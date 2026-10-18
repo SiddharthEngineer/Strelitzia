@@ -127,7 +127,13 @@ when they do. The project and client facts below were checked on 2026-10-18 from
   - **Web client "Strelitzia web"** (2026-10-17): its id and secret are `STRELITZIA_GOOGLE_CLIENT_ID` / `_SECRET`. **Prod and
     preprod share this one client**, with the four https redirect URIs above.
 - **`.env` (user-managed):** prod and preprod each have their own `STRELITZIA_SESSION_SECRET` and `STRELITZIA_TOKEN_KEY`.
-  `STRELITZIA_OWNER_EMAIL` is the user's own Google account in both.
+  `STRELITZIA_OWNER_EMAIL` is the user's own Google account on prod and the dev test account on preprod (2026-10-18).
+  Each `.env` needs its **own** `STRELITZIA_PUBLIC_URL`: until 2026-10-18 preprod's pointed at prod, so preprod sign-in
+  bounced to `strelitzia.engineerfamily.net`. Nginx basic auth on preprod does not break sign-in (the browser resends its
+  cached credentials on the callback).
 - **Sign-in works on prod** (M25/M27, 2026-10-17/18).
-- **Test account:** none yet. The user plans a separate Google account for Claude's testing, so agents never sign in as the
-  owner. Until it exists and is written down here, don't sign in to any environment with the owner's account.
+- **Test account** (2026-10-18): a separate Google account for agents' browser testing (address in the user's notes and
+  preprod's `STRELITZIA_OWNER_EMAIL`, not in this public repo). It is the **owner on preprod** (so owner-only pages such as
+  the resume workbench and `/claude-setup` can be tested; preprod data is fake) and an **invited non-owner on prod**.
+  The user signs it in once in a dedicated browser profile (sessions last 30 days); agents drive that profile and never
+  hold its password or 2FA. Never sign in to any environment with the user's own account.

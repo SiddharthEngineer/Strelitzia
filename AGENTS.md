@@ -28,5 +28,7 @@ under `~/.strelitzia`. The old `applypilot` CLI, `APPLYPILOT_*` env vars and `~/
 - Never commit personal data (`personal/`, `~/.strelitzia` or `~/.applypilot`, `.env`, resume or profile content, DB rows). Never print secrets; hand secret steps to the user.
 - Work on a branch, never directly on `trunk`, except for plan/ROADMAP commits made in `/plan`.
 - Never weaken tests to get to green. Never add code that submits applications: Strelitzia only discovers, tailors and tracks.
+- Browser testing signs in only as the dev test account (preprod owner, invited non-owner on prod), never as the user's own
+  Google account. The user signs it in once in a dedicated browser profile; agents never handle its password or 2FA (`agents/DEPLOY.md`).
 - Prod deploys are the user's call (`agents/DEPLOY.md`). Never `chown`, force-push, drop volumes or databases, or run as root.
 - When a plan task finishes: set its Status in the plan and the ROADMAP row. Git history and PRs are the changelog.
