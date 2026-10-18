@@ -16,6 +16,7 @@ None. R25-R39 (issues #45-#49, PRs #57-#71) are merged, on prod and archived (20
 | M25 | For R29/R30 (Google sign-in, Drive per user): in the **same** Google Cloud project as the Drive desktop client, publish the consent screen (scopes openid, email, profile, drive.file; no logo), create a Web OAuth client with redirect URIs `/app/api/auth/callback` and `/app/api/drive/callback` on `strelitzia` and `strelitzia-preprod.engineerfamily.net`, then put `STRELITZIA_GOOGLE_CLIENT_ID`, `_GOOGLE_CLIENT_SECRET`, `_OWNER_EMAIL`, `_PUBLIC_URL`, `_SESSION_SECRET`, `_TOKEN_KEY` in `~/.strelitzia/.env` (and auth-only keys with their own secrets in `~/.strelitzia-preprod/.env`). Login stays off until the client id is set. Covers M17's consent-screen part.  Done 2026-10-17 (user): Web client, redirect URIs and published consent screen; sign-in works on prod. | ☑ |
 | M26 | After R31: engineerfamily PR to drop nginx basic auth on prod `strelitzia` (keep it on preprod), deploy via the VPS make targets.  Done 2026-10-18: engineerfamily #31, v1.1.3 on prod (also fixed the stale `VPS_KNOWN_HOSTS` secret after the 10-16 host-key change). | ☑ |
 | M27 | After R39: deploy prod (`make -C ~/src/engineerfamily strelitzia-deploy`). The R25 migration rewrites the jobs primary key on first start: take a `pg_dump` of `applypilot` first. Then sign in, invite a test account, and run the human test steps of R29-R39 on prod.  Done 2026-10-18 (user): backup taken, prod deployed, sign-in and test steps pass. | ☑ |
+| M28 | Dev test account: sign it in once on preprod (`strelitzia-preprod.engineerfamily.net/app/`, basic auth then Google) in the browser profile agents use, and once on prod as the invited user. Its first preprod sign-in re-keys the `owner@localhost` row to it.  Done 2026-10-18 (user): owner on preprod, active invited user on prod; the user's own account is invited on preprod. | ☑ |
 | M2 | Obsolete (2026-10-16): discovery is off by default (R22) and jobs come in by manual upload. Decide whether to pay for a residential proxy. Without one, Glassdoor and ZipRecruiter stay disabled (Cloudflare 403). | ☑ |
 | M3 | Obsolete: replaced by M19, and the backlog was pruned on 2026-10-15. `strelitzia run score --reset-errors`, then `strelitzia run score`, to re-score jobs stuck at 0 (may take more than one day on the free tier). | ☑ |
 | M5 | Obsolete: R18 removed auto-apply (applications are tracked by hand in the dashboard). | ☑ |
@@ -51,6 +52,16 @@ None. R25-R39 (issues #45-#49, PRs #57-#71) are merged, on prod and archived (20
 - 2026-10-01: Pipeline LLM calls stay on the Gemini free tier. `applypilot apply` keeps the user in the loop.
 
 ## Backlog (not yet planned)
+- Site reorganization (user, 2026-10-18; spans engineerfamily and Strelitzia, plan before building):
+  - Move Strelitzia from subdomains to paths: `engineerfamily.net/strelitzia` and `preprod.engineerfamily.net/strelitzia`,
+    with the dashboard (today's `/app/`) at `/strelitzia/dashboard`. 301s from `strelitzia*` and `applypilot*` hosts.
+    Means new OAuth redirect URIs and consent-screen homepage/privacy URLs (a manual step), and a sub-path-aware dashboard build.
+  - Strelitzia homepage becomes a scrollable, sleek demo rather than a description (references: onepagelove.com/tag/demo),
+    with a link into the dashboard. Not urgent.
+  - Shared header: a Strelitzia link in the engineerfamily header; the dashboard keeps its header but gains a link back to
+    engineerfamily.net. Same styling, the home link always looks the same and sits in the same spot, profile/sign-in always top right.
+  - Google sign-in moves to the engineerfamily.net site level (one session for the whole domain). Only the dashboard needs an
+    invited account; everything else stays open to signed-out and uninvited visitors.
 - "Posting closed" liveness check, so jobs without a stated deadline can turn Inactive.
 - Nightly `pg_dump` of the `applypilot` DB to `/srv/backups`.
 - Split the god-files (`smartextract.py`, `cli.py`; `scoring/tailor.py` shrank to 69 lines in R23); review risk.
