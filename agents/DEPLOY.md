@@ -1,8 +1,10 @@
 # Deploys (VPS)
 
 Strelitzia runs inside the engineerfamily Docker stack (`SiddharthEngineer/engineerfamily`) as the compose service `strelitzia`,
-served at `https://strelitzia.engineerfamily.net/app/` behind nginx basic auth. `applypilot.engineerfamily.net` (and `-preprod`) 301 to the
-new names, keeping the path. Postgres runs in the compose service `postgres-db` (formerly `analytics-db`), which holds the DBs
+served at `https://engineerfamily.net/strelitzia/dashboard/` (the static homepage is `/strelitzia/`). The old hosts
+`strelitzia.engineerfamily.net` and `applypilot.engineerfamily.net` 301 to `engineerfamily.net/strelitzia/`, and their `/app/...`
+to `/strelitzia/dashboard/...`. The dashboard used to live at `/app/` (until 2026-10).
+Postgres runs in the compose service `postgres-db` (formerly `analytics-db`), which holds the DBs
 `strelitzia` / `strelitzia_test` (prod) and `strelitzia_preprod` (preprod), owned by the role `strelitzia`, with passwords in the
 engineerfamily `.env` keys `STRELITZIA_DB_PASSWORD*`. Until 2026-10 they were all named `applypilot`;
 `services/nginx/.htpasswd-applypilot` keeps its old name.
@@ -40,15 +42,16 @@ and `make up` from `~/src/engineerfamily` operate on what's deployed, never on t
 
 ## Prod checks
 Check from outside, through Cloudflare. A loopback check doesn't prove the hostname routes to the right nginx.
-1. `https://engineerfamily.net`, `https://umami.engineerfamily.net` and `https://strelitzia.engineerfamily.net` return 200
-   (`/app/` returns 401 without credentials), and `https://applypilot.engineerfamily.net/app/` returns 301.
+1. `https://engineerfamily.net`, `https://umami.engineerfamily.net`, `https://engineerfamily.net/strelitzia/` and
+   `https://engineerfamily.net/strelitzia/dashboard/api/health` return 200, and `https://strelitzia.engineerfamily.net/app/` returns 301.
 2. If one doesn't: for Strelitzia, run `make -C ~/src/engineerfamily strelitzia-deploy ref=<previous sha>`. For engineerfamily, run `make deploy-prod ref=<previous tag>`.
 
 ## Preprod (review PRs)
 `scripts/agent/preprod.sh` holds a one-PR lock: `deploy <pr>` checks the PR head out in `$PREPROD_APP_DIR` (`/srv/Strelitzia-preprod`), runs
-`make -C /srv/engineerfamily-preprod preprod-strelitzia-up`, and health-checks `http://127.0.0.1:8080/app/api/health`
+`make -C /srv/engineerfamily-preprod preprod-strelitzia-up`, and health-checks `http://127.0.0.1:8080/strelitzia/dashboard/api/health`
 (credentials in `~/.config/strelitzia-agent/preprod.netrc`). Merging or closing the PR frees the lock, and the next tick resets preprod to trunk.
-Test at `https://strelitzia-preprod.engineerfamily.net/app/` with the preprod login.
+Test at `https://preprod.engineerfamily.net/strelitzia/dashboard/` (or the same path on `strelitzia-preprod.engineerfamily.net`)
+with the preprod login.
 Preprod uses its own disposable `strelitzia_preprod` DB (preprod postgres-db) and app dir (`~/.strelitzia-preprod`), never prod data.
 **Preprod data is wiped and reseeded on every deploy** (a PR deploy or the reset to trunk): after the deploy command, `preprod.sh` runs
 `PREPROD_SEED_CMD`, which runs `scripts/seed_preprod.py` in a one-off container of the preprod image with the checkout mounted at `/seed`.
@@ -70,16 +73,19 @@ To turn it on for an environment, the user (secrets are never handled by an agen
   (it's also the only way to revoke a session early, besides disabling the account).
 - `STRELITZIA_OWNER_EMAIL`: the owner's Google email. An owner row still called `owner@localhost` is re-keyed to it on
   the owner's first sign-in.
-- `STRELITZIA_PUBLIC_URL`: `https://strelitzia.engineerfamily.net` (prod) or `https://strelitzia-preprod.engineerfamily.net`
-  (preprod). An https URL makes the session cookie `Secure`.
+- `STRELITZIA_PUBLIC_URL`: the bare origin the browser uses, with no path: `https://engineerfamily.net` (prod) or
+  `https://preprod.engineerfamily.net` (preprod). The app appends `/strelitzia/dashboard/api/...` itself for the OAuth
+  redirect URIs. An https URL makes the session cookie `Secure`.
 
 With the client id set, the app refuses to start unless the client secret, session secret and owner email are set too.
 
-Authorized redirect URIs on the OAuth client, one pair per environment (the four https ones are set; see Google Cloud below):
-- `https://strelitzia.engineerfamily.net/app/api/auth/callback` and `.../app/api/drive/callback`
-- `https://strelitzia-preprod.engineerfamily.net/app/api/auth/callback` and `.../app/api/drive/callback`
-- `http://localhost:8765/app/api/auth/callback` and `.../app/api/drive/callback`, for local `strelitzia serve` with
-  `STRELITZIA_PUBLIC_URL=http://localhost:8765`. Not known to be set: ask the user to add them before testing login locally.
+Authorized redirect URIs on the OAuth client, one pair per environment (the user adds them; see Google Cloud below):
+- `https://engineerfamily.net/strelitzia/dashboard/api/auth/callback` and `.../strelitzia/dashboard/api/drive/callback`
+- `https://preprod.engineerfamily.net/strelitzia/dashboard/api/auth/callback` and `.../strelitzia/dashboard/api/drive/callback`
+- `http://localhost:8765/strelitzia/dashboard/api/auth/callback` and `.../strelitzia/dashboard/api/drive/callback`, for local
+  `strelitzia serve` with `STRELITZIA_PUBLIC_URL=http://localhost:8765`. Not known to be set: ask the user to add them before testing login locally.
+
+The old `https://strelitzia(-preprod).engineerfamily.net/app/api/...` pairs can be removed once nothing runs the `/app` build.
 
 ### Google Drive per user
 Each user connects their own Drive on the Claude setup page (**Connect Google Drive**, scope `drive.file` only, a
@@ -92,9 +98,10 @@ file stays). Disconnect revokes the token at Google and deletes the row. The CLI
 Changing the key makes the stored tokens unreadable: everyone connects again. The web client must be in the same
 Google Cloud project as the Drive desktop client, since `drive.file` only sees files that project created.
 
-With login on, every `/app/api/*` route except `/app/api/health` and `/app/api/auth/*` returns 401 without a session
+With login on, every `/strelitzia/dashboard/api/*` route except `/strelitzia/dashboard/api/health` and
+`/strelitzia/dashboard/api/auth/*` returns 401 without a session
 (30 days, `HttpOnly`, `SameSite=Lax`); the UI routes stay public. Only the owner and invited emails get in; anyone else
-lands on `/app/?auth=not_invited`. The resume workbench (packet, result, Claude setup) stays owner-only until per-user
+lands on `/strelitzia/dashboard/?auth=not_invited`. The resume workbench (packet, result, Claude setup) stays owner-only until per-user
 content libraries (#48) exist: it reads the owner's resume (Drive is per user, below). nginx basic auth is gone on prod
 (engineerfamily #31, 2026-10-18), so Google sign-in is prod's only gate; preprod keeps basic auth in front.
 Preprod's no-`.env` rule above is about LLM keys: an auth-only `.env` there is the user's call.

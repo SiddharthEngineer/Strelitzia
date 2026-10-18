@@ -195,7 +195,7 @@ describe('JobPage Claude workbench', () => {
     const user = userEvent.setup();
     const links = {
       ...jobDetail().links, resume: 'https://drive.google.com/file/d/R/view',
-      resume_docx: '/app/api/jobs/abc123/files/resume_docx', cover_letter: 'https://drive.google.com/file/d/C/view',
+      resume_docx: '/strelitzia/dashboard/api/jobs/abc123/files/resume_docx', cover_letter: 'https://drive.google.com/file/d/C/view',
     };
     vi.mocked(api.pasteResult).mockResolvedValue({
       ok: true, outcome: { draft_version: 1, warnings: ["Dropped to fit one page: 'x'"], coverage: saved.coverage, unmet: saved.unmet },
@@ -220,11 +220,11 @@ describe('JobPage Claude workbench', () => {
     vi.mocked(api.getJob).mockResolvedValue(jobDetail({
       ...saved,
       links: { ...jobDetail().links, resume: 'https://drive.google.com/file/d/OLD/view',
-        resume_pdf: '/app/api/jobs/abc123/files/resume_pdf' },
+        resume_pdf: '/strelitzia/dashboard/api/jobs/abc123/files/resume_pdf' },
     }));
     renderJob();
     const files = await screen.findByRole('navigation', { name: 'Files' });
-    expect(within(files).getByRole('link', { name: /Resume PDF/ })).toHaveAttribute('href', '/app/api/jobs/abc123/files/resume_pdf');
+    expect(within(files).getByRole('link', { name: /Resume PDF/ })).toHaveAttribute('href', '/strelitzia/dashboard/api/jobs/abc123/files/resume_pdf');
   });
 
   it('a job without a draft shows no coverage', async () => {

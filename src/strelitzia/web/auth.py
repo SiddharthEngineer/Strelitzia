@@ -2,7 +2,7 @@
 
 Login is on only when STRELITZIA_GOOGLE_CLIENT_ID is set. While it's unset every request acts as the owner, as before
 accounts existed. With it on, the owner (STRELITZIA_OWNER_EMAIL) and invited emails get a session cookie holding their
-user id; anyone else is sent back to /app/?auth=not_invited (a disabled account to ?auth=disabled).
+user id; anyone else is sent back to /strelitzia/dashboard/?auth=not_invited (a disabled account to ?auth=disabled).
 """
 
 from __future__ import annotations
@@ -24,8 +24,10 @@ from strelitzia import users
 from strelitzia.config import env
 from strelitzia.database import Connection, get_connection
 from strelitzia.storage import drive
+from strelitzia.web.paths import API_PREFIX
+from strelitzia.web.paths import PREFIX as UI_PREFIX
 
-PREFIX = "/app/api/auth"
+PREFIX = f"{API_PREFIX}/auth"
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke"
@@ -33,11 +35,11 @@ SCOPES = "openid email profile"
 SESSION_COOKIE = "strelitzia_session"
 SESSION_MAX_AGE = 30 * 24 * 3600
 CLOCK_SKEW_SECONDS = 30  # tolerated drift between this server's clock and Google's when checking the ID token
-PUBLIC_API_PATHS = ("/app/api/health",)
+PUBLIC_API_PATHS = (f"{API_PREFIX}/health",)
 
-DRIVE_PREFIX = "/app/api/drive"
+DRIVE_PREFIX = f"{API_PREFIX}/drive"
 DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
-SETUP_PAGE = "/app/claude-setup"
+SETUP_PAGE = f"{UI_PREFIX}/claude-setup"
 
 router = APIRouter(prefix=PREFIX)
 drive_router = APIRouter(prefix=DRIVE_PREFIX)
@@ -153,7 +155,7 @@ def _exchange_code(code: str, redirect_uri: str) -> dict | None:
 
 
 def _back(outcome: str | None = None) -> RedirectResponse:
-    return RedirectResponse("/app/" + (f"?auth={outcome}" if outcome else ""), status_code=303)
+    return RedirectResponse(f"{UI_PREFIX}/" + (f"?auth={outcome}" if outcome else ""), status_code=303)
 
 
 @router.get("/login")

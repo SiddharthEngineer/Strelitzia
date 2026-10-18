@@ -14,8 +14,9 @@ from strelitzia import users
 from strelitzia.database import Connection, get_connection
 from strelitzia.llm import user_month_spend
 from strelitzia.web import auth
+from strelitzia.web.paths import API_PREFIX
 
-PREFIX = "/app/api/admin"
+PREFIX = f"{API_PREFIX}/admin"
 
 router = APIRouter(prefix=PREFIX)
 

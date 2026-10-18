@@ -10,7 +10,7 @@ vi.mock('../api');
 
 function setup(extra: Partial<ClaudeSetup> = {}): ClaudeSetup {
   return {
-    drive: true, drive_detail: 'Connected 2026-10-16', drive_source: 'user', connect_url: '/app/api/drive/connect',
+    drive: true, drive_detail: 'Connected 2026-10-16', drive_source: 'user', connect_url: '/strelitzia/dashboard/api/drive/connect',
     rules_version: 'r1234567',
     docs: [
       { kind: 'rules', name: 'Strelitzia rules', url: 'https://docs.google.com/document/d/R/edit', changed_at: '2026-10-15T09:30:00+00:00' },
@@ -64,7 +64,7 @@ describe('ClaudeSetupPage', () => {
   });
 
   it('explains the clipboard fallback without Drive', async () => {
-    vi.mocked(api.getClaudeSetup).mockResolvedValue(setup({ drive: false, drive_detail: 'Connect Google Drive on /app/claude-setup' }));
+    vi.mocked(api.getClaudeSetup).mockResolvedValue(setup({ drive: false, drive_detail: 'Connect Google Drive on /strelitzia/dashboard/claude-setup' }));
     renderPage();
     expect(await screen.findByText(/Google Drive isn't set up/)).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Project Docs' })).toBeNull();
@@ -76,7 +76,7 @@ describe('ClaudeSetupPage', () => {
       drive: false, drive_source: null, drive_detail: 'Connect Google Drive on the Claude setup page',
     }));
     renderPage();
-    expect(await screen.findByRole('link', { name: 'Connect Google Drive' })).toHaveAttribute('href', '/app/api/drive/connect');
+    expect(await screen.findByRole('link', { name: 'Connect Google Drive' })).toHaveAttribute('href', '/strelitzia/dashboard/api/drive/connect');
     expect(screen.queryByRole('button', { name: 'Disconnect' })).not.toBeInTheDocument();
   });
 
@@ -86,7 +86,7 @@ describe('ClaudeSetupPage', () => {
     renderPage('/claude-setup?drive=connected');
     expect(await screen.findByText('Google Drive is connected.')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Connect Google Drive' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Reconnect' })).toHaveAttribute('href', '/app/api/drive/connect');
+    expect(screen.getByRole('link', { name: 'Reconnect' })).toHaveAttribute('href', '/strelitzia/dashboard/api/drive/connect');
     expect(screen.getByText('Connected')).toBeInTheDocument();
     vi.mocked(api.getClaudeSetup).mockResolvedValue(setup({ drive: false, drive_source: null }));
     await user.click(screen.getByRole('button', { name: 'Disconnect' }));

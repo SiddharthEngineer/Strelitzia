@@ -26,7 +26,7 @@ describe('api', () => {
     const fetch = mockFetch(200, { total: 0, page: 1, page_size: 50, items: [] });
     await listJobs({ sort: '-fit_score' });
     const [url, init] = fetch.mock.calls[0];
-    expect(url).toBe('/app/api/jobs?sort=-fit_score');
+    expect(url).toBe('/strelitzia/dashboard/api/jobs?sort=-fit_score');
     expect(init.headers['X-Strelitzia']).toBeUndefined();
   });
 
@@ -34,7 +34,7 @@ describe('api', () => {
     const fetch = mockFetch(200, {});
     await setStatus('abc', 'submitted', '2026-10-01');
     const [url, init] = fetch.mock.calls[0];
-    expect(url).toBe('/app/api/jobs/abc/status');
+    expect(url).toBe('/strelitzia/dashboard/api/jobs/abc/status');
     expect(init.method).toBe('POST');
     expect(init.headers['X-Strelitzia']).toBe('1');
     expect(JSON.parse(init.body)).toEqual({ status: 'submitted', submitted_at: '2026-10-01' });
@@ -58,7 +58,7 @@ describe('api', () => {
     const fetch = mockFetch(200, { prompt: 'p', doc_url: null, inline: true, rules_version: 'abcd1234' });
     expect((await openPacket('k1')).inline).toBe(true);
     const [url, init] = fetch.mock.calls[0];
-    expect(url).toBe('/app/api/jobs/k1/packet');
+    expect(url).toBe('/strelitzia/dashboard/api/jobs/k1/packet');
     expect(init.method).toBe('POST');
     expect(init.headers['X-Strelitzia']).toBe('1');
   });
@@ -68,7 +68,7 @@ describe('api', () => {
     const out = await pasteResult('k1', 'reply text');
     expect(out).toEqual({ ok: false, errors: ['bad', 'worse'], warnings: [], fix_prompt: 'These problems…' });
     const [url, init] = fetch.mock.calls[0];
-    expect(url).toBe('/app/api/jobs/k1/result');
+    expect(url).toBe('/strelitzia/dashboard/api/jobs/k1/result');
     expect(init.headers['X-Strelitzia']).toBe('1');
     expect(JSON.parse(init.body)).toEqual({ text: 'reply text' });
   });
@@ -95,7 +95,7 @@ describe('api', () => {
     const fetch = mockFetch(200, { prefs: {}, rescored: 0, task: null });
     await savePreferences({ skills_want: ['Rust'] } as unknown as Preferences, true);
     const [url, init] = fetch.mock.calls[0];
-    expect(url).toBe('/app/api/preferences');
+    expect(url).toBe('/strelitzia/dashboard/api/preferences');
     expect(init.method).toBe('PUT');
     expect(JSON.parse(init.body)).toEqual({ prefs: { skills_want: ['Rust'] }, confirm_reassess: true,
       reassess_scope: 'stale' });
@@ -108,7 +108,7 @@ describe('api', () => {
     const fetch = mockFetch(200, { jobs: 1, skipped_unextracted: 0, estimated_usd: 0.01, task: null });
     await rescoreAll();
     const [url, init] = fetch.mock.calls[0];
-    expect(url).toBe('/app/api/rescore');
+    expect(url).toBe('/strelitzia/dashboard/api/rescore');
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body)).toEqual({ confirm: true });
   });
@@ -126,7 +126,7 @@ describe('api', () => {
     const fetch = mockFetch(201, { key: 'k1', created: true, task: null });
     await addJob({ url: 'https://example.com/1' });
     let [url, init] = fetch.mock.calls[0];
-    expect(url).toBe('/app/api/jobs');
+    expect(url).toBe('/strelitzia/dashboard/api/jobs');
     expect(init.method).toBe('POST');
     expect(init.headers['X-Strelitzia']).toBe('1');
     expect(JSON.parse(init.body)).toEqual({ url: 'https://example.com/1' });
@@ -134,7 +134,7 @@ describe('api', () => {
     const put = mockFetch(200, { task: null, key: 'k1' });
     await putDescription('k1', { description: 'text' });
     [url, init] = put.mock.calls[0];
-    expect(url).toBe('/app/api/jobs/k1/description');
+    expect(url).toBe('/strelitzia/dashboard/api/jobs/k1/description');
     expect(init.method).toBe('PUT');
   });
 
@@ -142,7 +142,7 @@ describe('api', () => {
     const fetch = mockFetch(200, {});
     await linkContact('k1', { contact: { name: 'Ana' } }, 'recruiter');
     const [url, init] = fetch.mock.calls[0];
-    expect(url).toBe('/app/api/jobs/k1/contacts');
+    expect(url).toBe('/strelitzia/dashboard/api/jobs/k1/contacts');
     expect(JSON.parse(init.body)).toEqual({ contact: { name: 'Ana' }, relation: 'recruiter' });
   });
 });

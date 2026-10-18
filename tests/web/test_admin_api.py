@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from strelitzia import users
 from web_helpers import add_job, second_user, sign_in_as
 
-URL = "/app/api/admin/users"
+URL = "/strelitzia/dashboard/api/admin/users"
 
 
 def _owner(conn):

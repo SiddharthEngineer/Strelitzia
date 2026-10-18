@@ -21,7 +21,7 @@ URLS = [f"https://example.com/jobs/{i}" for i in range(3)]
 def wait_for(client, task_id, timeout=10.0):
     end = time.monotonic() + timeout
     while time.monotonic() < end:
-        task = client.get(f"/app/api/tasks/{task_id}").json()
+        task = client.get(f"/strelitzia/dashboard/api/tasks/{task_id}").json()
         if task["state"] in ("done", "error"):
             return task
         time.sleep(0.02)
@@ -71,7 +71,7 @@ def tclient(db_path, gen):
 
 
 def _queue(client, url):
-    return client.post(f"/app/api/jobs/{job_key(url)}/rescore")
+    return client.post(f"/strelitzia/dashboard/api/jobs/{job_key(url)}/rescore")
 
 
 def test_rescore_returns_a_task_that_finishes(tclient, gen):
@@ -87,7 +87,7 @@ def test_rescore_returns_a_task_that_finishes(tclient, gen):
 
 def test_generation_kinds_are_gone(tclient, conn):
     """Resumes and cover letters are written in Claude and pasted back; there is no generate task or route."""
-    assert tclient.post(f"/app/api/jobs/{job_key(URLS[0])}/generate", json={}).status_code in (404, 405)
+    assert tclient.post(f"/strelitzia/dashboard/api/jobs/{job_key(URLS[0])}/generate", json={}).status_code in (404, 405)
     for kind in ("resume", "cover", "both"):
         with pytest.raises(ValueError):
             tasks.enqueue(conn, "u1", URLS[0], kind)
@@ -105,7 +105,7 @@ def test_tasks_run_one_at_a_time_in_order(tclient, gen):
 def test_queueing_leaves_the_status_alone(tclient):
     key = job_key(URLS[0])
     wait_for(tclient, _queue(tclient, URLS[0]).json()["id"])
-    detail = tclient.get(f"/app/api/jobs/{key}").json()
+    detail = tclient.get(f"/strelitzia/dashboard/api/jobs/{key}").json()
     assert detail["status"] == "active" and detail["events"] == []
 
 
@@ -139,7 +139,7 @@ def test_interrupted_tasks_are_recovered_on_start(db_path, gen):
                  "VALUES ('t1', ?, 'rescore', 'running', '2026-10-05T00:00:00', '2026-10-05T00:00:01')", (URLS[0],))
     conn.commit()
     with TestClient(create_app(db=db_path, generate=gen), headers=HEADERS) as c:
-        task = c.get("/app/api/tasks/t1").json()
+        task = c.get("/strelitzia/dashboard/api/tasks/t1").json()
     assert task["state"] == "error" and task["error"] == "interrupted" and task["finished_at"]
     assert gen.calls == []  # not re-run
 
@@ -149,7 +149,7 @@ def test_queued_tasks_survive_a_restart(db_path, gen):
     add_job(get_connection(db_path), URLS[0], job_key=job_key(URLS[0]))
     with TestClient(create_app(db=db_path, run_tasks=False), headers=HEADERS) as c:
         task_id = _queue(c, URLS[0]).json()["id"]
-        assert c.get(f"/app/api/tasks/{task_id}").json()["state"] == "queued"
+        assert c.get(f"/strelitzia/dashboard/api/tasks/{task_id}").json()["state"] == "queued"
     with TestClient(create_app(db=db_path, generate=gen), headers=HEADERS) as c:
         assert wait_for(c, task_id)["state"] == "done"
 
@@ -162,17 +162,17 @@ def test_a_waiting_duplicate_is_not_queued_twice(db_path):
         a = _queue(c, URLS[0]).json()["id"]
         b = _queue(c, URLS[0]).json()["id"]
         intake = tasks.enqueue(conn, users.owner(conn).id, URLS[0], "intake")["id"]
-        listed = c.get(f"/app/api/jobs/{job_key(URLS[0])}/tasks").json()
+        listed = c.get(f"/strelitzia/dashboard/api/jobs/{job_key(URLS[0])}/tasks").json()
     assert a == b != intake
     assert {t["id"] for t in listed} == {intake, a}
 
 
 def test_errors_and_csrf(tclient, app):
-    assert tclient.get("/app/api/tasks/nope").status_code == 404
-    assert tclient.post("/app/api/jobs/nope/rescore").status_code == 404
-    assert tclient.get("/app/api/jobs/nope/tasks").status_code == 404
+    assert tclient.get("/strelitzia/dashboard/api/tasks/nope").status_code == 404
+    assert tclient.post("/strelitzia/dashboard/api/jobs/nope/rescore").status_code == 404
+    assert tclient.get("/strelitzia/dashboard/api/jobs/nope/tasks").status_code == 404
     with TestClient(app) as bare:
-        assert bare.post(f"/app/api/jobs/{job_key(URLS[0])}/rescore").status_code == 403
+        assert bare.post(f"/strelitzia/dashboard/api/jobs/{job_key(URLS[0])}/rescore").status_code == 403
 
 
 @pytest.mark.parametrize("reason", ["overloaded", "auth"])
@@ -247,11 +247,11 @@ def test_tasks_belong_to_a_user(db_path, gen):
     assert tasks.enqueue(conn, other, URLS[0], "rescore")["id"] == theirs["id"]
     assert tasks.enqueue(conn, other, None, "reassess_all")["id"] != tasks.enqueue(conn, owner, None, "reassess_all")["id"]
     with TestClient(create_app(db=db_path, run_tasks=False), headers=HEADERS) as c:
-        assert c.get(f"/app/api/tasks/{theirs['id']}").status_code == 404
-        assert c.get(f"/app/api/tasks/{mine['id']}").json()["key"] == job_key(URLS[0])
-        assert [t["id"] for t in c.get(f"/app/api/jobs/{job_key(URLS[0])}/tasks").json()] == [mine["id"]]
-        assert c.get(f"/app/api/jobs/{job_key(URLS[1])}").status_code == 404  # only B has it
-        assert c.post(f"/app/api/jobs/{job_key(URLS[1])}/rescore").status_code == 404
+        assert c.get(f"/strelitzia/dashboard/api/tasks/{theirs['id']}").status_code == 404
+        assert c.get(f"/strelitzia/dashboard/api/tasks/{mine['id']}").json()["key"] == job_key(URLS[0])
+        assert [t["id"] for t in c.get(f"/strelitzia/dashboard/api/jobs/{job_key(URLS[0])}/tasks").json()] == [mine["id"]]
+        assert c.get(f"/strelitzia/dashboard/api/jobs/{job_key(URLS[1])}").status_code == 404  # only B has it
+        assert c.post(f"/strelitzia/dashboard/api/jobs/{job_key(URLS[1])}/rescore").status_code == 404
     runner = TaskRunner(db_path, generate=gen)
     runner.run_one(conn, tasks.get_task(conn, theirs["id"]))
     assert gen.users == [other] and tasks.get_task(conn, theirs["id"])["state"] == "done"

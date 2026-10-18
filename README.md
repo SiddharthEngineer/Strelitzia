@@ -30,7 +30,7 @@ uv pip install -e ".[web,jobspy]"
 playwright install chromium
 strelitzia init          # one-time server setup: the owner's resume, profile, searches, API key
 strelitzia doctor        # check the setup: database, sign-in and Drive keys, Claude
-strelitzia serve         # the dashboard at http://127.0.0.1:8765/app/
+strelitzia serve         # the dashboard at http://127.0.0.1:8765/strelitzia/dashboard/
 strelitzia users invite friend@example.com --cap 5   # let someone else sign in (needs Google sign-in on)
 ```
 
@@ -112,7 +112,7 @@ Each draft has bullets per role (between your base resume's bullet count and two
 Resumes and cover letters are written in your Claude Pro plan, not through the API, so they cost nothing extra and you
 pick the model (Opus or Sonnet) per chat. Results come back by pasting, which works on any plan.
 
-1. **Once:** open **Claude setup** in the dashboard (`/app/claude-setup`). With Google Drive set up, Strelitzia writes
+1. **Once:** open **Claude setup** in the dashboard (`/strelitzia/dashboard/claude-setup`). With Google Drive set up, Strelitzia writes
    two Google Docs into `Strelitzia/_Claude/`: "Strelitzia rules" (the writing rules and the JSON format every reply
    ends with) and "Strelitzia content library". Create a claude.ai Project named "Strelitzia Resumes", add both Docs,
    and paste the project instructions the page shows. Strelitzia keeps the Docs current when the rules or your library
@@ -214,7 +214,7 @@ owner. To turn it on, create a Google OAuth client of type **Web application** a
 | `STRELITZIA_OWNER_EMAIL` | The owner's Google email |
 | `STRELITZIA_PUBLIC_URL` | The URL users open, e.g. `https://jobs.example.com` (an https URL makes the cookie `Secure`) |
 
-Add `<PUBLIC_URL>/app/api/auth/callback` and `<PUBLIC_URL>/app/api/drive/callback` as authorized redirect URIs. With
+Add `<PUBLIC_URL>/strelitzia/dashboard/api/auth/callback` and `<PUBLIC_URL>/strelitzia/dashboard/api/drive/callback` as authorized redirect URIs. With
 the client id set, the server refuses to start unless the other three keys are set too.
 
 Only the owner and invited emails can sign in. The owner manages accounts on the dashboard's **Users** page or with the
@@ -240,7 +240,7 @@ to `<name>.db.bak-<date>` first, without changing it. To switch back to SQLite, 
 
 ### Dashboard
 
-`strelitzia serve` runs the job dashboard at `http://127.0.0.1:8765/app/`: a filterable, sortable jobs table and a detail
+`strelitzia serve` runs the job dashboard at `http://127.0.0.1:8765/strelitzia/dashboard/`: a filterable, sortable jobs table and a detail
 page per job, with the Claude workbench (Open in Claude, Paste result, Resume targeting) and the application's status.
 Every route works on the signed-in user's own jobs.
 The built UI ships in the package (`src/strelitzia/web/static/`), so Node is only needed to change it:
@@ -248,40 +248,40 @@ The built UI ships in the package (`src/strelitzia/web/static/`), so Node is onl
 ```bash
 pip install -e ".[web]"
 strelitzia serve --port 8765 [--web-dir path/to/built/ui]
-curl localhost:8765/app/api/health          # {"ok": true, "db": "postgresql", ...}
+curl localhost:8765/strelitzia/dashboard/api/health          # {"ok": true, "db": "postgresql", ...}
 ```
 
-- `GET /app/api/jobs` lists jobs. Filters: `status` (repeatable: active, inactive, in_progress, submitted, rejected,
+- `GET /strelitzia/dashboard/api/jobs` lists jobs. Filters: `status` (repeatable: active, inactive, in_progress, submitted, rejected,
   heard_back, no_response), `role`, `work_mode`, `location`, `found_from`/`found_to`, `due_from`/`due_to`,
   `score_min`/`score_max`, `source` (manual, discovered) and `q`. Sort with `sort=-fit_score` (or `discovered_at`,
   `deadline`, `next_interview`). Page with `page` and `page_size` (at most 200).
-  `GET /app/api/facets` returns the counts for the filter dropdowns and the hero banner.
-- `GET /app/api/jobs/{key}` returns one job with its extracted details, status history, links, contacts and interviews.
-- Add job: `POST /app/api/jobs {"url": "..."}` (or `{"title", "company", "location", "description"}` without a link)
+  `GET /strelitzia/dashboard/api/facets` returns the counts for the filter dropdowns and the hero banner.
+- `GET /strelitzia/dashboard/api/jobs/{key}` returns one job with its extracted details, status history, links, contacts and interviews.
+- Add job: `POST /strelitzia/dashboard/api/jobs {"url": "..."}` (or `{"title", "company", "location", "description"}` without a link)
   queues an `intake` task that reads, extracts and scores the posting; a link you already have returns `"created": false`
-  and the same key. `PUT /app/api/jobs/{key}/description` saves a pasted description when the page couldn't be read.
-- Contacts: `GET/POST /app/api/contacts`, `GET/PATCH/DELETE /app/api/contacts/{id}`, `POST /app/api/jobs/{key}/contacts
-  {"contact_id" | "contact", "relation"}`, `DELETE /app/api/jobs/{key}/contacts/{id}`. Interviews:
-  `POST /app/api/jobs/{key}/interviews`, `PATCH/DELETE /app/api/interviews/{id}`.
-- Status: `POST /app/api/jobs/{key}/status {"status": "submitted"}` (or `rejected`, `heard_back`, `in_progress`, `null`
-  to reset). Active and Inactive are derived from the deadline. `PATCH /app/api/jobs/{key}` edits `submitted_at` and `notes`.
-- Claude workbench: `POST /app/api/jobs/{key}/packet` returns `{prompt, doc_url, inline}` (it writes the packet Doc
-  when Drive is authorized, else `inline: true` and the prompt holds the whole packet). `POST /app/api/jobs/{key}/result
+  and the same key. `PUT /strelitzia/dashboard/api/jobs/{key}/description` saves a pasted description when the page couldn't be read.
+- Contacts: `GET/POST /strelitzia/dashboard/api/contacts`, `GET/PATCH/DELETE /strelitzia/dashboard/api/contacts/{id}`, `POST /strelitzia/dashboard/api/jobs/{key}/contacts
+  {"contact_id" | "contact", "relation"}`, `DELETE /strelitzia/dashboard/api/jobs/{key}/contacts/{id}`. Interviews:
+  `POST /strelitzia/dashboard/api/jobs/{key}/interviews`, `PATCH/DELETE /strelitzia/dashboard/api/interviews/{id}`.
+- Status: `POST /strelitzia/dashboard/api/jobs/{key}/status {"status": "submitted"}` (or `rejected`, `heard_back`, `in_progress`, `null`
+  to reset). Active and Inactive are derived from the deadline. `PATCH /strelitzia/dashboard/api/jobs/{key}` edits `submitted_at` and `notes`.
+- Claude workbench: `POST /strelitzia/dashboard/api/jobs/{key}/packet` returns `{prompt, doc_url, inline}` (it writes the packet Doc
+  when Drive is authorized, else `inline: true` and the prompt holds the whole packet). `POST /strelitzia/dashboard/api/jobs/{key}/result
   {"text": "<Claude's reply>"}` runs the checks: 422 with `errors` and a `fix_prompt`, or 200 with the saved draft and
-  the job. `GET /app/api/jobs/{key}/files/{resume_pdf|resume_docx|cover_letter_pdf}` downloads a draft file still on
-  this server. `GET /app/api/claude/setup` and `POST /app/api/claude/docs` back the Claude setup page.
-- `POST /app/api/jobs/{key}/rescore` queues a fresh assessment. Poll `GET /app/api/tasks/{id}`. Tasks run one at a
+  the job. `GET /strelitzia/dashboard/api/jobs/{key}/files/{resume_pdf|resume_docx|cover_letter_pdf}` downloads a draft file still on
+  this server. `GET /strelitzia/dashboard/api/claude/setup` and `POST /strelitzia/dashboard/api/claude/docs` back the Claude setup page.
+- `POST /strelitzia/dashboard/api/jobs/{key}/rescore` queues a fresh assessment. Poll `GET /strelitzia/dashboard/api/tasks/{id}`. Tasks run one at a
   time on a background thread.
 
-Every POST/PATCH needs the header `X-Strelitzia: 1`. With sign-in on, every `/app/api/*` route except `/health` and
-`/auth/*` needs a session (401 without one), and `/app/api/admin/users` is the owner's only. With sign-in off, put the
+Every POST/PATCH needs the header `X-Strelitzia: 1`. With sign-in on, every `/strelitzia/dashboard/api/*` route except `/health` and
+`/auth/*` needs a session (401 without one), and `/strelitzia/dashboard/api/admin/users` is the owner's only. With sign-in off, put the
 server behind a reverse proxy with authentication.
 
 **UI development** (React + TypeScript + Vite, in `dashboard/`):
 
 ```bash
 cd dashboard && npm ci
-npm run dev      # http://localhost:5173/app/ , proxies /app/api to strelitzia serve on :8765
+npm run dev      # http://localhost:5173/strelitzia/dashboard/ , proxies /strelitzia/dashboard/api to strelitzia serve on :8765
 npm test         # Vitest (including the theme contrast and reduced-motion checks)
 npm run build    # writes src/strelitzia/web/static/ (commit it)
 ```
@@ -310,7 +310,7 @@ dashboard, so it always has a signed-in user.
 ```
 strelitzia init                          # First-time server setup wizard (the owner's resume, profile, API key)
 strelitzia doctor                        # Check the database, sign-in and Drive keys, Claude key, models and spend
-strelitzia serve [--port 8765]           # Dashboard API + UI at /app/
+strelitzia serve [--port 8765]           # Dashboard API + UI at /strelitzia/dashboard/
 strelitzia db migrate [--from F --to URL]  # Copy the SQLite jobs into Postgres (rerunnable)
 strelitzia db verify  [--from F --to URL]  # Compare counts between the two
 strelitzia users list                    # Every account: role, status, cap, spend this month, last sign-in
