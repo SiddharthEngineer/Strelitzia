@@ -68,6 +68,8 @@ None. R25-R39 (issues #45-#49, PRs #57-#71) are merged, on prod and archived (20
     one per repo). Keep the cron that picks up plans. Also settle the folder layout: today `agents/` holds the tool-agnostic
     docs (ROADMAP, plans, DEPLOY) and `.claude/` holds Claude Code's commands and settings, which is confusing; pick one
     layout and use it in both repos.
+    Design: [shared-agent-runner](plans/shared-agent-runner.md) (one shared runner, manager/implementation/validation roles,
+    one layout; awaiting the user's sign-off, then split into Part plans).
 - "Posting closed" liveness check, so jobs without a stated deadline can turn Inactive.
 - Nightly `pg_dump` of the `applypilot` DB to `/srv/backups`.
 - Split the god-files (`smartextract.py`, `cli.py`; `scoring/tailor.py` shrank to 69 lines in R23); review risk.
