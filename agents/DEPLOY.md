@@ -75,11 +75,11 @@ To turn it on for an environment, the user (secrets are never handled by an agen
 
 With the client id set, the app refuses to start unless the client secret, session secret and owner email are set too.
 
-Authorized redirect URIs on the OAuth client (one per environment):
-- `https://strelitzia.engineerfamily.net/app/api/auth/callback`
-- `https://strelitzia-preprod.engineerfamily.net/app/api/auth/callback`
-- `http://localhost:8765/app/api/auth/callback` (local `strelitzia serve`, with `STRELITZIA_PUBLIC_URL=http://localhost:8765`)
-- the same three with `/app/api/drive/callback` instead of `/app/api/auth/callback` (Connect Google Drive, below)
+Authorized redirect URIs on the OAuth client, one pair per environment (the four https ones are set; see Google Cloud below):
+- `https://strelitzia.engineerfamily.net/app/api/auth/callback` and `.../app/api/drive/callback`
+- `https://strelitzia-preprod.engineerfamily.net/app/api/auth/callback` and `.../app/api/drive/callback`
+- `http://localhost:8765/app/api/auth/callback` and `.../app/api/drive/callback`, for local `strelitzia serve` with
+  `STRELITZIA_PUBLIC_URL=http://localhost:8765`. Not known to be set: ask the user to add them before testing login locally.
 
 ### Google Drive per user
 Each user connects their own Drive on the Claude setup page (**Connect Google Drive**, scope `drive.file` only, a
@@ -95,5 +95,39 @@ Google Cloud project as the Drive desktop client, since `drive.file` only sees f
 With login on, every `/app/api/*` route except `/app/api/health` and `/app/api/auth/*` returns 401 without a session
 (30 days, `HttpOnly`, `SameSite=Lax`); the UI routes stay public. Only the owner and invited emails get in; anyone else
 lands on `/app/?auth=not_invited`. The resume workbench (packet, result, Claude setup) stays owner-only until per-user
-content libraries (#48) exist: it reads the owner's resume (Drive is per user, below). nginx basic auth stays in front for now; dropping it on prod is a later manual step.
+content libraries (#48) exist: it reads the owner's resume (Drive is per user, below). nginx basic auth is gone on prod
+(engineerfamily #31, 2026-10-18), so Google sign-in is prod's only gate; preprod keeps basic auth in front.
 Preprod's no-`.env` rule above is about LLM keys: an auth-only `.env` there is the user's call.
+
+### Google Cloud project (set up by hand)
+The user did all of this in the Google Cloud Console between 2026-10-05 and 2026-10-17. Agents can't see the Console, so
+this section is the record of what's there. Change anything in the Console only through the user, and update this section
+when they do. The project and client facts below were checked on 2026-10-18 from the client ids in the `.env` files and
+`google_client_secret.json`; the Console settings are as the user reported them.
+
+- **Project:** display name "Engineer Xmas List", ID `engineer-xmas-list`, number `952717433799`. It's an older project
+  reused for Strelitzia; IDs can't be renamed. **Stay in this project.** `drive.file` only lets an app see files created by
+  clients of the same project, so a client in another project couldn't see existing Drive folders and files and would
+  create duplicates. A second, unused project named "Strelitzia" was made by mistake on 2026-10-13; nothing references it.
+  Whether it was deleted is unconfirmed.
+- **Google Auth Platform → Branding:** app name `Strelitzia` (it said `engineerfamily` before 2026-10-13). Home page
+  `https://strelitzia.engineerfamily.net`, privacy policy `https://strelitzia.engineerfamily.net/privacy` (served by
+  engineerfamily's `services/strelitzia/privacy.html`; keep both URLs answering 200). Authorized domain `engineerfamily.net`,
+  which covers every subdomain. **No logo:** uploading one triggers Google's brand verification.
+- **Data access (scopes):** `openid`, `.../auth/userinfo.email`, `.../auth/userinfo.profile`, `.../auth/drive.file`. All four
+  are non-sensitive, so the app needs no Google verification. Adding a sensitive or restricted scope (full `drive`, Gmail,
+  and so on) would require verification: don't add one without the user deciding to.
+- **Audience:** External, **published (In production)**. In Testing mode, refresh tokens expire after 7 days and only
+  listed test users can sign in. The app is unverified, so users see "Google hasn't verified this app" and continue through
+  **Advanced**. Who gets in is decided by the app's invite list (owner + invited emails), not by Google.
+- **Clients**, both in this project:
+  - **Desktop (installed) client** from 2026-10-05: `~/.strelitzia/google_client_secret.json`. The old CLI Drive sync used it;
+    `~/.strelitzia/google_token.json` came from it and was imported into the owner's `user_drive` row. Ask before
+    deleting it in the Console: Drive files it created stay visible to the web client either way (same project).
+  - **Web client "Strelitzia web"** (2026-10-17): its id and secret are `STRELITZIA_GOOGLE_CLIENT_ID` / `_SECRET`. **Prod and
+    preprod share this one client**, with the four https redirect URIs above.
+- **`.env` (user-managed):** prod and preprod each have their own `STRELITZIA_SESSION_SECRET` and `STRELITZIA_TOKEN_KEY`.
+  `STRELITZIA_OWNER_EMAIL` is the user's own Google account in both.
+- **Sign-in works on prod** (M25/M27, 2026-10-17/18).
+- **Test account:** none yet. The user plans a separate Google account for Claude's testing, so agents never sign in as the
+  owner. Until it exists and is written down here, don't sign in to any environment with the owner's account.

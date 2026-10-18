@@ -14,7 +14,7 @@ under `~/.strelitzia`. The old `applypilot` CLI, `APPLYPILOT_*` env vars and `~/
 - The dashboard is `web/` + `dashboard/`: the React app at `/app/` (Sunrise theme tokens in `dashboard/src/styles.css`). Per-user work happens only there.
 - `tests/`: hermetic by default (`conftest.py` blocks network). Opt-in tiers: `-m live --run-live`, `-m llm --run-llm`, `pg`.
 - `agents/ROADMAP.md`: the only status tracker. `agents/plans/<slug>.md`: one spec per change (`done/` holds the archive).
-- `agents/DEPLOY.md`: the prod/preprod layout and how deploys work. `scripts/agent/`: the unattended runner.
+- `agents/DEPLOY.md`: the prod/preprod layout, how deploys work, and the Google Cloud (OAuth) setup the user did by hand. `scripts/agent/`: the unattended runner.
 
 ## Validate (run before claiming anything works)
 `scripts/validate.sh` (ruff + pytest, ~45s) · `--full` (+ dashboard tests/build + docker build) · `--setup` in a new worktree.
