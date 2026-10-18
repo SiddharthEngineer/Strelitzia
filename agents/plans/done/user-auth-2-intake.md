@@ -1,5 +1,5 @@
 # Plan: User accounts, part 2: intake and the task queue per user
-**Status:** ✅ 2026-10-16 (all tasks done, PR open)
+**Status:** ✅ Done, archived 2026-10-18 (#58). On prod since 2026-10-17; human checks passed (ROADMAP M27).
 **Risk:** review (rewrites every job-row read/write on the intake path)
 **Issue:** #47
 **Depends on:** user-auth-1-schema

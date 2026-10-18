@@ -1,5 +1,5 @@
 # Plan: User accounts, part 5: Google sign-in and the invite allowlist
-**Status:** ✅ Done (2026-10-16)
+**Status:** ✅ Done, archived 2026-10-18 (#61). On prod since 2026-10-17; human checks passed (ROADMAP M27).
 **Risk:** review (authentication)
 **Issue:** #47
 **Depends on:** user-auth-4-workspace

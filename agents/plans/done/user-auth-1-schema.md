@@ -1,5 +1,5 @@
 # Plan: User accounts, part 1: users table and per-user job rows
-**Status:** ✅ 2026-10-16 (all tasks done, PR open)
+**Status:** ✅ Done, archived 2026-10-18 (#57). On prod since 2026-10-17; human checks passed (ROADMAP M27).
 **Risk:** review (schema migration of the live jobs table, including a primary-key change)
 **Issue:** #47
 

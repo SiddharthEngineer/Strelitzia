@@ -1,5 +1,5 @@
 # Plan: Profile, part 2: the Profile page and resume parsing
-**Status:** ✅ Done 2026-10-16 (PR open)
+**Status:** ✅ Done, archived 2026-10-18 (#68). On prod since 2026-10-17; human checks passed (ROADMAP M27).
 **Risk:** review (new page, file upload, an LLM call)
 **Issue:** #48
 **Depends on:** profile-1-store

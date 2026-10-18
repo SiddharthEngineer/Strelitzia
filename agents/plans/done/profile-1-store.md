@@ -1,5 +1,5 @@
 # Plan: Profile, part 1: per-user profile, resume and content library in the database
-**Status:** ✅ Done (2026-10-16)
+**Status:** ✅ Done, archived 2026-10-18 (#67). On prod since 2026-10-17; human checks passed (ROADMAP M27).
 **Risk:** review (moves the scoring and workbench inputs from files to the DB)
 **Issue:** #48
 **Depends on:** rescore-all

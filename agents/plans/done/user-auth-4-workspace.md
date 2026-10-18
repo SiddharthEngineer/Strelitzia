@@ -1,5 +1,5 @@
 # Plan: User accounts, part 4: contacts, tracking, workbench and panel per user
-**Status:** ✅ Done (2026-10-16)
+**Status:** ✅ Done, archived 2026-10-18 (#60). On prod since 2026-10-17; human checks passed (ROADMAP M27).
 **Risk:** review (data isolation)
 **Issue:** #47
 **Depends on:** user-auth-3-scoring

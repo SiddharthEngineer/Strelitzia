@@ -1,5 +1,5 @@
 # Plan: Contact form with separate fields
-**Status:** ✅ Done 2026-10-16 (PR open; human test steps on preprod pending)
+**Status:** ✅ Done, archived 2026-10-18 (#65). On prod since 2026-10-17; human checks passed (ROADMAP M27).
 **Risk:** review (dashboard UI; merges under AGENT_MERGE_POLICY=all)
 **Issue:** #49
 **Depends on:** user-auth-8-cli

@@ -1,5 +1,5 @@
 # Plan: Preferences cleanup, part 2: more job fields and a role map
-**Status:** ✅ Done (2026-10-16)
+**Status:** ✅ Done, archived 2026-10-18 (#70). On prod since 2026-10-17; human checks passed (ROADMAP M27).
 **Risk:** review (changes the extraction enum)
 **Issue:** #46
 **Depends on:** prefs-cleanup-1-scoring

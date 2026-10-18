@@ -1,5 +1,5 @@
 # Plan: Rescore all jobs
-**Status:** ✅ Done (2026-10-16, PR open)
+**Status:** ✅ Done, archived 2026-10-18 (#66). On prod since 2026-10-17; human checks passed (ROADMAP M27).
 **Risk:** review (queues paid LLM work)
 **Issue:** #45
 **Depends on:** contact-form

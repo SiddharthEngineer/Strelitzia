@@ -1,5 +1,5 @@
 # Plan: User accounts, part 8: admin-only CLI
-**Status:** ✅ Done (2026-10-16), PR open
+**Status:** ✅ Done, archived 2026-10-18 (#64). On prod since 2026-10-17; human checks passed (ROADMAP M27).
 **Risk:** review (removes CLI commands)
 **Issue:** #47
 **Depends on:** user-auth-7-dashboard

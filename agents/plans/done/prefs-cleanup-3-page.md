@@ -1,5 +1,5 @@
 # Plan: Preferences cleanup, part 3: regrouped Preferences page
-**Status:** ✅ Done (2026-10-16)
+**Status:** ✅ Done, archived 2026-10-18 (#71). On prod since 2026-10-17; human checks passed (ROADMAP M27).
 **Risk:** review (dashboard UI)
 **Issue:** #46
 **Depends on:** prefs-cleanup-2-roles

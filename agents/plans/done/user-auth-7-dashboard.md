@@ -1,5 +1,5 @@
 # Plan: User accounts, part 7: sign-in screens and the Users admin page
-**Status:** ✅ Done 2026-10-16 (PR open)
+**Status:** ✅ Done, archived 2026-10-18 (#63). On prod since 2026-10-17; human checks passed (ROADMAP M27).
 **Risk:** review (new pages and owner-only admin API)
 **Issue:** #47
 **Depends on:** user-auth-6-drive

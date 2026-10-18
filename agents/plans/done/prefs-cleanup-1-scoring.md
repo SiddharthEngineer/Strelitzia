@@ -1,5 +1,5 @@
 # Plan: Preferences cleanup, part 1: qualification rules from the profile, fixed AI weights, red-flag picks
-**Status:** ✅ Done 2026-10-16
+**Status:** ✅ Done, archived 2026-10-18 (#69). On prod since 2026-10-17; human checks passed (ROADMAP M27).
 **Risk:** review (changes how the fit score is computed)
 **Issue:** #46
 **Depends on:** profile-2-page
