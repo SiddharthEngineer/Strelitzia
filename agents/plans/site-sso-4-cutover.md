@@ -1,11 +1,12 @@
-# Plan: Site-wide sign-in, part 3: nginx cutover, Google Console, rollout and rollback
+# Plan: Site-wide sign-in, part 4: nginx cutover, Google Console, rollout and rollback
 **Status:** ❌ Not started (draft, waiting for the user's review)
 **Risk:** review (authentication; nginx and compose in the engineerfamily repo; prod is the user's call)
-**Depends on:** site-sso-1-site-auth, site-sso-2-proxy-mode
+**Depends on:** site-sso-1-site-auth, site-sso-2-site-header, site-sso-3-proxy-mode
 
 ## Goal
 The dashboard uses the site-wide sign-in: one Google sign-in on engineerfamily.net covers the homepage, Strelitzia's
-pages and the dashboard, and only the dashboard asks for an invite. Every step has a one-command rollback.
+pages and the dashboard, and only the dashboard asks for an invite. Every page's header has the same engineerfamily home
+link top left and the same sign-in / profile / Sign out control top right. Every step has a one-command rollback.
 
 ## Context
 - `~/src/engineerfamily/services/nginx/nginx.prod.conf`: `location /` (Flask, so `/auth/*` already reaches it),
@@ -52,22 +53,24 @@ can then send it `X-Auth-Request-*` headers (Umami, a third-party image, can't r
 **What:** in this order, stopping at the first failure:
 1. **Google Console (user):** on the "Strelitzia web" client add `https://preprod.engineerfamily.net/auth/callback` and
    `https://engineerfamily.net/auth/callback`. Keep the four `/strelitzia/dashboard/api/{auth,drive}/callback` URIs:
-   the dashboard callbacks are the rollback path, the Drive ones stay for good. Branding per part 1's open question 1
-   (home page `https://engineerfamily.net/`, privacy URL answering 200; still no logo).
+   the dashboard callbacks are the rollback path, the Drive ones stay for good. **Branding:** app name `engineerfamily`,
+   home page `https://engineerfamily.net/`, privacy policy `https://engineerfamily.net/privacy` (do this after step 6's
+   prod deploy, so the privacy URL already answers 200), authorized domain `engineerfamily.net` (unchanged). No logo.
 2. **Preprod `.env` (user):** `/srv/engineerfamily-preprod/.env` gets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (copy of
    the Strelitzia web client) and its own `SITE_SESSION_SECRET` (`openssl rand -hex 32`).
-3. Part 2 merged on Strelitzia trunk (no behavior change; prod can take it with `make strelitzia-deploy` any time).
-4. Part 1 PR: `make preprod-deploy ref=origin/<branch>`, human steps 1-4.
-5. Part 3 PR: `make preprod-deploy ref=origin/<branch>`, then `STRELITZIA_AUTH_MODE=proxy` in `~/.strelitzia-preprod/.env`
-   and `make preprod-strelitzia-up`. Human steps 5-9.
+3. Part 3 merged on Strelitzia trunk (no behavior change; prod can take it with `make strelitzia-deploy` any time).
+4. Parts 1 and 2 (one engineerfamily PR, or two merged into one preprod deploy): `make preprod-deploy ref=origin/<branch>`, human steps 1-4.
+5. Part 4 PR: `make preprod-deploy ref=origin/<branch>`, then `STRELITZIA_AUTH_MODE=proxy` and
+   `STRELITZIA_SITE_HEADER_URL=/shared/site-header.js` in `~/.strelitzia-preprod/.env` and `make preprod-strelitzia-up`.
+   Human steps 5-10.
 6. **Prod (user's go-ahead):** prod `.env` as in step 2 with a different secret, merge both engineerfamily PRs,
    `make tag-prod v=1.3.0`, `make deploy-prod ref=v1.3.0` (site sign-in on, dashboard still on its own flow), check
-   steps 1-4 on prod, then `STRELITZIA_AUTH_MODE=proxy` in `~/.strelitzia/.env` and `make strelitzia-up`. Everyone signs in
-   once more (the old `strelitzia_session` no longer counts).
+   steps 1-4 on prod, then the two settings from step 5 in `~/.strelitzia/.env` and `make strelitzia-up`. Everyone signs
+   in once more (the old `strelitzia_session` no longer counts). Then the branding change from step 1.
 7. **After a week without trouble (user):** remove the two `/strelitzia/dashboard/api/auth/callback` URIs from the client.
 **Rollback** (reverse order, no data to undo: nothing here migrates the DB):
-- Dashboard: delete `STRELITZIA_AUTH_MODE` from the `.env`, `make strelitzia-up` (or `preprod-strelitzia-up`) → the
-  built-in Google flow is back. Do this **before** rolling back nginx or Flask, or the dashboard loses its identity.
+- Dashboard: delete `STRELITZIA_AUTH_MODE` and `STRELITZIA_SITE_HEADER_URL` from the `.env`, `make strelitzia-up` (or
+  `preprod-strelitzia-up`) → the built-in Google flow and today's header are back. Do this **before** rolling back nginx or Flask, or the dashboard loses its identity.
 - Site: `make deploy-prod ref=v1.2.0` (the tag before this work); preprod: `make preprod-deploy ref=origin/main`.
 - Everyone signed out at once: rotate `SITE_SESSION_SECRET` and restart `app`.
 **Validate:** each step's human checks below pass before the next step starts.
@@ -81,19 +84,26 @@ can then send it `X-Auth-Request-*` headers (Umami, a third-party image, can't r
 
 ## Human test steps (preprod)
 Browser: only the dev test account (owner on preprod), in its own profile; basic auth first, as today.
-1. `https://preprod.engineerfamily.net/`: "Sign in" top right. Click it, pick the test account → back on `/`, its initials top right.
-2. `/games/` and `/strelitzia/`: still signed in, same initials.
-3. Initials menu → "Sign out" → "Sign in" shows everywhere. Pages stay readable signed out.
+1. `https://preprod.engineerfamily.net/`: the engineerfamily home link top left, "Sign in" top right. Click it, pick the
+   test account → back on `/`, its initials and a Sign out button top right.
+2. `/games/`, `/strelitzia/` and `/strelitzia/privacy`: still signed in; the home link and the profile control look the same
+   and sit in the same spots as on `/` (compare screenshots); the home link goes back to `/` from each.
+3. "Sign out" → "Sign in" shows everywhere. Pages stay readable signed out. Repeat 1-2 at phone width (390 px).
 4. DevTools → Application → Cookies: one `ef_session` with Path `/`, no Domain (host `preprod.engineerfamily.net`), HttpOnly, Secure, Lax.
-5. (After step 5 of the rollout.) Signed in on `/`, open `/strelitzia/dashboard/` → the jobs table with no second Google prompt.
+5. (After step 5 of the rollout.) Signed in on `/`, open `/strelitzia/dashboard/` → the jobs table with no second Google
+   prompt, the same home link top left and the same initials and Sign out top right as on `/`. The home link leads to `/`.
 6. Users page (owner-only) loads; the Claude setup page's Connect Google Drive still reaches Google and comes back connected.
-7. Sign out from the dashboard → signed out on `/` too; open the dashboard → its sign-in card; "Sign in with Google" returns to the dashboard.
+7. Sign out from the dashboard → signed out on `/` too; the dashboard shows its sign-in card under the same top bar;
+   "Sign in with Google" returns to the dashboard.
 8. `https://strelitzia-preprod.engineerfamily.net/strelitzia/dashboard/` → 301 to `preprod.engineerfamily.net`.
-9. (User, optional, any Google account not invited on preprod.) Sign in on `/` → fine; the dashboard shows "isn't invited" with that email and "Use another account".
-On prod, repeat 1-7 with the test account as an invited non-owner (step 6: Users page answers "owner only").
+9. (User, optional, any Google account not invited on preprod.) Sign in on `/` → fine; the dashboard shows "isn't invited"
+   with that email, "Use another account", and the home link and Sign out in its top bar.
+10. Dashboard at phone width: home link first and profile last on the top row; the nav scrolls.
+On prod, repeat 1-7 with the test account as an invited non-owner (step 6: Users page answers "owner only"). After the
+branding change, the Google prompt says "engineerfamily".
 
 ## Decisions
-1. Two engineerfamily PRs (part 1, then part 3) and a separate env flag, so site sign-in can go live before the dashboard
+1. Site sign-in and the header (parts 1-2) ship before the nginx cutover (this part), with separate env flags, so site sign-in can go live before the dashboard
    depends on it, and each step rolls back on its own.
 2. Old dashboard callback URIs stay registered for a week: they're what the rollback needs.
 3. `strelitzia-preprod.*` 301s instead of getting its own cookie, matching prod's `strelitzia.*` 301.
