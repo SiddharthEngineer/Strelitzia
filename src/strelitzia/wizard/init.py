@@ -182,7 +182,7 @@ def _setup_content_library() -> None:
 
     console.print(
         "\n[dim]Tip: resumes are tailored from your content library in Claude: open a job in the dashboard → "
-        "[bold]Open in Claude[/bold] (one-time setup at /app/claude-setup).[/dim]"
+        "[bold]Open in Claude[/bold] (one-time setup at /strelitzia/dashboard/claude-setup).[/dim]"
     )
 
 

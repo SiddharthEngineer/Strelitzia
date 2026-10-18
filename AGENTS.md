@@ -11,7 +11,7 @@ under `~/.strelitzia`. The old `applypilot` CLI, `APPLYPILOT_*` env vars and `~/
   (`discovery/`, `enrichment/`, `scoring/`), `database.py`/`db_pg.py`, `web/` (API), `wizard/` (init).
 - Accounts: `users.py` (owner + invited emails, caps; every per-user row has `user_id`), `web/auth.py` (Google sign-in,
   off until `STRELITZIA_GOOGLE_CLIENT_ID` is set; then every request has a signed-in user), `web/admin.py` (Users page).
-- The dashboard is `web/` + `dashboard/`: the React app at `/app/` (Sunrise theme tokens in `dashboard/src/styles.css`). Per-user work happens only there.
+- The dashboard is `web/` + `dashboard/`: the React app at `/strelitzia/dashboard/` (Sunrise theme tokens in `dashboard/src/styles.css`). Per-user work happens only there.
 - `tests/`: hermetic by default (`conftest.py` blocks network). Opt-in tiers: `-m live --run-live`, `-m llm --run-llm`, `pg`.
 - `agents/ROADMAP.md`: the only status tracker. `agents/plans/<slug>.md`: one spec per change (`done/` holds the archive).
 - `agents/DEPLOY.md`: the prod/preprod layout, how deploys work, and the Google Cloud (OAuth) setup the user did by hand. `scripts/agent/`: the unattended runner.

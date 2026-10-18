@@ -1,4 +1,4 @@
-"""GET /app/api/jobs filters, sorting, paging and /app/api/facets (dashboard-api Task 3)."""
+"""GET /strelitzia/dashboard/api/jobs filters, sorting, paging and /strelitzia/dashboard/api/facets (dashboard-api Task 3)."""
 
 from datetime import date
 
@@ -53,7 +53,7 @@ def _keys(*names):
 
 
 def get(client, **params):
-    return client.get("/app/api/jobs", params=params)
+    return client.get("/strelitzia/dashboard/api/jobs", params=params)
 
 
 def test_default_lists_everything_newest_first(client, jobs):
@@ -178,7 +178,7 @@ def test_list_backfills_job_keys(client, jobs, conn):
 
 
 def test_facets(client, jobs):
-    body = client.get("/app/api/facets").json()
+    body = client.get("/strelitzia/dashboard/api/facets").json()
     assert body["total"] == 7
     status = {s["value"]: s["count"] for s in body["status"]}
     assert status == {"active": 1, "inactive": 1, "in_progress": 1, "submitted": 2, "rejected": 1,
@@ -193,4 +193,4 @@ def test_facets(client, jobs):
 
 def test_empty_db(client):
     assert get(client).json() == {"total": 0, "page": 1, "page_size": 50, "items": []}
-    assert client.get("/app/api/facets").json()["total"] == 0
+    assert client.get("/strelitzia/dashboard/api/facets").json()["total"] == 0

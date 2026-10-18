@@ -1,12 +1,13 @@
-"""FastAPI app for the job dashboard. Every route lives under /app, which nginx proxies unchanged.
+"""FastAPI app for the job dashboard. Every route lives under PREFIX
+(/strelitzia/dashboard, web/paths.py), which nginx proxies unchanged.
 
-  /app/api/...   JSON API
-  /app/...       the built UI (index.html + assets), with unknown paths falling back to index.html
+  /strelitzia/dashboard/api/...   JSON API
+  /strelitzia/dashboard/...       the built UI (index.html + assets), with unknown paths falling back to index.html
 
 Mutating requests need the header `X-Strelitzia: 1`. nginx puts basic auth in front, and browsers resend
 basic-auth credentials (and the session cookie) on cross-site form posts, but a cross-site form can't set a custom header.
 
-With Google sign-in on (STRELITZIA_GOOGLE_CLIENT_ID set, see web/auth.py) every /app/api route except health and
+With Google sign-in on (STRELITZIA_GOOGLE_CLIENT_ID set, see web/auth.py) every /strelitzia/dashboard/api route except health and
 auth/* needs a session; the UI routes stay public so the SPA can show its login screen.
 """
 
@@ -39,8 +40,8 @@ from strelitzia.scoring import resume_parse, workbench
 from strelitzia.scoring.assessment import current_assessment_key, recompute_fit
 from strelitzia.scoring.content_library import parse_content_library_text
 from strelitzia.web import admin, auth, queries, tasks
+from strelitzia.web.paths import PREFIX
 
-PREFIX = "/app"
 CSRF_HEADER = "X-Strelitzia"
 LEGACY_CSRF_HEADER = "X-ApplyPilot"  # sent by dashboard bundles from before the rename (open tabs after a deploy)
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
@@ -496,7 +497,7 @@ def _notify(request: Request) -> None:
 
 @api.post("/jobs/{key}/rescore")
 def rescore(key: str, request: Request) -> dict:
-    """Queue a sync assessment of one job (whatever its state). Poll GET /app/api/tasks/{id}."""
+    """Queue a sync assessment of one job (whatever its state). Poll GET /strelitzia/dashboard/api/tasks/{id}."""
     conn = db_conn(request)
     user = current_user(request)
     job = job_by_key(conn, user.id, key)
@@ -522,7 +523,7 @@ def rescore_all_preview(request: Request) -> dict:
 @api.post("/rescore")
 def rescore_all(body: RescoreAll, request: Request) -> dict:
     """After the user confirmed the cost, queue re-assessment of every active job, current assessments included.
-    Poll GET /app/api/tasks/{id}. A budget stop (402) queues nothing."""
+    Poll GET /strelitzia/dashboard/api/tasks/{id}. A budget stop (402) queues nothing."""
     from strelitzia.scoring.scorer import rescore_preview
 
     if not body.confirm:

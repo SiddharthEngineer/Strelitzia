@@ -1,4 +1,4 @@
-// Typed fetch helpers for /app/api. Mutating calls send `X-Strelitzia: 1` (the server's CSRF check).
+// Typed fetch helpers for the dashboard API (<base>/api, e.g. /strelitzia/dashboard/api). Mutating calls send `X-Strelitzia: 1` (the server's CSRF check).
 import type {
   AddJobInput, AddJobResult, AdminUser, AuthMe, ClaudeSetup, Contact, ContactFields, ContactListItem, ContactWithJobs,
   Facets, Interview, ImportResult, InterviewFields, JobDetail, JobList, JobQuery, PacketResult, PanelGradeOutcome,
@@ -7,7 +7,7 @@ import type {
   SavePreferencesResult, Task, UserStatus,
 } from './types';
 
-export const API_BASE = '/app/api';
+export const API_BASE = `${import.meta.env.BASE_URL}api`;
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {

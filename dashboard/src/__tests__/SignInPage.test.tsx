@@ -30,7 +30,7 @@ afterEach(() => vi.clearAllMocks());
 describe('SignInPage', () => {
   it('links to Google sign-in', () => {
     render(<MemoryRouter><SignInPage /></MemoryRouter>);
-    expect(screen.getByRole('link', { name: 'Sign in with Google' })).toHaveAttribute('href', '/app/api/auth/login');
+    expect(screen.getByRole('link', { name: 'Sign in with Google' })).toHaveAttribute('href', '/strelitzia/dashboard/api/auth/login');
     expect(screen.queryByRole('alert')).toBeNull();
   });
 

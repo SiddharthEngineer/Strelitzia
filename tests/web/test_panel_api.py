@@ -36,28 +36,28 @@ def _reply(winners, count=None):
 @pytest.fixture
 def run(client, conn):
     _seed(conn)
-    res = client.post("/app/api/panel/runs", json={"n": N, "mode": "latest_vs_previous"})
+    res = client.post("/strelitzia/dashboard/api/panel/runs", json={"n": N, "mode": "latest_vs_previous"})
     assert res.status_code == 201, res.text
     return res.json()
 
 
 def test_panel_summary_counts_and_due(client, conn):
-    body = client.get("/app/api/panel").json()
+    body = client.get("/strelitzia/dashboard/api/panel").json()
     assert body["due"] is None and body["needed"] == 5 and body["runs"] == []
     assert body["comparable"] == {"latest_vs_previous": 0, "rules_a_vs_b": 0}
     assert body["project_name"] == "Strelitzia Panel" and "not_met" in body["rubric"]["text"]
     assert body["rubric"]["url"] is None
     _seed(conn)
-    body = client.get("/app/api/panel").json()
+    body = client.get("/strelitzia/dashboard/api/panel").json()
     assert body["due"] == "no panel has been run yet"
     assert body["comparable"] == {"latest_vs_previous": 5, "rules_a_vs_b": 5}
 
 
 def test_create_run_needs_comparable_jobs(client):
-    res = client.post("/app/api/panel/runs", json={"n": 5})
+    res = client.post("/strelitzia/dashboard/api/panel/runs", json={"n": 5})
     assert res.status_code == 409 and "two comparable drafts" in res.json()["detail"]
-    assert client.post("/app/api/panel/runs", json={"n": 0}).status_code == 422
-    assert client.post("/app/api/panel/runs", json={"mode": "nope"}).status_code == 422
+    assert client.post("/strelitzia/dashboard/api/panel/runs", json={"n": 0}).status_code == 422
+    assert client.post("/strelitzia/dashboard/api/panel/runs", json={"mode": "nope"}).status_code == 422
 
 
 def test_run_is_blind_until_your_picks(client, run):
@@ -71,13 +71,13 @@ def test_run_is_blind_until_your_picks(client, run):
     assert p1.index(item["first_text"].strip()) < p1.index(item["second_text"].strip())
     assert p2.index(item["second_text"].strip()) < p2.index(item["first_text"].strip())
     assert "older" not in json.dumps(run["items"]) and "newer" not in json.dumps(run["items"])
-    assert client.get(f"/app/api/panel/runs/{run['id']}").json()["id"] == run["id"]
-    assert client.get("/app/api/panel/runs/nope").status_code == 404
-    assert client.get("/app/api/panel").json()["runs"][0]["id"] == run["id"]
+    assert client.get(f"/strelitzia/dashboard/api/panel/runs/{run['id']}").json()["id"] == run["id"]
+    assert client.get("/strelitzia/dashboard/api/panel/runs/nope").status_code == 404
+    assert client.get("/strelitzia/dashboard/api/panel").json()["runs"][0]["id"] == run["id"]
 
 
 def test_model_replies_picks_and_report(client, run):
-    url = f"/app/api/panel/runs/{run['id']}/grades"
+    url = f"/strelitzia/dashboard/api/panel/runs/{run['id']}/grades"
     res = client.post(url, json={"grader": "sonnet", "text": _reply(["first"] * 5)})
     assert res.status_code == 200 and res.json()["graded"] == 5
     assert res.json()["run"]["graded"] == {"sonnet": 5, "opus": 0, "you": 0}
@@ -94,11 +94,11 @@ def test_model_replies_picks_and_report(client, run):
     assert report["agreement"] == {"sonnet_vs_opus": 1.0, "sonnet_vs_you": 1.0, "opus_vs_you": 1.0}
     assert report["verdict"] in ("newer is better", "no clear gain", "worse")
     assert report["items"][0]["winners"]["you"] in ("newer", "older")
-    assert client.get("/app/api/panel").json()["due"] is None
+    assert client.get("/strelitzia/dashboard/api/panel").json()["due"] is None
 
 
 def test_reply_with_the_wrong_item_count_is_an_error(client, conn, run):
-    url = f"/app/api/panel/runs/{run['id']}/grades"
+    url = f"/strelitzia/dashboard/api/panel/runs/{run['id']}/grades"
     res = client.post(url, json={"grader": "sonnet", "text": _reply(["first"] * 5, count=4)})
     assert res.status_code == 422
     assert "grades 4 items, but this panel has 5" in res.json()["detail"] and res.json()["errors"]
@@ -106,18 +106,18 @@ def test_reply_with_the_wrong_item_count_is_an_error(client, conn, run):
     assert client.post(url, json={"grader": "you", "item": 1}).status_code == 422
     assert client.post(url, json={"grader": "you", "item": 9, "winner": "tie"}).status_code == 404
     assert client.post(url, json={"grader": "gpt", "text": "x"}).status_code == 422
-    assert client.post("/app/api/panel/runs/nope/grades", json={"grader": "sonnet", "text": "x"}).status_code == 404
+    assert client.post("/strelitzia/dashboard/api/panel/runs/nope/grades", json={"grader": "sonnet", "text": "x"}).status_code == 404
     assert panel.grades(conn, users.owner(conn).id, run["id"]) == {}
 
 
 def test_another_users_panel_run_is_404(client, conn, monkeypatch):
     _seed(conn)
-    run = client.post("/app/api/panel/runs", json={"n": N}).json()
+    run = client.post("/strelitzia/dashboard/api/panel/runs", json={"n": N}).json()
     act_as(monkeypatch, second_user(conn))
-    assert client.get(f"/app/api/panel/runs/{run['id']}").status_code == 404
-    res = client.post(f"/app/api/panel/runs/{run['id']}/grades", json={"grader": "you", "item": 1, "winner": "tie"})
+    assert client.get(f"/strelitzia/dashboard/api/panel/runs/{run['id']}").status_code == 404
+    res = client.post(f"/strelitzia/dashboard/api/panel/runs/{run['id']}/grades", json={"grader": "you", "item": 1, "winner": "tie"})
     assert res.status_code == 404
-    page = client.get("/app/api/panel").json()
+    page = client.get("/strelitzia/dashboard/api/panel").json()
     assert page["runs"] == [] and page["comparable"] == {"latest_vs_previous": 0, "rules_a_vs_b": 0}
-    assert client.post("/app/api/panel/runs", json={"n": N}).status_code == 409
+    assert client.post("/strelitzia/dashboard/api/panel/runs", json={"n": N}).status_code == 409
     assert panel.grades(conn, users.owner(conn).id, run["id"]) == {}

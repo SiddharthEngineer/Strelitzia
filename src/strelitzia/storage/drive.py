@@ -38,7 +38,7 @@ PROP_PREFIX = "applypilot_"
 INSTALL_HINT = 'Install the Drive extra: pip install -e ".[drive]"'
 # The CLI's `drive auth` is gone (user-auth-8-cli): a token now comes only from the dashboard's Connect Google Drive.
 LEGACY_CONNECT_HINT = ("Turn on Google sign-in and set STRELITZIA_TOKEN_KEY, then use Connect Google Drive on "
-                "/app/claude-setup (README: Google Drive file library).")
+                "/strelitzia/dashboard/claude-setup (README: Google Drive file library).")
 
 
 class DriveNotConfigured(RuntimeError):

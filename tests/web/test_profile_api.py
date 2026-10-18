@@ -37,11 +37,11 @@ def _llm(reply=PARSED):
 
 
 def _upload(client, data, name="cv.pdf", mime="application/pdf"):
-    return client.post("/app/api/profile/resume", files={"file": (name, data, mime)})
+    return client.post("/strelitzia/dashboard/api/profile/resume", files={"file": (name, data, mime)})
 
 
 def test_get_starts_empty_with_the_education_options(client):
-    body = client.get("/app/api/profile").json()
+    body = client.get("/strelitzia/dashboard/api/profile").json()
     assert body["profile"]["first_name"] == "" and body["profile"]["skills"] == []
     assert body["profile"]["years_experience"] is None and body["profile"]["education_level"] is None
     assert body["has_resume"] is False and body["resume_file_name"] is None
@@ -52,7 +52,7 @@ def test_get_starts_empty_with_the_education_options(client):
 def test_put_saves_the_fields_and_keeps_the_rest(client, conn):
     owner = users.owner(conn).id
     store.save_profile(conn, owner, store.UserProfile(resume_text="old resume", extras={"resume_facts": {"x": 1}}))
-    r = client.put("/app/api/profile", json={
+    r = client.put("/strelitzia/dashboard/api/profile", json={
         "first_name": " Ada ", "last_name": "Example", "phone": "555-000-0000", "email": "ada@example.com",
         "linkedin_url": "https://www.linkedin.com/in/example", "github_url": "https://github.com/example",
         "location": "Springfield", "current_job_title": "Widget Engineer", "years_experience": 4.5,
@@ -64,7 +64,7 @@ def test_put_saves_the_fields_and_keeps_the_rest(client, conn):
     assert (saved.phone, saved.years_experience, saved.education_level) == ("555-000-0000", 4.5, "masters")
     assert saved.content_library_md == LIBRARY
     assert saved.resume_text == "old resume" and saved.extras == {"resume_facts": {"x": 1}}
-    assert client.get("/app/api/profile").json()["profile"]["phone"] == "555-000-0000"
+    assert client.get("/strelitzia/dashboard/api/profile").json()["profile"]["phone"] == "555-000-0000"
 
 
 @pytest.mark.parametrize("field,value", [
@@ -78,29 +78,29 @@ def test_put_saves_the_fields_and_keeps_the_rest(client, conn):
     ("education_level", "unknown"),
 ])
 def test_put_rejects_bad_values(client, conn, field, value):
-    r = client.put("/app/api/profile", json={field: value})
+    r = client.put("/strelitzia/dashboard/api/profile", json={field: value})
     assert r.status_code == 422
     assert not store.has_profile(conn, users.owner(conn).id)
 
 
 def test_a_content_library_without_roles_shows_an_error_but_saves(client, conn):
-    r = client.put("/app/api/profile", json={"content_library_md": "just some notes"})
+    r = client.put("/strelitzia/dashboard/api/profile", json={"content_library_md": "just some notes"})
     assert r.status_code == 200
     assert "No roles found" in r.json()["content_library_error"]
     assert store.load_profile(conn, users.owner(conn).id).content_library_md == "just some notes"
 
 
 def test_profiles_are_per_user(client, conn, monkeypatch):
-    client.put("/app/api/profile", json={"first_name": "Owner"})
+    client.put("/strelitzia/dashboard/api/profile", json={"first_name": "Owner"})
     act_as(monkeypatch, second_user(conn))
-    assert client.get("/app/api/profile").json()["profile"]["first_name"] == ""
-    client.put("/app/api/profile", json={"first_name": "Bo"})
+    assert client.get("/strelitzia/dashboard/api/profile").json()["profile"]["first_name"] == ""
+    client.put("/strelitzia/dashboard/api/profile", json={"first_name": "Bo"})
     assert store.load_profile(conn, users.owner(conn).id).first_name == "Owner"
 
 
 def test_upload_stores_the_file_and_returns_a_draft_for_the_empty_fields(client, conn):
     owner = users.owner(conn).id
-    client.put("/app/api/profile", json={"first_name": "Adeline", "skills": ["Go"]})
+    client.put("/strelitzia/dashboard/api/profile", json={"first_name": "Adeline", "skills": ["Go"]})
     key_before = current_assessment_key(conn, user_id=owner)
     pdf = make_pdf(LINES)
     with _llm() as get_client:
@@ -119,7 +119,7 @@ def test_upload_stores_the_file_and_returns_a_draft_for_the_empty_fields(client,
     assert saved.last_name == "" and saved.skills == ["Go"]  # the draft isn't saved
     assert current_assessment_key(conn, user_id=owner) != key_before  # old assessments are stale
 
-    download = client.get("/app/api/profile/resume")
+    download = client.get("/strelitzia/dashboard/api/profile/resume")
     assert download.status_code == 200 and download.content == pdf
     assert download.headers["content-type"] == "application/pdf"
     assert "cv.pdf" in download.headers["content-disposition"]
@@ -165,20 +165,20 @@ def test_without_an_api_key_the_resume_is_stored_with_a_parse_error(client, conn
 
 
 def test_download_without_a_file_is_a_404(client):
-    assert client.get("/app/api/profile/resume").status_code == 404
+    assert client.get("/strelitzia/dashboard/api/profile/resume").status_code == 404
 
 
 def test_mutations_need_the_header(app):
     from fastapi.testclient import TestClient
 
     with TestClient(app) as bare:
-        assert bare.put("/app/api/profile", json={}).status_code == 403
+        assert bare.put("/strelitzia/dashboard/api/profile", json={}).status_code == 403
         assert _upload(bare, make_pdf(LINES)).status_code == 403
 
 
 def test_a_put_leaves_the_fields_it_doesnt_send(client, conn):
-    client.put("/app/api/profile", json={"first_name": "Ada", "skills": ["Go"], "content_library_md": LIBRARY})
-    r = client.put("/app/api/profile", json={"phone": "555-000-0000"})
+    client.put("/strelitzia/dashboard/api/profile", json={"first_name": "Ada", "skills": ["Go"], "content_library_md": LIBRARY})
+    r = client.put("/strelitzia/dashboard/api/profile", json={"phone": "555-000-0000"})
     assert r.status_code == 200
     saved = store.load_profile(conn, users.owner(conn).id)
     assert (saved.first_name, saved.skills, saved.content_library_md) == ("Ada", ["Go"], LIBRARY)
@@ -186,7 +186,7 @@ def test_a_put_leaves_the_fields_it_doesnt_send(client, conn):
 
 @pytest.mark.parametrize("body", [{"phone": 5551234}, {"first_name": []}, {"skills": "Python"}])
 def test_wrong_types_are_a_422(client, body):
-    assert client.put("/app/api/profile", json=body).status_code == 422
+    assert client.put("/strelitzia/dashboard/api/profile", json=body).status_code == 422
 
 
 def test_a_put_never_writes_the_resume_text_back(client, conn):
@@ -196,7 +196,7 @@ def test_a_put_never_writes_the_resume_text_back(client, conn):
     stale = store.load_profile(conn, owner)
     store.save_resume_file(conn, owner, "cv.pdf", store.PDF_MIME, b"%PDF", "new resume")
     with patch.object(store, "load_profile", return_value=stale):
-        assert client.put("/app/api/profile", json={"phone": "1"}).status_code == 200
+        assert client.put("/strelitzia/dashboard/api/profile", json={"phone": "1"}).status_code == 200
     assert store.load_profile(conn, owner).resume_text == "new resume"
 
 

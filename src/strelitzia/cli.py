@@ -259,7 +259,7 @@ def serve(
         None, "--web-dir", help="Built dashboard UI (default: $STRELITZIA_WEB_DIR, else the bundle shipped in the package).",
     ),
 ) -> None:
-    """Run the dashboard API (and UI) at http://HOST:PORT/app/."""
+    """Run the dashboard API (and UI) at http://HOST:PORT/strelitzia/dashboard/."""
     _bootstrap()
     try:
         import uvicorn

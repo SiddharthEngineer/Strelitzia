@@ -22,5 +22,5 @@ RUN mkdir -p /home/dev && chmod 1777 /home/dev
 
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:8000/app/api/health || exit 1
+    CMD curl -fsS http://127.0.0.1:8000/strelitzia/dashboard/api/health || exit 1
 CMD ["strelitzia", "serve", "--host", "0.0.0.0", "--port", "8000"]
