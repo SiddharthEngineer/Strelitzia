@@ -1,8 +1,7 @@
 """Wipe the preprod database and seed it with 18 fake jobs spread over every pipeline stage.
 
 Runs on every preprod deploy (scripts/agent/preprod.sh, via PREPROD_SEED_CMD) in a one-off container of the preprod
-image with this checkout mounted at /seed. It refuses any database except `strelitzia_preprod`
-(or the pre-rename `applypilot_preprod`), since it deletes rows.
+image with this checkout mounted at /seed. It refuses any database except `strelitzia_preprod`, since it deletes rows.
 
     python scripts/seed_preprod.py                 # target: STRELITZIA_DATABASE_URL (must be .../strelitzia_preprod)
     python scripts/seed_preprod.py --sqlite PATH   # seed a SQLite file instead (tests)
@@ -22,7 +21,6 @@ from strelitzia.config import env
 from strelitzia.database import init_db, job_key
 
 PREPROD_DB = "strelitzia_preprod"
-LEGACY_PREPROD_DB = "applypilot_preprod"  # the name before the 2026-10 rename; drop once preprod is switched
 DEFAULT_POSTINGS = Path(__file__).resolve().parent.parent / "tests" / "data" / "postings"
 
 # (title, noun for "Example <Noun> Co", location, salary)
@@ -154,14 +152,14 @@ def seed(conn, jobs: list[dict]) -> int:
 
 
 def _preprod_db_name(url: str | None) -> str | None:
-    """The database name if `url` is a postgres URL for exactly PREPROD_DB (or LEGACY_PREPROD_DB), else None."""
+    """The database name if `url` is a postgres URL for exactly PREPROD_DB, else None."""
     if not url:
         return None
     parsed = urlparse(url)
     if parsed.scheme not in ("postgresql", "postgres"):
         return None
     name = parsed.path.lstrip("/")
-    return name if name in (PREPROD_DB, LEGACY_PREPROD_DB) else None
+    return name if name == PREPROD_DB else None
 
 
 def main(argv: list[str] | None = None) -> int:
