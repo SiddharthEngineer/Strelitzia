@@ -81,9 +81,12 @@ To turn it on for an environment, the user (secrets are never handled by an agen
 
 With the client id set, the app refuses to start unless the client secret, session secret and owner email are set too.
 
-Authorized redirect URIs on the OAuth client, one pair per environment (the user adds them; see Google Cloud below):
-- `https://engineerfamily.net/strelitzia/dashboard/api/auth/callback` and `.../strelitzia/dashboard/api/drive/callback`
-- `https://preprod.engineerfamily.net/strelitzia/dashboard/api/auth/callback` and `.../strelitzia/dashboard/api/drive/callback`
+Authorized redirect URIs on the OAuth client (the user adds them; see Google Cloud below):
+- `https://engineerfamily.net/auth/callback` and `https://preprod.engineerfamily.net/auth/callback`: engineerfamily's
+  site-wide sign-in, which the dashboard trusts in proxy mode.
+- `https://engineerfamily.net/strelitzia/dashboard/api/drive/callback` and the same path on `preprod.engineerfamily.net`.
+- The dashboard's own `.../strelitzia/dashboard/api/auth/callback` URIs on prod and preprod were removed on 2026-10-19
+  (M33): proxy mode doesn't use them. Rolling back to `google` mode there means adding them again first.
 - `http://localhost:8765/strelitzia/dashboard/api/auth/callback` and `.../strelitzia/dashboard/api/drive/callback`, for local
   `strelitzia serve` with `STRELITZIA_PUBLIC_URL=http://localhost:8765`. Not known to be set: ask the user to add them before testing login locally.
 
@@ -128,7 +131,8 @@ With login on, every `/strelitzia/dashboard/api/*` route except `/strelitzia/das
 (30 days, `HttpOnly`, `SameSite=Lax`); the UI routes stay public. Only the owner and invited emails get in; anyone else
 lands on `/strelitzia/dashboard/?auth=not_invited`. The resume workbench (packet, result, Claude setup) stays owner-only until per-user
 content libraries (#48) exist: it reads the owner's resume (Drive is per user, below). nginx basic auth is gone on prod
-(engineerfamily #31, 2026-10-18), so Google sign-in is prod's only gate; preprod keeps basic auth in front.
+(engineerfamily #31, 2026-10-18), so Google sign-in is prod's only gate; preprod keeps basic auth in front until
+engineerfamily E2 (preprod-open) removes it.
 Preprod's no-`.env` rule above is about LLM keys: an auth-only `.env` there is the user's call.
 
 ### Google Cloud project (set up by hand)
@@ -142,9 +146,9 @@ when they do. The project and client facts below were checked on 2026-10-18 from
   clients of the same project, so a client in another project couldn't see existing Drive folders and files and would
   create duplicates. A second, unused project named "Strelitzia" was made by mistake on 2026-10-13; nothing references it.
   Whether it was deleted is unconfirmed.
-- **Google Auth Platform → Branding:** app name `Strelitzia` (it said `engineerfamily` before 2026-10-13). Home page
-  `https://strelitzia.engineerfamily.net`, privacy policy `https://strelitzia.engineerfamily.net/privacy` (served by
-  engineerfamily's `services/strelitzia/privacy.html`; keep both URLs answering 200). Authorized domain `engineerfamily.net`,
+- **Google Auth Platform → Branding:** app name `engineerfamily` (2026-10-19, M32, as the user reported; it was `Strelitzia`
+  from 2026-10-13), since sign-in is now site-wide. Home page `https://engineerfamily.net/`, privacy policy
+  `https://engineerfamily.net/privacy` (served by engineerfamily's Flask app; keep both URLs answering 200). Authorized domain `engineerfamily.net`,
   which covers every subdomain. **No logo:** uploading one triggers Google's brand verification.
 - **Data access (scopes):** `openid`, `.../auth/userinfo.email`, `.../auth/userinfo.profile`, `.../auth/drive.file`. All four
   are non-sensitive, so the app needs no Google verification. Adding a sensitive or restricted scope (full `drive`, Gmail,
@@ -157,7 +161,7 @@ when they do. The project and client facts below were checked on 2026-10-18 from
     `~/.strelitzia/google_token.json` came from it and was imported into the owner's `user_drive` row. Ask before
     deleting it in the Console: Drive files it created stay visible to the web client either way (same project).
   - **Web client "Strelitzia web"** (2026-10-17): its id and secret are `STRELITZIA_GOOGLE_CLIENT_ID` / `_SECRET`. **Prod and
-    preprod share this one client**, with the four https redirect URIs above.
+    preprod share this one client**, with the https redirect URIs above.
 - **`.env` (user-managed):** prod and preprod each have their own `STRELITZIA_SESSION_SECRET` and `STRELITZIA_TOKEN_KEY`.
   `STRELITZIA_OWNER_EMAIL` is the user's own Google account on prod and the dev test account on preprod (2026-10-18).
   Each `.env` needs its **own** `STRELITZIA_PUBLIC_URL`: until 2026-10-18 preprod's pointed at prod, so preprod sign-in
