@@ -1,5 +1,5 @@
 # Plan: Site-wide sign-in, part 4: nginx cutover, Google Console, rollout and rollback
-**Status:** 🟡 Code done 2026-10-19 (engineerfamily PR #36). On prod since v1.3.0 (M31). Prod steps 1-7 found header layout bugs (see Task 3). M32-M33 are still open
+**Status:** ✅ Done 2026-10-19. On prod since v1.3.0 (M31). The header layout bugs from the prod steps are fixed: the static pages by engineerfamily E1 (#54, prod v1.3.3), and the dashboard at 390 px by this plan's dashboard changes (prod b3717f7). M32-M33 stay open in the ROADMAP's manual steps. Dashboard polish follow-ups: R46
 **Risk:** review (authentication; nginx and compose in the engineerfamily repo; prod is the user's call)
 **Depends on:** site-sso-1-site-auth, site-sso-2-site-header, site-sso-3-proxy-mode
 
@@ -93,6 +93,7 @@ outside checks pass (`/auth/verify` → 404, the spoofed header → `"user": nul
   available for the account yet (#48). 7 ✅ Sign out from the dashboard → signed out on `/`. The sign-in card sits under the same top
   bar, and Sign in returns to the dashboard. The Google prompt still says "Strelitzia" (M32 pending).
 - 10 (dashboard at 390 px) ❌ the `.nav` shrinks to 0 px (Jobs/Contacts/… unreachable), and the top bar is 411 px wide, so Sign out is cut off and the page scrolls sideways.
+- Follow-up 2026-10-19: a signed-in QC on preprod (dev test account, Claude in Chrome) passed steps 2, 3 and 10 at 1280, 500 and 390 px: home, brand and profile on one row, no sideways scroll, every nav link reachable, Sign out inside the window. engineerfamily v1.3.3 (E1, #54) took the static-page fix to prod the same day (outside check: `/strelitzia/` serves `style.css?v=3` and the compact header). Left over, moved to R46: the narrow dashboard nav doesn't show that it scrolls, and the signed-out dashboard page has an empty top bar.
 - Caching: Cloudflare rewrites `/shared/site-header.js` to `Cache-Control: max-age=14400` (overriding nginx's `no-cache`). `/strelitzia/*.html`
   and `style.css` have no `Cache-Control`, so a browser that saw the old pages kept stale copies, or a cached 404 for the header,
   until it reloaded.

@@ -7,16 +7,10 @@ Status: ⏳ queued · 🔄 in progress · 🟡 code done, user steps pending · 
 
 ## Active
 
-R40-R43: site-wide Google sign-in and the shared header (approved by the user 2026-10-19, PR #77). R40, R41 and R43 change the
-engineerfamily repo, so they run interactively (the runner only builds Strelitzia); R42 can run unattended and merge first,
-since its defaults change nothing. Rollout order, preprod checks and rollback are in R43's plan. R25-R39 are on prod and archived (2026-10-18). #19 is the user's.
+R25-R43 are on prod and archived (R40-R43, site-wide Google sign-in and the shared header: 2026-10-19, engineerfamily v1.3.3). M32-M33 below are R43's last manual steps. #19 is the user's.
 
 | ID | Initiative | Plan | Risk | Status | Depends on |
 |---|---|---|---|---|---|
-| R40 | Site SSO 1: Google sign-in in the engineerfamily Flask app, site privacy page | [site-sso-1-site-auth](plans/site-sso-1-site-auth.md) | review | ✅ | M29, M30 |
-| R41 | Site SSO 2: shared header (home link top left, profile and Sign out top right) | [site-sso-2-site-header](plans/site-sso-2-site-header.md) | review | ✅ | R40 |
-| R42 | Site SSO 3: dashboard proxy auth mode and shared header | [site-sso-3-proxy-mode](plans/site-sso-3-proxy-mode.md) | review | ✅ | - |
-| R43 | Site SSO 4: nginx cutover, rollout and rollback | [site-sso-4-cutover](plans/site-sso-4-cutover.md) | review | 🟡 on prod (v1.3.0, proxy mode) 2026-10-19; prod steps 1-7 pass except header layout. The static-page wrap is fixed by engineerfamily E1 (#54, merged and on preprod 2026-10-19); a signed-in QC on preprod (dev test account, Claude in Chrome) passes on `/`, `/games/`, `/strelitzia/`, `/strelitzia/privacy` and the dashboard at 1280, 500 and 390 px. To close: deploy engineerfamily to prod (you), then recheck the header on prod at 1280 and 390 px. Two dashboard polish items moved to R46 | R40, R41, R42 |
 | R44 | Shared agent-runner: Strelitzia `runner.toml` and agent settings (add-only) | [strelitzia-runner-config](plans/strelitzia-runner-config.md) | low | ✅ | agent-runner A10 |
 | R45 | Shared agent-runner: commands on the `agent-runner` CLI, delete `scripts/agent/` | [strelitzia-runner-cleanup](plans/strelitzia-runner-cleanup.md) | low | ⏳ queued for 2026-10-26 (Task 3, `.claude/settings.json`, stays interactive) | R44, agent-runner cutover + 1 week |
 | R46 | Dashboard header polish: the narrow nav shows it scrolls; the signed-out page keeps the site header (R43 QC follow-up) | [dashboard-header-polish](plans/dashboard-header-polish.md) | review | ⏸ not queued (saved for later, user 2026-10-19) | - |
