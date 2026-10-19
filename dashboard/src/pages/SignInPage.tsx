@@ -1,6 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
 import { LOGIN_URL } from '../api';
 import Flower from '../components/Flower';
+import { SiteHome, SiteProfile, useSiteHeader } from '../components/SiteSlots';
 import type { AuthMe } from '../types';
 
 // The ?auth= outcome the sign-in callback (web/auth.py) redirects back with.
@@ -19,18 +20,27 @@ export default function SignInPage({ me }: { me?: AuthMe | null }) {
   const [params] = useSearchParams();
   const refused = me?.reason ? me.identity : null;
   const outcome = AUTH_OUTCOMES[me?.reason ?? params.get('auth') ?? ''];
+  useSiteHeader(me?.site_header_url);
   return (
-    <main className="sign-in">
-      <div className="sign-in-card card">
-        <Flower variant="mark" size={56} />
-        <h1>Strelitzia</h1>
-        <p className="muted">Sign in to see your jobs.</p>
-        {outcome && <p className="notice error" role="alert">{outcome}</p>}
-        {refused && <p className="muted">Signed in as <strong>{refused.email}</strong></p>}
-        {me?.reason
-          ? <a className="button" href={LOGIN_URL}>Use another account</a>
-          : <a className="button" href={LOGIN_URL}>Sign in with Google</a>}
-      </div>
-    </main>
+    <>
+      {me?.site_header_url && (
+        <header className="topbar site-topbar">
+          <SiteHome />
+          <SiteProfile />
+        </header>
+      )}
+      <main className={me?.site_header_url ? 'sign-in with-site-topbar' : 'sign-in'}>
+        <div className="sign-in-card card">
+          <Flower variant="mark" size={56} />
+          <h1>Strelitzia</h1>
+          <p className="muted">Sign in to see your jobs.</p>
+          {outcome && <p className="notice error" role="alert">{outcome}</p>}
+          {refused && <p className="muted">Signed in as <strong>{refused.email}</strong></p>}
+          {me?.reason
+            ? <a className="button" href={LOGIN_URL}>Use another account</a>
+            : <a className="button" href={LOGIN_URL}>Sign in with Google</a>}
+        </div>
+      </main>
+    </>
   );
 }

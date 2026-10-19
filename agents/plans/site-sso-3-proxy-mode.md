@@ -83,7 +83,7 @@ CSS: the home slot is the topbar's first item and the profile slot is pushed rig
 width the nav scrolls horizontally and both slots stay on the top row.
 **Validate:** `npm --prefix dashboard test -- --run SiteSlots` → passes: with `site_header_url` the header's first
 element is `ef-home`, its last is `ef-profile`, and there's no `.user-menu`; without it, `.user-menu` with Sign out is there.
-**Status:** ❌
+**Status:** ✅ 2026-10-19
 
 ### Task 4: document the modes
 **Runs:** unattended
