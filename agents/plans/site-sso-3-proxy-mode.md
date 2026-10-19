@@ -93,7 +93,7 @@ element is `ef-home`, its last is `ef-profile`, and there's no `.user-menu`; wit
 and the rule that proxy mode is safe only when nothing but the proxy can reach the container (on the VPS: no published
 port; part 4 also moves it off the shared `web` network).
 **Validate:** `grep -n "AUTH_MODE" agents/DEPLOY.md` → the new section.
-**Status:** ❌
+**Status:** ✅ 2026-10-19
 
 ## Validation
 - `scripts/validate.sh --full` passes.
