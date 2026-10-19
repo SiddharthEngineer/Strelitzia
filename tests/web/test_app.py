@@ -25,6 +25,12 @@ def test_ui_index_and_assets(client):
     assert client.get("/strelitzia/dashboard", follow_redirects=False).headers["location"] == "/strelitzia/dashboard/"
 
 
+def test_index_html_is_revalidated(client):
+    for path in ("/strelitzia/dashboard/", "/strelitzia/dashboard/index.html", "/strelitzia/dashboard/jobs/abc123"):
+        assert client.get(path).headers["cache-control"] == "no-cache"
+    assert "cache-control" not in client.get("/strelitzia/dashboard/assets/app.js").headers
+
+
 def test_spa_fallback_for_unknown_ui_paths(client):
     r = client.get("/strelitzia/dashboard/jobs/abc123")
     assert r.status_code == 200
