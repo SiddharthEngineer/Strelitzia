@@ -4,6 +4,7 @@ import { Link, NavLink, Route, Routes } from 'react-router-dom';
 import AddJobDialog from './components/AddJobDialog';
 import Flower from './components/Flower';
 import Footer from './components/Footer';
+import { SiteHome, SiteProfile, useSiteHeader } from './components/SiteSlots';
 import ClaudeSetupPage from './pages/ClaudeSetupPage';
 import ContactsPage from './pages/ContactsPage';
 import JobPage from './pages/JobPage';
@@ -38,6 +39,9 @@ function Shell({ me }: { me: AuthMe | null }) {
   useEffect(refreshPanelDue, [refreshPanelDue]);
   // The Users page is for the owner, and only matters once other accounts can sign in.
   const isOwner = Boolean(me?.enabled && me.user?.role === 'owner');
+  // On engineerfamily.net the site's own home link and profile control frame the header (and carry Sign out).
+  const site = Boolean(me?.site_header_url);
+  useSiteHeader(me?.site_header_url);
   const loader = <div className="loader-state" aria-live="polite" aria-busy="true"><Flower variant="loader" size={64} />Loading…</div>;
   function signOut() {
     const done = me?.logout_url ? siteLogout(me.logout_url) : logout();
@@ -45,7 +49,8 @@ function Shell({ me }: { me: AuthMe | null }) {
   }
   return (
     <div className="app">
-      <header className="topbar">
+      <header className={site ? 'topbar site-topbar' : 'topbar'}>
+        {site && <SiteHome />}
         <Link to="/" className="brand">
           <Flower variant="mark" size={28} />
           Strelitzia
@@ -62,7 +67,7 @@ function Shell({ me }: { me: AuthMe | null }) {
           {isOwner && <NavLink to="/users">Users</NavLink>}
         </nav>
         <button type="button" className="primary add-job-button" onClick={() => setAdding(true)}>Add job</button>
-        {me?.enabled && me.user && (
+        {site ? <SiteProfile /> : me?.enabled && me.user && (
           <span className="user-menu">
             <span className="user-name" title={me.user.email}>{me.user.name || me.user.email}</span>
             <button type="button" onClick={signOut}>Sign out</button>
