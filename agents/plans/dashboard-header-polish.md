@@ -1,7 +1,7 @@
 # Plan: dashboard header polish at phone width and when signed out (R43 follow-up)
 **Status:** ❌ Not started
 **Risk:** review (dashboard UI; `dashboard/*` is high-risk in `agents/runner.toml`, so the PR needs a human)
-**Depends on:** - (engineerfamily E1 [header-fit](https://github.com/SiddharthEngineer/engineerfamily/blob/main/agents/plans/header-fit.md) fixed the static pages)
+**Depends on:** - (engineerfamily E1 [header-fit](https://github.com/SiddharthEngineer/engineerfamily/blob/main/agents/plans/done/header-fit.md) fixed the static pages)
 
 ## Goal
 Two small header problems found by the signed-in QC on preprod (2026-10-19, Claude in Chrome as the dev test account, preprod on
