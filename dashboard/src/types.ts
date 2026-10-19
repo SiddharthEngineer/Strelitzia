@@ -492,9 +492,19 @@ export interface AuthUser {
 }
 
 export interface AuthMe {
-  /** Google sign-in is on (STRELITZIA_GOOGLE_CLIENT_ID is set on the server). */
+  /** Sign-in is on: built-in Google sign-in, or the site's sign-in through the reverse proxy. */
   enabled: boolean;
   user: AuthUser | null;
+  /** How sign-in works (missing from an older server). */
+  mode?: 'off' | 'google' | 'proxy';
+  /** Proxy mode: who the site signed in, even when that account can't use the dashboard. */
+  identity?: { email: string; name: string | null } | null;
+  /** Why `identity` has no account here. */
+  reason?: 'not_invited' | 'disabled' | null;
+  /** Proxy mode: the site's sign-out endpoint (POST), used instead of the dashboard's own. */
+  logout_url?: string | null;
+  /** engineerfamily's shared header script (`<ef-home>`, `<ef-profile>`), when the dashboard should use it. */
+  site_header_url?: string | null;
 }
 
 /** A row on the owner's Users page (GET /admin/users). */

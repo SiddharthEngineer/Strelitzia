@@ -294,11 +294,16 @@ export function getMe(signal?: AbortSignal): Promise<AuthMe> {
   return request<AuthMe>('/auth/me', { signal });
 }
 
-/** The Google sign-in page (a full-page redirect through the server). */
+/** The Google sign-in page (a full-page redirect through the server; in proxy mode, on to the site's sign-in). */
 export const LOGIN_URL = `${API_BASE}/auth/login`;
 
 export function logout(): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>('/auth/logout', { method: 'POST' });
+}
+
+/** Proxy mode: end the site's session (its own endpoint, outside the dashboard's API). */
+export async function siteLogout(url: string): Promise<void> {
+  await fetch(url, { method: 'POST', credentials: 'same-origin' });
 }
 
 // --- The owner's Users page (owner-only: 403 for everyone else) ---
