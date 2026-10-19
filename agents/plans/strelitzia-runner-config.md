@@ -30,7 +30,7 @@ don't change, so the live cron keeps working until the cutover. The command swit
 and `scripts/validate.sh --full`; `[gate]` from `gate.py` with `scripts/agent/*` replaced by `agents/runner.toml`, `agents/settings/*`,
 `agents/mcp.json`; `[preprod] app_dir="/srv/Strelitzia-preprod"`, the deploy/seed commands from the fixture, health per Context.
 **Validate:** `python3 ~/src/agent-runner/config.py check agents/runner.toml` → `ok` (agent-runner on `origin/main`).
-**Status:** ❌
+**Status:** ✅ 2026-10-19
 
 ### Task 2: agent settings and MCP
 **Runs:** unattended
@@ -41,7 +41,7 @@ and `scripts/validate.sh --full`; `[gate]` from `gate.py` with `scripts/agent/*`
 repo's validate commands (`.venv/bin/*`, `npm … dashboard`). `mcp.json` = `scripts/agent/mcp.json`.
 **Validate:** `.venv/bin/python -c` one-liner: all three parse; `implement.json` denies `Bash(gh pr merge:*)` and `Bash(make:*)`;
 `validate.json` denies `Edit` and `Bash(git push:*)`.
-**Status:** ❌
+**Status:** ✅ 2026-10-19
 
 ### Task 3: docs
 **Runs:** unattended
