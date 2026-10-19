@@ -16,9 +16,9 @@ since its defaults change nothing. Rollout order, preprod checks and rollback ar
 | R40 | Site SSO 1: Google sign-in in the engineerfamily Flask app, site privacy page | [site-sso-1-site-auth](plans/site-sso-1-site-auth.md) | review | ✅ | M29, M30 |
 | R41 | Site SSO 2: shared header (home link top left, profile and Sign out top right) | [site-sso-2-site-header](plans/site-sso-2-site-header.md) | review | ✅ | R40 |
 | R42 | Site SSO 3: dashboard proxy auth mode and shared header | [site-sso-3-proxy-mode](plans/site-sso-3-proxy-mode.md) | review | ✅ | - |
-| R43 | Site SSO 4: nginx cutover, rollout and rollback | [site-sso-4-cutover](plans/site-sso-4-cutover.md) | review | 🟡 on prod (v1.3.0, proxy mode) 2026-10-19; prod steps 1-7 pass except header layout: signed-in profile wraps on `/strelitzia/` pages at 1280 px; at 390 px the site nav and the dashboard nav shrink to ~0 px and the dashboard's Sign out overflows. Fix before closing | R40, R41, R42 |
+| R43 | Site SSO 4: nginx cutover, rollout and rollback | [site-sso-4-cutover](plans/site-sso-4-cutover.md) | review | 🟡 on prod (v1.3.0, proxy mode) 2026-10-19; prod steps 1-7 pass except header layout: signed-in profile wraps on `/strelitzia/` pages at 1280 px; at 390 px the site nav and the dashboard nav shrink to ~0 px and the dashboard's Sign out overflows. Fix before closing: engineerfamily E1 [header-fit](https://github.com/SiddharthEngineer/engineerfamily/blob/main/agents/plans/header-fit.md) is queued (still wraps on preprod 2026-10-19) | R40, R41, R42 |
 | R44 | Shared agent-runner: Strelitzia `runner.toml` and agent settings (add-only) | [strelitzia-runner-config](plans/strelitzia-runner-config.md) | low | ✅ | agent-runner A10 |
-| R45 | Shared agent-runner: commands on the `agent-runner` CLI, delete `scripts/agent/` | [strelitzia-runner-cleanup](plans/strelitzia-runner-cleanup.md) | low | ⏳ | R44, agent-runner cutover + 1 week |
+| R45 | Shared agent-runner: commands on the `agent-runner` CLI, delete `scripts/agent/` | [strelitzia-runner-cleanup](plans/strelitzia-runner-cleanup.md) | low | ⏳ queued for 2026-10-26 (Task 3, `.claude/settings.json`, stays interactive) | R44, agent-runner cutover + 1 week |
 
 ## Manual steps (you)
 
