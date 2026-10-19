@@ -1,5 +1,5 @@
 # Plan: Site-wide sign-in, part 2: one header contract (home link top left, profile top right)
-**Status:** ❌ Not started
+**Status:** ✅ Done 2026-10-19 (all 2 tasks; engineerfamily eba091d, [PR #35](https://github.com/SiddharthEngineer/engineerfamily/pull/35); on preprod, cutover human steps 1-4 pass)
 **Risk:** review (user-facing on every page; lands in the engineerfamily repo)
 **Depends on:** site-sso-1-site-auth (`/auth/me`, `/auth/login`, `/auth/logout`)
 
@@ -35,7 +35,7 @@ mounted into nginx in `docker-compose.base.yml`; `Cache-Control: no-cache` so a 
 README: the contract (both elements, where they go, that pages must not restyle them).
 **Validate:** `node --check services/shared/site-header.js` → exit 0; `nginx -t` (repo rules) → ok for both envs;
 after a preprod deploy `curl -s -u <creds> -o /dev/null -w "%{http_code}" https://preprod.engineerfamily.net/shared/site-header.js` → 200.
-**Status:** ❌
+**Status:** ✅ 2026-10-19 (engineerfamily eba091d, [PR #35](https://github.com/SiddharthEngineer/engineerfamily/pull/35))
 
 ### Task 2: use it on the site and Strelitzia's static pages
 **Runs:** interactive (engineerfamily repo; checked in a browser on preprod)
@@ -46,7 +46,7 @@ Strelitzia), then `<ef-profile>` pushed right; the old `brand-link` goes (the ho
 Strelitzia static header: `<ef-home>`, then the Strelitzia brand and nav, then `<ef-profile>`. At phone width the nav
 may wrap or scroll, but `<ef-home>` stays first and `<ef-profile>` stays last on the top row.
 **Validate:** `npm --prefix services/app/vite run build` → succeeds; `grep -c "ef-home\|ef-profile" services/strelitzia/*.html` → 2 per page.
-**Status:** ❌
+**Status:** ✅ 2026-10-19 (engineerfamily eba091d, [PR #35](https://github.com/SiddharthEngineer/engineerfamily/pull/35))
 
 ## Validation
 - Task validations pass. Preprod: the human steps in `site-sso-4-cutover` (1-4, then 5 and 10 for the dashboard).

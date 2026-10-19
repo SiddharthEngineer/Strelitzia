@@ -1,5 +1,5 @@
 # Plan: Site-wide sign-in, part 1: Google sign-in in the engineerfamily Flask app
-**Status:** ❌ Not started
+**Status:** ✅ Done 2026-10-19 (all 3 tasks; engineerfamily eba091d, [PR #35](https://github.com/SiddharthEngineer/engineerfamily/pull/35); on preprod, cutover human steps 1-4 pass)
 **Risk:** review (authentication; lands in the engineerfamily repo)
 **Depends on:** none. Parts 2 (`site-sso-2-site-header`), 3 (`site-sso-3-proxy-mode`) and 4 (`site-sso-4-cutover`) build on it.
 
@@ -60,7 +60,7 @@ Refuse to start with the client id set but the secret, `SITE_SESSION_SECRET` or 
 **Validate:** `cd services/app && python -m pytest test_auth.py -q` → passes: next-path checks, a stubbed callback
 (token exchange and `verify_oauth2_token` monkeypatched) sets the cookie with `Path=/`, no `Domain`, `HttpOnly`,
 `SameSite=Lax`; a wrong `state` signs nobody in; `verify` adds the headers only with a session.
-**Status:** ❌
+**Status:** ✅ 2026-10-19 (engineerfamily eba091d, [PR #35](https://github.com/SiddharthEngineer/engineerfamily/pull/35))
 
 ### Task 2: site privacy page
 **Runs:** interactive (engineerfamily repo)
@@ -69,7 +69,7 @@ Refuse to start with the client id set but the secret, `SITE_SESSION_SECRET` or 
 30 days and nothing else; no data is shared or sold; Strelitzia's dashboard and Drive use are covered by
 `/strelitzia/privacy` (linked). It must answer 200 because the consent screen links to it.
 **Validate:** Flask test client `GET /privacy` → 200 (add to `test_auth.py`).
-**Status:** ❌
+**Status:** ✅ 2026-10-19 (engineerfamily eba091d, [PR #35](https://github.com/SiddharthEngineer/engineerfamily/pull/35))
 
 ### Task 3: Compose env and docs
 **Runs:** interactive (engineerfamily repo)
@@ -78,7 +78,7 @@ Refuse to start with the client id set but the secret, `SITE_SESSION_SECRET` or 
 README: an "Auth" section with the design above.
 **Validate:** `docker compose --env-file /srv/engineerfamily-<env>/.env -f docker-compose.base.yml -f docker-compose.<env>.yml config -q`
 → exit 0 for prod and preprod.
-**Status:** ❌
+**Status:** ✅ 2026-10-19 (engineerfamily eba091d, [PR #35](https://github.com/SiddharthEngineer/engineerfamily/pull/35))
 
 ## Validation
 - Task validations pass; `nginx -t` unchanged (no nginx edits in this part).
