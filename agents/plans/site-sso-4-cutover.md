@@ -1,5 +1,5 @@
 # Plan: Site-wide sign-in, part 4: nginx cutover, Google Console, rollout and rollback
-**Status:** 🟡 Code done 2026-10-19 (engineerfamily PR #36, on preprod, human steps 1-10 pass with 9 skipped); prod rollout is M31-M33
+**Status:** 🟡 Code done 2026-10-19 (engineerfamily PR #36). On prod since v1.3.0 (M31). Prod steps 1-7 found header layout bugs (see Task 3). M32-M33 are still open
 **Risk:** review (authentication; nginx and compose in the engineerfamily repo; prod is the user's call)
 **Depends on:** site-sso-1-site-auth, site-sso-2-site-header, site-sso-3-proxy-mode
 
@@ -80,6 +80,22 @@ can then send it `X-Auth-Request-*` headers (Umami, a third-party image, can't r
 in proxy mode, and the `strelitzia-preprod` 301s are right. Human steps 1-10 pass (9 skipped). `make preprod-strelitzia-up` didn't recreate the
 container after a change to the `.env` alone, so the dashboard stayed in `google` mode. #36 (fc08176) adds `--force-recreate` to the
 `*strelitzia-up` targets; until #36 merges, run it from the PR branch or recreate by hand. Steps 6-7 are the user's (M31-M33).
+2026-10-19, prod (v1.3.0, dashboard in proxy mode), test account as an invited non-owner, at 1280 px and 390 px:
+outside checks pass (`/auth/verify` → 404, the spoofed header → `"user": null`, `www` → 301).
+- 1 ✅ Sign in → back on `/` with initials and Sign out. 2 ⚠️ `/`, `/games/` and the dashboard match. On `/strelitzia/` and
+  `/strelitzia/privacy`, signed in, the profile wraps to a second row at 1280 px: the 680 px column is too narrow for
+  home + brand + nav + profile. Signed out, it fits. Home links go to `/` everywhere.
+- 3 ⚠️ Sign out works everywhere and the pages read fine signed out. At 390 px signed in, the site nav (`.nav-menu`) shrinks
+  to 10 px, so Games and Strelitzia are effectively hidden, and on `/strelitzia/` the profile sits on its own row.
+- 4 ✅ HttpOnly (not in `document.cookie`); Path/Domain/Secure/Lax per `services/app/auth.py` (DevTools not available to the agent).
+- 5 ✅ Jobs table with no second prompt; the same home link, initials and Sign out. 6 ✅/n/a: `api/admin/users` → 403 "Only the owner
+  can manage users" (the UI hides `/users`). Drive connect can't be tested by a non-owner: Claude setup says the workbench isn't
+  available for the account yet (#48). 7 ✅ Sign out from the dashboard → signed out on `/`. The sign-in card sits under the same top
+  bar, and Sign in returns to the dashboard. The Google prompt still says "Strelitzia" (M32 pending).
+- 10 (dashboard at 390 px) ❌ the `.nav` shrinks to 0 px (Jobs/Contacts/… unreachable), and the top bar is 411 px wide, so Sign out is cut off and the page scrolls sideways.
+- Caching: Cloudflare rewrites `/shared/site-header.js` to `Cache-Control: max-age=14400` (overriding nginx's `no-cache`). `/strelitzia/*.html`
+  and `style.css` have no `Cache-Control`, so a browser that saw the old pages kept stale copies, or a cached 404 for the header,
+  until it reloaded.
 
 ## Validation
 - Task 1-2 validations pass. Outside checks through Cloudflare after each deploy:
