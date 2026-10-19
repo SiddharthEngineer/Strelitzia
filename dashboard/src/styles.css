@@ -326,10 +326,18 @@ button.danger { color: var(--danger); border-color: var(--danger); }
 }
 
 @media (max-width: 640px) {
-  .site-topbar { gap: 8px; }
-  .site-topbar .nav { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  /* Home, brand and profile on the top row; the nav scrolls on its own row below, with Add job at its end. The signed-in
+     profile (initials + Sign out) leaves no room for the nav beside it at 390px. */
+  .site-topbar {
+    display: grid; gap: 8px; grid-template-columns: auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "home brand . profile" "nav nav nav add";
+  }
+  .site-topbar .site-home { grid-area: home; }
+  .site-topbar .brand { grid-area: brand; font-size: 0; gap: 0; }
+  .site-topbar .site-profile { grid-area: profile; margin-left: 0; }
+  .site-topbar .nav { grid-area: nav; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   .site-topbar .nav a { white-space: nowrap; }
-  .site-topbar .brand { font-size: 0; gap: 0; }
+  .site-topbar .add-job-button { grid-area: add; margin-left: 0; }
   .hero { grid-template-columns: 1fr; justify-items: center; text-align: center; padding: 16px; }
   .hero-stats { justify-content: center; }
   .content { padding: 12px; }
