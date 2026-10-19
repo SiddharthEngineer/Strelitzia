@@ -1,5 +1,5 @@
 # Plan: Site-wide sign-in, part 4: nginx cutover, Google Console, rollout and rollback
-**Status:** ❌ Not started
+**Status:** 🟡 Code done 2026-10-19 (engineerfamily PR #36, on preprod, human steps 1-10 pass with 9 skipped); prod rollout is M31-M33
 **Risk:** review (authentication; nginx and compose in the engineerfamily repo; prod is the user's call)
 **Depends on:** site-sso-1-site-auth, site-sso-2-site-header, site-sso-3-proxy-mode
 
@@ -36,7 +36,8 @@ host-only), `127.0.0.1 localhost` keep the dashboard proxy for the health check 
 `/app/` is dropped if no open Strelitzia PR predates the move, else gets the same lines.
 **Validate:** `docker run --rm -v $PWD/services/nginx/nginx.<env>.conf:/etc/nginx/conf.d/default.conf:ro nginx:alpine nginx -t`
 → "syntax is ok" for both envs (stub `.htpasswd` and upstream names as the repo's rules describe).
-**Status:** ❌
+**Status:** ✅ 2026-10-19: engineerfamily #36 (5080cc7). `nginx -t` passes for both envs. `/app/` is dropped (no open Strelitzia PRs).
+`127.0.0.1`/`localhost` answer only `/strelitzia/dashboard/api/health` (basic auth, identity headers emptied), with 404 for everything else.
 
 ### Task 2: keep other containers off the dashboard
 **Runs:** interactive (engineerfamily repo)
@@ -45,7 +46,8 @@ host-only), `127.0.0.1 localhost` keep the dashboard proxy for the health check 
 can then send it `X-Auth-Request-*` headers (Umami, a third-party image, can't reach it). Egress (Google, Anthropic) is unaffected.
 **Validate:** `docker compose ... config -q` → exit 0 for both envs; after the preprod deploy,
 `docker compose -p engineerfamily-preprod exec umami wget -qO- -T 3 http://strelitzia:8000/` fails to resolve.
-**Status:** ❌
+**Status:** ✅ 2026-10-19: engineerfamily #36. `config -q` exits 0 for both envs. On preprod, umami (started briefly) gets
+`wget: bad address 'strelitzia:8000'`, while nginx still reaches it.
 
 ### Task 3: rollout (the user drives; agents only on preprod)
 **Runs:** interactive (Google Console, `.env` files and prod are the user's)
@@ -74,7 +76,10 @@ can then send it `X-Auth-Request-*` headers (Umami, a third-party image, can't r
 - Site: `make deploy-prod ref=v1.2.0` (the tag before this work); preprod: `make preprod-deploy ref=origin/main`.
 - Everyone signed out at once: rotate `SITE_SESSION_SECRET` and restart `app`.
 **Validate:** each step's human checks below pass before the next step starts.
-**Status:** ❌
+**Status:** 🟡 2026-10-19: steps 1-5 done on preprod. Preprod `/auth/verify` → 404, the spoofed `X-Auth-Request-Email` → `"user": null`
+in proxy mode, and the `strelitzia-preprod` 301s are right. Human steps 1-10 pass (9 skipped). `make preprod-strelitzia-up` didn't recreate the
+container after a change to the `.env` alone, so the dashboard stayed in `google` mode. #36 (fc08176) adds `--force-recreate` to the
+`*strelitzia-up` targets; until #36 merges, run it from the PR branch or recreate by hand. Steps 6-7 are the user's (M31-M33).
 
 ## Validation
 - Task 1-2 validations pass. Outside checks through Cloudflare after each deploy:

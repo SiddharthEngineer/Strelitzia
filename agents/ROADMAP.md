@@ -16,14 +16,14 @@ since its defaults change nothing. Rollout order, preprod checks and rollback ar
 | R40 | Site SSO 1: Google sign-in in the engineerfamily Flask app, site privacy page | [site-sso-1-site-auth](plans/site-sso-1-site-auth.md) | review | ✅ | M29, M30 |
 | R41 | Site SSO 2: shared header (home link top left, profile and Sign out top right) | [site-sso-2-site-header](plans/site-sso-2-site-header.md) | review | ✅ | R40 |
 | R42 | Site SSO 3: dashboard proxy auth mode and shared header | [site-sso-3-proxy-mode](plans/site-sso-3-proxy-mode.md) | review | ✅ | - |
-| R43 | Site SSO 4: nginx cutover, rollout and rollback | [site-sso-4-cutover](plans/site-sso-4-cutover.md) | review | ⏳ | R40, R41, R42 |
+| R43 | Site SSO 4: nginx cutover, rollout and rollback | [site-sso-4-cutover](plans/site-sso-4-cutover.md) | review | 🟡 engineerfamily #36 on preprod, steps 1-10 pass; prod is M31 | R40, R41, R42 |
 
 ## Manual steps (you)
 
 | ID | Step | Done |
 |---|---|---|
 | M29 | Before R40's preprod test: in Google Cloud (project `engineer-xmas-list`), on the "Strelitzia web" client add the redirect URIs `https://preprod.engineerfamily.net/auth/callback` and `https://engineerfamily.net/auth/callback`. Keep the four `/strelitzia/dashboard/api/{auth,drive}/callback` URIs (the auth ones are the rollback path until M33).  Done 2026-10-19 (user). | ☑ |
-| M30 | Before R40's preprod test: in `/srv/engineerfamily-preprod/.env` set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (copies of `STRELITZIA_GOOGLE_CLIENT_ID` / `_SECRET`) and a new `SITE_SESSION_SECRET` (`openssl rand -hex 32`). For R43's preprod run, add `STRELITZIA_AUTH_MODE=proxy` and `STRELITZIA_SITE_HEADER_URL=/shared/site-header.js` to `~/.strelitzia-preprod/.env`, then `make -C ~/src/engineerfamily preprod-strelitzia-up`.  First half (the engineerfamily preprod `.env`) done 2026-10-19 (user). | ☐ |
+| M30 | Before R40's preprod test: in `/srv/engineerfamily-preprod/.env` set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (copies of `STRELITZIA_GOOGLE_CLIENT_ID` / `_SECRET`) and a new `SITE_SESSION_SECRET` (`openssl rand -hex 32`). For R43's preprod run, add `STRELITZIA_AUTH_MODE=proxy` and `STRELITZIA_SITE_HEADER_URL=/shared/site-header.js` to `~/.strelitzia-preprod/.env`, then `make -C ~/src/engineerfamily preprod-strelitzia-up`.  Done 2026-10-19 (user); the dashboard needed a forced recreate (fixed in engineerfamily #36). | ☑ |
 | M31 | After R40-R43 pass on preprod: prod `.env` as in M30 with a **different** `SITE_SESSION_SECRET`; merge the engineerfamily PRs, `make tag-prod v=1.3.0`, `make deploy-prod ref=v1.3.0`, check R43 human steps 1-4 on prod; `make strelitzia-deploy` if prod lacks R42; then the two `STRELITZIA_` settings from M30 in `~/.strelitzia/.env` and `make strelitzia-up`. Everyone signs in once more. Rollback: R43's plan. | ☐ |
 | M32 | After M31: Google Auth Platform → Branding: app name `engineerfamily`, home page `https://engineerfamily.net/`, privacy policy `https://engineerfamily.net/privacy` (must answer 200 first). No logo. Then update the Google Cloud section of `agents/DEPLOY.md`. | ☐ |
 | M33 | A week after M31 with no trouble: remove the two `/strelitzia/dashboard/api/auth/callback` redirect URIs (keep the Drive ones). | ☐ |
