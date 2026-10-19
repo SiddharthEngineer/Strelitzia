@@ -49,7 +49,7 @@ repo's validate commands (`.venv/bin/*`, `npm … dashboard`). `mcp.json` = `scr
 **What:** AGENTS.md map: `agents/runner.toml`, `agents/settings/`, `agents/mcp.json` ("read by the shared agent-runner after the cutover;
 `scripts/agent/` is the live runner until then"). DEPLOY.md preprod section: one line saying the preprod commands now also live in `agents/runner.toml`.
 **Validate:** `scripts/validate.sh` → all PASS.
-**Status:** ❌
+**Status:** ✅ 2026-10-19
 
 ## Validation
 - `scripts/validate.sh --full` passes.
