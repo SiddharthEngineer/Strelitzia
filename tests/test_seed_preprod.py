@@ -110,5 +110,5 @@ def test_guard_refuses_anything_but_preprod(seed_mod, monkeypatch, capsys, tmp_p
 def test_guard_accepts_preprod_name(seed_mod):
     assert seed_mod._preprod_db_name("postgresql://u:p@postgres-db:5432/strelitzia_preprod") == "strelitzia_preprod"
     assert seed_mod._preprod_db_name("postgres://u:p@h/strelitzia_preprod?sslmode=disable") == "strelitzia_preprod"
-    # The pre-rename name, until preprod is switched.
-    assert seed_mod._preprod_db_name("postgresql://u:p@analytics-db:5432/applypilot_preprod") == "applypilot_preprod"
+    # The pre-rename name is refused now that preprod is switched.
+    assert seed_mod._preprod_db_name("postgresql://u:p@analytics-db:5432/applypilot_preprod") is None
