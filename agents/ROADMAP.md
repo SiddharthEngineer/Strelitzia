@@ -7,13 +7,13 @@ Status: ⏳ queued · 🔄 in progress · 🟡 code done, user steps pending · 
 
 ## Active
 
-R25-R43 are on prod and archived (R40-R43, site-wide Google sign-in and the shared header: 2026-10-19, engineerfamily v1.3.3). M32-M33 below are R43's last manual steps. #19 is the user's.
+R25-R43 are on prod and archived (R40-R43, site-wide Google sign-in and the shared header: 2026-10-19, engineerfamily v1.3.3). #19 is the user's.
 
 | ID | Initiative | Plan | Risk | Status | Depends on |
 |---|---|---|---|---|---|
 | R44 | Shared agent-runner: Strelitzia `runner.toml` and agent settings (add-only) | [strelitzia-runner-config](plans/strelitzia-runner-config.md) | low | ✅ | agent-runner A10 |
 | R45 | Shared agent-runner: commands on the `agent-runner` CLI, delete `scripts/agent/` | [strelitzia-runner-cleanup](plans/strelitzia-runner-cleanup.md) | low | ⏳ queued for 2026-10-26 (Task 3, `.claude/settings.json`, stays interactive) | R44, agent-runner cutover + 1 week |
-| R46 | Dashboard header polish: the narrow nav shows it scrolls; the signed-out page keeps the site header (R43 QC follow-up) | [dashboard-header-polish](plans/dashboard-header-polish.md) | review | ⏸ not queued (saved for later, user 2026-10-19) | - |
+| R46 | Dashboard header in the Strelitzia page style (pairs with engineerfamily E3), plus: the narrow nav shows it scrolls; the signed-out page keeps the site header | [dashboard-header-polish](plans/dashboard-header-polish.md) | review | ⏳ planned 2026-10-19, not queued | - |
 
 ## Manual steps (you)
 
@@ -22,8 +22,8 @@ R25-R43 are on prod and archived (R40-R43, site-wide Google sign-in and the shar
 | M29 | Before R40's preprod test: in Google Cloud (project `engineer-xmas-list`), on the "Strelitzia web" client add the redirect URIs `https://preprod.engineerfamily.net/auth/callback` and `https://engineerfamily.net/auth/callback`. Keep the four `/strelitzia/dashboard/api/{auth,drive}/callback` URIs (the auth ones are the rollback path until M33).  Done 2026-10-19 (user). | ☑ |
 | M30 | Before R40's preprod test: in `/srv/engineerfamily-preprod/.env` set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (copies of `STRELITZIA_GOOGLE_CLIENT_ID` / `_SECRET`) and a new `SITE_SESSION_SECRET` (`openssl rand -hex 32`). For R43's preprod run, add `STRELITZIA_AUTH_MODE=proxy` and `STRELITZIA_SITE_HEADER_URL=/shared/site-header.js` to `~/.strelitzia-preprod/.env`, then `make -C ~/src/engineerfamily preprod-strelitzia-up`.  Done 2026-10-19 (user); the dashboard needed a forced recreate (fixed in engineerfamily #36). | ☑ |
 | M31 | After R40-R43 pass on preprod: prod `.env` as in M30 with a **different** `SITE_SESSION_SECRET`; merge the engineerfamily PRs, `make tag-prod v=1.3.0`, `make deploy-prod ref=v1.3.0`, check R43 human steps 1-4 on prod; `make strelitzia-deploy` if prod lacks R42; then the two `STRELITZIA_` settings from M30 in `~/.strelitzia/.env` and `make strelitzia-up`. Everyone signs in once more. Rollback: R43's plan.  Done 2026-10-19 (user): v1.3.0 on prod, dashboard in proxy mode; outside checks pass. Prod human steps 1-7 run 2026-10-19 (results in R43's plan). | ☑ |
-| M32 | After M31: Google Auth Platform → Branding: app name `engineerfamily`, home page `https://engineerfamily.net/`, privacy policy `https://engineerfamily.net/privacy` (must answer 200 first). No logo. Then update the Google Cloud section of `agents/DEPLOY.md`. | ☐ |
-| M33 | A week after M31 with no trouble: remove the two `/strelitzia/dashboard/api/auth/callback` redirect URIs (keep the Drive ones). | ☐ |
+| M32 | After M31: Google Auth Platform → Branding: app name `engineerfamily`, home page `https://engineerfamily.net/`, privacy policy `https://engineerfamily.net/privacy` (must answer 200 first). No logo. Then update the Google Cloud section of `agents/DEPLOY.md`.  Done 2026-10-19 (user); DEPLOY.md's Google Cloud section updated. | ☑ |
+| M33 | A week after M31 with no trouble: remove the two `/strelitzia/dashboard/api/auth/callback` redirect URIs (keep the Drive ones).  Done 2026-10-19 (user); DEPLOY.md's redirect URI list updated. | ☑ |
 | M25 | For R29/R30 (Google sign-in, Drive per user): in the **same** Google Cloud project as the Drive desktop client, publish the consent screen (scopes openid, email, profile, drive.file; no logo), create a Web OAuth client with redirect URIs `/app/api/auth/callback` and `/app/api/drive/callback` on `strelitzia` and `strelitzia-preprod.engineerfamily.net`, then put `STRELITZIA_GOOGLE_CLIENT_ID`, `_GOOGLE_CLIENT_SECRET`, `_OWNER_EMAIL`, `_PUBLIC_URL`, `_SESSION_SECRET`, `_TOKEN_KEY` in `~/.strelitzia/.env` (and auth-only keys with their own secrets in `~/.strelitzia-preprod/.env`). Login stays off until the client id is set. Covers M17's consent-screen part.  Done 2026-10-17 (user): Web client, redirect URIs and published consent screen; sign-in works on prod. | ☑ |
 | M26 | After R31: engineerfamily PR to drop nginx basic auth on prod `strelitzia` (keep it on preprod), deploy via the VPS make targets.  Done 2026-10-18: engineerfamily #31, v1.1.3 on prod (also fixed the stale `VPS_KNOWN_HOSTS` secret after the 10-16 host-key change). | ☑ |
 | M27 | After R39: deploy prod (`make -C ~/src/engineerfamily strelitzia-deploy`). The R25 migration rewrites the jobs primary key on first start: take a `pg_dump` of `applypilot` first. Then sign in, invite a test account, and run the human test steps of R29-R39 on prod.  Done 2026-10-18 (user): backup taken, prod deployed, sign-in and test steps pass. | ☑ |
@@ -31,7 +31,7 @@ R25-R43 are on prod and archived (R40-R43, site-wide Google sign-in and the shar
 | M2 | Obsolete (2026-10-16): discovery is off by default (R22) and jobs come in by manual upload. Decide whether to pay for a residential proxy. Without one, Glassdoor and ZipRecruiter stay disabled (Cloudflare 403). | ☑ |
 | M3 | Obsolete: replaced by M19, and the backlog was pruned on 2026-10-15. `strelitzia run score --reset-errors`, then `strelitzia run score`, to re-score jobs stuck at 0 (may take more than one day on the free tier). | ☑ |
 | M5 | Obsolete: R18 removed auto-apply (applications are tracked by hand in the dashboard). | ☑ |
-| M8 | Google Cloud OAuth desktop client with the Drive API, saved to `~/.applypilot/google_client_secret.json`, then `strelitzia drive auth --no-browser`, `strelitzia drive sync` and `DRIVE_SYNC=1` (R6 code is done and archived; checklist in `plans/done/google-drive-file-library.md` Task 8). | ☐ |
+| M8 | Google Cloud OAuth desktop client with the Drive API, saved to `~/.applypilot/google_client_secret.json`, then `strelitzia drive auth --no-browser`, `strelitzia drive sync` and `DRIVE_SYNC=1` (R6 code is done and archived; checklist in `plans/done/google-drive-file-library.md` Task 8).  Done (user): the desktop client and its token are in `~/.strelitzia/` (the path moved there from `~/.applypilot/` in R18), `DRIVE_SYNC=1` is set, and the token was imported into the owner's `user_drive` row. Drive is per user since R30: any other account, such as the dev test account, connects its own Drive from the dashboard. | ☑ |
 | M11 | Obsolete: replaced by M19, and the backlog was pruned on 2026-10-15. Rerun `strelitzia run extract` daily until the backfill count reaches 0 (until a pipeline cron exists). | ☑ |
 | M12 | Agent runner setup: inbox repo, ntfy topic, `~/.config/strelitzia-agent/env`, crontab line (`scripts/agent/README.md`). | ☑ |
 | M14 | Before R18 runs: GitHub Settings → Danger Zone → **Leave fork network** on SiddharthEngineer/ApplyPilot, then rename it to **Strelitzia**. In Cloudflare, add `strelitzia` and `strelitzia-preprod` DNS records (proxied, copy of the `applypilot*` ones). | ☑ |
@@ -63,28 +63,13 @@ R25-R43 are on prod and archived (R40-R43, site-wide Google sign-in and the shar
 - 2026-10-01: Pipeline LLM calls stay on the Gemini free tier. `applypilot apply` keeps the user in the loop.
 
 ## Backlog (not yet planned)
-- Site reorganization (user, 2026-10-18; spans engineerfamily and Strelitzia, plan before building):
-  - Move Strelitzia from subdomains to paths: `engineerfamily.net/strelitzia` and `preprod.engineerfamily.net/strelitzia`,
-    with the dashboard (today's `/app/`) at `/strelitzia/dashboard`. 301s from `strelitzia*` and `applypilot*` hosts.
-    Means new OAuth redirect URIs and consent-screen homepage/privacy URLs (a manual step), and a sub-path-aware dashboard build.
-  - Strelitzia homepage becomes a scrollable, sleek demo rather than a description (references: onepagelove.com/tag/demo),
-    with a link into the dashboard. Not urgent.
-  - Shared header: a Strelitzia link in the engineerfamily header; the dashboard keeps its header but gains a link back to
-    engineerfamily.net. Same styling, the home link always looks the same and sits in the same spot, profile/sign-in always top right.
-  - Google sign-in moves to the engineerfamily.net site level (one session for the whole domain). Only the dashboard needs an
-    invited account; everything else stays open to signed-out and uninvited visitors. Planned as R40-R43 (2026-10-19),
-    which also cover the Shared header item's home link and profile control; matching the rest of the nav styling stays above.
-  - Bring the unattended build setup (PIV loop, `/schedule-build` queue, the 5-minute cron `scripts/agent/run.sh` that picks
-    up queued plans, `gate.py` risk gate, inbox issues + ntfy) into the engineerfamily repo too, so engineerfamily gets the
-    same continuous development as Strelitzia becomes part of it. May need a redesign (one shared runner for both repos, or
-    one per repo). Keep the cron that picks up plans. Also settle the folder layout: today `agents/` holds the tool-agnostic
-    docs (ROADMAP, plans, DEPLOY) and `.claude/` holds Claude Code's commands and settings, which is confusing; pick one
-    layout and use it in both repos.
-    Moved to the `agent-runner` repo (the renamed inbox repo) on 2026-10-19: design
-    [shared-agent-runner](https://github.com/SiddharthEngineer/agent-runner/blob/main/agents/plans/shared-agent-runner.md),
-    tracked in that repo's `agents/ROADMAP.md`, along with the new VPS-health agent. Every Part is planned (2026-10-19);
-    Strelitzia's are R44 and R45. Programme PRs are `low` and auto-merge on green CI (user).
-- "Posting closed" liveness check, so jobs without a stated deadline can turn Inactive.
-- Nightly `pg_dump` of the `applypilot` DB to `/srv/backups`.
-- Split the god-files (`smartextract.py`, `cli.py`; `scoring/tailor.py` shrank to 69 lines in R23); review risk.
-- Runner: let the agent address review comments on its own PRs (re-queue on a "changes requested" review).
+- Site reorganization (user, 2026-10-18): the path move (`engineerfamily.net/strelitzia`, dashboard at `/strelitzia/dashboard`),
+  site-wide Google sign-in and the shared header are done (R40-R43, engineerfamily v1.3.x). Left, and planned 2026-10-19:
+  one header style everywhere, the Strelitzia page's (engineerfamily E3 + R46), and the homepage as a scrollable demo with
+  made-up data, since the public can't open the dashboard (engineerfamily E4). The shared runner moved to the `agent-runner` repo.
+- Rescore all reprocesses only Active jobs (user, 2026-10-19). Jobs already turn Inactive by themselves once their deadline
+  passes (`tracking.py:36-42`), so no separate "posting closed" check is wanted. Today Rescore all's `active` scope is every
+  extracted job that isn't rejected (`scoring/scorer.py:287-298`), so past-deadline, submitted and heard-back jobs are re-scored too.
+- Nightly `pg_dump` of the `strelitzia` DB to Hetzner Object Storage (S3-compatible), not to `/srv/backups`, so dumps don't
+  use the VPS volume (user, 2026-10-19). Keep in the backlog; don't queue.
+- Split the large source files: `discovery/smartextract.py` (~1,400 lines), `web/app.py` (~1,150) and `cli.py`; review risk.
