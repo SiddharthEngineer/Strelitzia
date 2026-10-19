@@ -7,12 +7,26 @@ Status: ⏳ queued · 🔄 in progress · 🟡 code done, user steps pending · 
 
 ## Active
 
-None. R25-R39 (issues #45-#49, PRs #57-#71) are merged, on prod and archived (2026-10-18). #19 is the user's next.
+R40-R43: site-wide Google sign-in and the shared header (approved by the user 2026-10-19, PR #77). R40, R41 and R43 change the
+engineerfamily repo, so they run interactively (the runner only builds Strelitzia); R42 can run unattended and merge first,
+since its defaults change nothing. Rollout order, preprod checks and rollback are in R43's plan. R25-R39 are on prod and archived (2026-10-18). #19 is the user's.
+
+| ID | Initiative | Plan | Risk | Status | Depends on |
+|---|---|---|---|---|---|
+| R40 | Site SSO 1: Google sign-in in the engineerfamily Flask app, site privacy page | [site-sso-1-site-auth](plans/site-sso-1-site-auth.md) | review | ⏳ | M29, M30 |
+| R41 | Site SSO 2: shared header (home link top left, profile and Sign out top right) | [site-sso-2-site-header](plans/site-sso-2-site-header.md) | review | ⏳ | R40 |
+| R42 | Site SSO 3: dashboard proxy auth mode and shared header | [site-sso-3-proxy-mode](plans/site-sso-3-proxy-mode.md) | review | ⏳ | - |
+| R43 | Site SSO 4: nginx cutover, rollout and rollback | [site-sso-4-cutover](plans/site-sso-4-cutover.md) | review | ⏳ | R40, R41, R42 |
 
 ## Manual steps (you)
 
 | ID | Step | Done |
 |---|---|---|
+| M29 | Before R40's preprod test: in Google Cloud (project `engineer-xmas-list`), on the "Strelitzia web" client add the redirect URIs `https://preprod.engineerfamily.net/auth/callback` and `https://engineerfamily.net/auth/callback`. Keep the four `/strelitzia/dashboard/api/{auth,drive}/callback` URIs (the auth ones are the rollback path until M33). | ☐ |
+| M30 | Before R40's preprod test: in `/srv/engineerfamily-preprod/.env` set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (copies of `STRELITZIA_GOOGLE_CLIENT_ID` / `_SECRET`) and a new `SITE_SESSION_SECRET` (`openssl rand -hex 32`). For R43's preprod run, add `STRELITZIA_AUTH_MODE=proxy` and `STRELITZIA_SITE_HEADER_URL=/shared/site-header.js` to `~/.strelitzia-preprod/.env`, then `make -C ~/src/engineerfamily preprod-strelitzia-up`. | ☐ |
+| M31 | After R40-R43 pass on preprod: prod `.env` as in M30 with a **different** `SITE_SESSION_SECRET`; merge the engineerfamily PRs, `make tag-prod v=1.3.0`, `make deploy-prod ref=v1.3.0`, check R43 human steps 1-4 on prod; `make strelitzia-deploy` if prod lacks R42; then the two `STRELITZIA_` settings from M30 in `~/.strelitzia/.env` and `make strelitzia-up`. Everyone signs in once more. Rollback: R43's plan. | ☐ |
+| M32 | After M31: Google Auth Platform → Branding: app name `engineerfamily`, home page `https://engineerfamily.net/`, privacy policy `https://engineerfamily.net/privacy` (must answer 200 first). No logo. Then update the Google Cloud section of `agents/DEPLOY.md`. | ☐ |
+| M33 | A week after M31 with no trouble: remove the two `/strelitzia/dashboard/api/auth/callback` redirect URIs (keep the Drive ones). | ☐ |
 | M25 | For R29/R30 (Google sign-in, Drive per user): in the **same** Google Cloud project as the Drive desktop client, publish the consent screen (scopes openid, email, profile, drive.file; no logo), create a Web OAuth client with redirect URIs `/app/api/auth/callback` and `/app/api/drive/callback` on `strelitzia` and `strelitzia-preprod.engineerfamily.net`, then put `STRELITZIA_GOOGLE_CLIENT_ID`, `_GOOGLE_CLIENT_SECRET`, `_OWNER_EMAIL`, `_PUBLIC_URL`, `_SESSION_SECRET`, `_TOKEN_KEY` in `~/.strelitzia/.env` (and auth-only keys with their own secrets in `~/.strelitzia-preprod/.env`). Login stays off until the client id is set. Covers M17's consent-screen part.  Done 2026-10-17 (user): Web client, redirect URIs and published consent screen; sign-in works on prod. | ☑ |
 | M26 | After R31: engineerfamily PR to drop nginx basic auth on prod `strelitzia` (keep it on preprod), deploy via the VPS make targets.  Done 2026-10-18: engineerfamily #31, v1.1.3 on prod (also fixed the stale `VPS_KNOWN_HOSTS` secret after the 10-16 host-key change). | ☑ |
 | M27 | After R39: deploy prod (`make -C ~/src/engineerfamily strelitzia-deploy`). The R25 migration rewrites the jobs primary key on first start: take a `pg_dump` of `applypilot` first. Then sign in, invite a test account, and run the human test steps of R29-R39 on prod.  Done 2026-10-18 (user): backup taken, prod deployed, sign-in and test steps pass. | ☑ |
@@ -61,12 +75,8 @@ None. R25-R39 (issues #45-#49, PRs #57-#71) are merged, on prod and archived (20
   - Shared header: a Strelitzia link in the engineerfamily header; the dashboard keeps its header but gains a link back to
     engineerfamily.net. Same styling, the home link always looks the same and sits in the same spot, profile/sign-in always top right.
   - Google sign-in moves to the engineerfamily.net site level (one session for the whole domain). Only the dashboard needs an
-    invited account; everything else stays open to signed-out and uninvited visitors. Draft plans (waiting for the user's
-    review, not yet in Active): [site-sso-1-site-auth](plans/site-sso-1-site-auth.md),
-    [site-sso-2-site-header](plans/site-sso-2-site-header.md), [site-sso-3-proxy-mode](plans/site-sso-3-proxy-mode.md),
-    [site-sso-4-cutover](plans/site-sso-4-cutover.md). They also cover the Shared header item's home link (top left) and
-    profile / sign-in / Sign out control (top right); matching the rest of the nav styling stays in that item.
-    User, 2026-10-18: consent screen renamed `engineerfamily`; the dashboard keeps a Sign out button.
+    invited account; everything else stays open to signed-out and uninvited visitors. Planned as R40-R43 (2026-10-19),
+    which also cover the Shared header item's home link and profile control; matching the rest of the nav styling stays above.
   - Bring the unattended build setup (PIV loop, `/schedule-build` queue, the 5-minute cron `scripts/agent/run.sh` that picks
     up queued plans, `gate.py` risk gate, inbox issues + ntfy) into the engineerfamily repo too, so engineerfamily gets the
     same continuous development as Strelitzia becomes part of it. May need a redesign (one shared runner for both repos, or

@@ -1,5 +1,5 @@
 # Plan: Site-wide sign-in, part 1: Google sign-in in the engineerfamily Flask app
-**Status:** ❌ Not started (draft, waiting for the user's review)
+**Status:** ❌ Not started
 **Risk:** review (authentication; lands in the engineerfamily repo)
 **Depends on:** none. Parts 2 (`site-sso-2-site-header`), 3 (`site-sso-3-proxy-mode`) and 4 (`site-sso-4-cutover`) build on it.
 

@@ -1,5 +1,5 @@
 # Plan: Site-wide sign-in, part 4: nginx cutover, Google Console, rollout and rollback
-**Status:** ❌ Not started (draft, waiting for the user's review)
+**Status:** ❌ Not started
 **Risk:** review (authentication; nginx and compose in the engineerfamily repo; prod is the user's call)
 **Depends on:** site-sso-1-site-auth, site-sso-2-site-header, site-sso-3-proxy-mode
 

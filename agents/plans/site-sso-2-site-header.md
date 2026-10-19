@@ -1,5 +1,5 @@
 # Plan: Site-wide sign-in, part 2: one header contract (home link top left, profile top right)
-**Status:** ❌ Not started (draft, waiting for the user's review)
+**Status:** ❌ Not started
 **Risk:** review (user-facing on every page; lands in the engineerfamily repo)
 **Depends on:** site-sso-1-site-auth (`/auth/me`, `/auth/login`, `/auth/logout`)
 
