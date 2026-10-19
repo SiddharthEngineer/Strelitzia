@@ -52,6 +52,8 @@ Check from outside, through Cloudflare. A loopback check doesn't prove the hostn
 (credentials in `~/.config/strelitzia-agent/preprod.netrc`). Merging or closing the PR frees the lock, and the next tick resets preprod to trunk.
 Test at `https://preprod.engineerfamily.net/strelitzia/dashboard/` (or the same path on `strelitzia-preprod.engineerfamily.net`)
 with the preprod login.
+The same preprod commands (app dir, deploy, seed, and a health check through Cloudflare) also live in `agents/runner.toml`, which the
+shared agent-runner reads after the cutover; until then `scripts/agent/preprod.sh` and the runner env are what run.
 Preprod uses its own disposable `strelitzia_preprod` DB (preprod postgres-db) and app dir (`~/.strelitzia-preprod`), never prod data.
 **Preprod data is wiped and reseeded on every deploy** (a PR deploy or the reset to trunk): after the deploy command, `preprod.sh` runs
 `PREPROD_SEED_CMD`, which runs `scripts/seed_preprod.py` in a one-off container of the preprod image with the checkout mounted at `/seed`.

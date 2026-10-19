@@ -15,6 +15,8 @@ under `~/.strelitzia`. The old `applypilot` CLI, `APPLYPILOT_*` env vars and `~/
 - `tests/`: hermetic by default (`conftest.py` blocks network). Opt-in tiers: `-m live --run-live`, `-m llm --run-llm`, `pg`.
 - `agents/ROADMAP.md`: the only status tracker. `agents/plans/<slug>.md`: one spec per change (`done/` holds the archive).
 - `agents/DEPLOY.md`: the prod/preprod layout, how deploys work, and the Google Cloud (OAuth) setup the user did by hand. `scripts/agent/`: the unattended runner.
+- `agents/runner.toml`, `agents/settings/`, `agents/mcp.json`: read by the shared agent-runner after the cutover;
+  `scripts/agent/` is the live runner until then.
 
 ## Validate (run before claiming anything works)
 `scripts/validate.sh` (ruff + pytest, ~45s) · `--full` (+ dashboard tests/build + docker build) · `--setup` in a new worktree.
