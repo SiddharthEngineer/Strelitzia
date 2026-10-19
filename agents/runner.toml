@@ -1,0 +1,48 @@
+# Strelitzia as a repo the shared agent-runner builds (agent-runner design D4/D5). Read by the runner from origin/trunk only,
+# after the cutover. Until then scripts/agent/ is the live runner and nothing reads this file.
+[repo]
+name = "strelitzia"
+github = "SiddharthEngineer/Strelitzia"
+base = "trunk"
+merge = "rebase"
+
+[validate]
+fast = "scripts/validate.sh"
+full = "scripts/validate.sh --full"
+
+[gate]
+# Any change here needs a human, whatever the plan says (was scripts/agent/gate.py HIGH_RISK).
+high_risk = [
+    "Dockerfile",
+    ".dockerignore",
+    "pyproject.toml",
+    ".github/*",
+    ".claude/settings.json",
+    "agents/runner.toml",
+    "agents/settings/*",
+    "agents/mcp.json",
+    "scripts/validate.sh",
+    "scripts/migrate_to_strelitzia.sh",  # moves the data dirs, rewrites crontab and ~/.ssh/config
+    "src/strelitzia/database.py",
+    "src/strelitzia/db_pg.py",
+    "src/strelitzia/migrate.py",
+    "src/strelitzia/config.py",
+    "src/strelitzia/web/*",
+    "dashboard/*",
+    "*password*",
+    "*credential*",
+    "*secret*",
+]
+doc_or_test = ["*.md", "agents/*", ".claude/commands/*", ".claude/agents/*", "tests/*"]
+code_line_budget = 250
+tests_dir = "tests/"
+
+[preprod]
+# The PR head is fetched and checked out in app_dir, then deploy rebuilds only the preprod dashboard service.
+app_dir = "/srv/Strelitzia-preprod"
+deploy = "make -C /srv/engineerfamily-preprod preprod-strelitzia-up"
+# Wipes and reseeds the preprod DB with scripts/seed_preprod.py after every deploy (agents/DEPLOY.md).
+seed = "docker compose -p engineerfamily-preprod --project-directory /srv/engineerfamily-preprod -f /srv/engineerfamily-preprod/docker-compose.base.yml -f /srv/engineerfamily-preprod/docker-compose.preprod.yml run --rm --no-deps -T -v /srv/Strelitzia-preprod:/seed:ro strelitzia python /seed/scripts/seed_preprod.py"
+netrc_env = "PREPROD_NETRC"
+# Through Cloudflare, not 127.0.0.1:8080, so the check also proves the public host routes to the right nginx.
+health = [{ url = "https://preprod.engineerfamily.net/strelitzia/dashboard/api/health", json_ok = true }]
