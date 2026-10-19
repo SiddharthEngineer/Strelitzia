@@ -1,5 +1,5 @@
 # Plan: Strelitzia's runner config for the shared agent-runner
-**Status:** ❌ Not started
+**Status:** ✅ Complete (2026-10-19)
 **Risk:** low (no prod impact; new files that nothing reads until the cutover; auto-merges on green CI, user 2026-10-19)
 **Depends on:** agent-runner runner-7-preprod-check (the `runner.toml` schema and validator settings are final then)
 
