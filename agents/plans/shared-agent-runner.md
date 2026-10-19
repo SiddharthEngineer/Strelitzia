@@ -1,5 +1,5 @@
 # Plan: One agent runner for Strelitzia and engineerfamily, with manager, implementation and validation roles
-**Status:** 📝 Design, decisions settled (2026-10-19). Next: each Part becomes its own plan through `/plan`
+**Status:** 📝 Design, decisions settled and Parts split to the plan budget (2026-10-19). Next: each Part becomes its own plan through `/plan`
 **Risk:** review (moves the runner to a new repo, changes the agent settings and the preprod lock; touches `scripts/agent/*`, `.claude/settings.json` and `.github/*` in both repos)
 
 This is a design plan: it is over `gate.py --plan`'s size budget on purpose and **must not be queued**. Each Part below is
@@ -139,7 +139,7 @@ agents/settings/{implement,validate}.json, agents/mcp.json   headless permission
 
 ### D5. engineerfamily-specific gates (`engineerfamily/agents/runner.toml`)
 - `base = "main"`, `merge = "merge"` (keeps the repo's merge commits).
-- `validate = "scripts/validate.sh"`. Part 3 adds it: `docker compose … config -q` for local, preprod and prod with
+- `validate = "scripts/validate.sh"`. Part 3a adds it: `docker compose … config -q` for local, preprod and prod with
   `--env-file .env.template` (CI has no `/srv` `.env`), `nginx -t` in `nginx:alpine` for each `nginx.<env>.conf` (stub cert and
   `.htpasswd` files if needed), and the runner tests. `.github/workflows/ci.yml` runs the same, so `gh pr checks` has something to go green on.
 - `high_risk` = `services/nginx/*`, `docker-compose*.yml`, `Makefile`, `scripts/*`, `services/*/Dockerfile`, `.github/*`,
@@ -154,26 +154,37 @@ agents/settings/{implement,validate}.json, agents/mcp.json   headless permission
   1. Neither agent settings file allows `make`, `docker compose`, `gh workflow`, `git tag` or `git push` of tags; all are denied.
   2. `config.py` refuses a `runner.toml` whose preprod commands mention `deploy-prod`, `tag-prod`, `strelitzia-deploy`, `/srv/*-prod` or `-p engineerfamily ` (the prod project).
   3. The runner never calls a release target. Merging to `main`/`trunk` deploys nothing in either repo.
-- **Prod checkpoint.** Agents now merge `review` PRs too, so the user should see what a prod deploy will ship. Part 3 adds
+- **Prod checkpoint.** Agents now merge `review` PRs too, so the user should see what a prod deploy will ship. Part 3a adds
   `make prod-changes` to engineerfamily: it prints `git log` of `origin/main` since the last `v*` tag, and of Strelitzia `origin/trunk`
   since the commit `/srv/Strelitzia-prod` is on, each with PR links.
 
 ## Parts (each becomes its own plan via `/plan`; all `review`)
-| Part | Repo | What | Runs |
-|---|---|---|---|
-| 0 create repo | GitHub | `gh repo create SiddharthEngineer/agent-runner --private`, seeded with today's `scripts/agent/*` and `tests/test_agent_runner.py` (history not kept; the Strelitzia history stays there) | manual (user) |
-| 1 `runner-shared-1-core` | agent-runner | `config.py` + `runner.toml` loading, `<repo>/<slug>` keys with bare-slug migration, a repo column in the preprod lock, `~/.config/agent-runner` with fallback, per-repo gate patterns, the single merge rule, `AGENT_DRY_RUN`, the `agent-runner` CLI and `install.sh`, CI. Not in cron yet | interactive (the old runner can only build in Strelitzia) |
-| 2 `runner-shared-2-roles` | agent-runner | Validator role: `/review-pr` template, result file and stages in `run.sh`, tick order, re-queue on `changes`, "left for you" notice | interactive |
-| 3 `engineerfamily-agents-layout` | engineerfamily | `AGENTS.md` (from `CLAUDE.md`), `agents/{ROADMAP,DEPLOY}.md`, `agents/runner.toml`, `agents/settings/*`, `scripts/validate.sh`, `ci.yml`, `.claude/commands/*`, `.claude/settings.json`, `make prod-changes` | interactive (`.github/`, settings) |
-| 4 `strelitzia-agents-layout` | Strelitzia | `agents/runner.toml`, `agents/settings/*`, `agents/mcp.json`; commands call `agent-runner …`; `/schedule-build` passes `--repo`; delete `scripts/agent/` and its tests **after** cutover; `HIGH_RISK` and `AGENTS.md` updated | unattended, last task after cutover |
-| 5 cutover | VPS | Rollout steps 3–6 | manual (user) |
-| 6 `runner-shared-3-triage` (optional) | agent-runner | Sonnet manager triage of `blocked` items | unattended |
+Split on 2026-10-19 to fit `gate.py --plan` (≤4 tasks, ≤12 files, ≤10 KB per plan): the first cut's Parts 1, 3 and 4 each
+listed 10-15 files and 5-7 work items. Build in this order; each line merges on its own with green validation.
+Plans for `agent-runner` live in that repo's `agents/plans/` (written there after Part 0).
+
+| Part | Plan slug | Repo | What | Runs |
+|---|---|---|---|---|
+| 0 | create repo | GitHub | `gh repo create SiddharthEngineer/agent-runner --private`, seeded with today's `scripts/agent/*` and `tests/test_agent_runner.py` (history not kept; the Strelitzia history stays there) | manual (user) |
+| 1a | `runner-1-config` | agent-runner | `config.py`: load and check `runner.toml` (tomllib), the prod-command guard (D5 point 2); `gate.py` takes `HIGH_RISK`/`DOC_OR_TEST`/budget/base from it; a sample `runner.toml` fixture; tests | interactive |
+| 1b | `runner-2-state` | agent-runner | `<repo>/<slug>` queue keys with bare-slug migration, `add --repo`, cross-repo `--after`; 4-column `preprod.lock` (3-column read as `strelitzia`); `~/.config/agent-runner` and `~/.local/state/agent-runner` with the `strelitzia-agent` fallback in `buildqueue.py`, `preprod.sh`, `inbox.py`, `usage.py`; tests | interactive |
+| 1c | `runner-3-run` | agent-runner | `run.sh` walks `repos/*.env`, reads base/merge/validate/preprod from `runner.toml` on `origin/<base>`, worktrees at `worktrees/<repo>/<slug>`, the single merge rule (drop `AGENT_MERGE_POLICY`), `AGENT_DRY_RUN`; tests | interactive |
+| 1d | `runner-4-install` | agent-runner | the `agent-runner` CLI, `install.sh <tag>`, CI workflow, README. Not in cron yet | interactive |
+| 2a | `runner-5-review` | agent-runner | Validator review stage: `/review-pr` template, result file, the stage in `run.sh`, re-queue on `changes` (resume the implementer with the review as the note) | interactive |
+| 2b | `runner-6-preprod-check` | agent-runner | Validator preprod stage: tick order, the checklist comment, fail → off preprod and back to the implementer, the "left for you" inbox notice | interactive |
+| 3a | `ef-validate-ci` | engineerfamily | `scripts/validate.sh` (compose `config -q` with `.env.template`, `nginx -t` with stub cert/`.htpasswd`), `.github/workflows/ci.yml`, `make prod-changes`. Useful before the runner exists: engineerfamily PRs get a green/red check | interactive (`.github/`) |
+| 3b | `ef-agents-layout` | engineerfamily | `AGENTS.md` (from `CLAUDE.md`), `agents/ROADMAP.md`, `agents/DEPLOY.md` (from README "Deploys"), `.claude/settings.json` | interactive (settings) |
+| 3c | `ef-runner-config` | engineerfamily | `agents/runner.toml`, `agents/settings/{implement,validate}.json`, `agents/mcp.json`, `.claude/commands/*` calling `agent-runner …` | interactive (settings) |
+| 4a | `strelitzia-runner-config` | Strelitzia | `agents/runner.toml`, `agents/settings/*`, `agents/mcp.json`; commands call `agent-runner …`; `/schedule-build` passes `--repo`; `HIGH_RISK` and `AGENTS.md` updated. `scripts/agent/` stays | unattended |
+| 5 | cutover | VPS | Rollout steps 3-6 | manual (user) |
+| 4b | `strelitzia-runner-cleanup` | Strelitzia | Rollout step 7: delete `scripts/agent/` and `tests/test_agent_runner.py`, drop the config-dir fallback | unattended, a week after Part 5 |
+| 6 | `runner-7-triage` (optional) | agent-runner | Sonnet manager triage of `blocked` items | unattended |
 
 ## Rollout (the Strelitzia runner keeps working at every step)
-1. **Parts 0–3 build next to the old runner.** Nothing the old runner reads changes: `~/src/Strelitzia/scripts/agent/`,
+1. **Parts 0-3c build next to the old runner.** Nothing the old runner reads changes: `~/src/Strelitzia/scripts/agent/`,
    `~/.config/strelitzia-agent/` and `~/.local/state/strelitzia-agent/` all stay as they are. The new code uses its own state dir
-   and isn't in cron. Run Parts 1–3 interactively: the old runner only makes worktrees of Strelitzia.
-2. **Dry run.** `AGENT_DRY_RUN=1 ~/.local/share/agent-runner/current/run.sh` (Part 1 adds it: it logs the decision, then exits before `claude`/`gh pr merge`/preprod)
+   and isn't in cron. Run Parts 1a-3c interactively: the old runner only makes worktrees of Strelitzia.
+2. **Dry run.** `AGENT_DRY_RUN=1 ~/.local/share/agent-runner/current/run.sh` (Part 1c adds it: it logs the decision, then exits before `claude`/`gh pr merge`/preprod)
    against a **copy** of the old `queue.json` in a temp state dir. Expected result: bare keys read as `strelitzia/*`, every item `done`, "nothing due".
 3. **Drain.** `buildqueue.py list` on the old runner shows nothing `queued`, `running` or `on-preprod`, and `preprod.sh status` says `free`.
    (True at plan time.) Comment out the old cron line if it is on.
@@ -185,7 +196,7 @@ agents/settings/{implement,validate}.json, agents/mcp.json   headless permission
    with no validator run. Then queue a `review` engineerfamily plan that changes one nginx comment. Expected: validator review →
    preprod deploy through `make preprod-deploy ref=<sha>` → preprod-stage checklist comment → validator approves → the manager merges →
    the lock releases → preprod is back on `main`.
-7. **Clean up** after a week with no problems: run Part 4's last task (delete Strelitzia's `scripts/agent/`), delete `~/.config/strelitzia-agent`
+7. **Clean up** after a week with no problems: run Part 4b (delete Strelitzia's `scripts/agent/`), delete `~/.config/strelitzia-agent`
    and `~/.local/state/strelitzia-agent`, and drop the config-dir fallback.
 
 Rollback at any step before 7: restore the old crontab line. The old code, config and state are untouched until then.
