@@ -70,7 +70,7 @@ None. R25-R39 (issues #45-#49, PRs #57-#71) are merged, on prod and archived (20
     layout and use it in both repos.
     Design: [shared-agent-runner](plans/shared-agent-runner.md) (runner in its own `agent-runner` repo; manager/implementation/
     validation roles; `low` auto-merges, `review` merges after the validator approves; prod deploys stay manual).
-    One open question (submodule or installed copy), then split into Part plans.
+    One installed copy on the VPS that both repos call (no submodule). Decisions settled; next, split into Part plans.
 - "Posting closed" liveness check, so jobs without a stated deadline can turn Inactive.
 - Nightly `pg_dump` of the `applypilot` DB to `/srv/backups`.
 - Split the god-files (`smartextract.py`, `cli.py`; `scoring/tailor.py` shrank to 69 lines in R23); review risk.

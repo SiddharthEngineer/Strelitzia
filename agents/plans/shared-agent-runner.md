@@ -1,5 +1,5 @@
 # Plan: One agent runner for Strelitzia and engineerfamily, with manager, implementation and validation roles
-**Status:** 📝 Design (2026-10-18; user answers folded in 2026-10-19). One open question left (D2: submodule or installed copy), then each Part becomes its own plan through `/plan`
+**Status:** 📝 Design, decisions settled (2026-10-19). Next: each Part becomes its own plan through `/plan`
 **Risk:** review (moves the runner to a new repo, changes the agent settings and the preprod lock; touches `scripts/agent/*`, `.claude/settings.json` and `.github/*` in both repos)
 
 This is a design plan: it is over `gate.py --plan`'s size budget on purpose and **must not be queued**. Each Part below is
@@ -77,14 +77,13 @@ A new private repo `SiddharthEngineer/agent-runner` holds `run.sh`, `buildqueue.
 `usage.py`, the new `config.py`, the `/review-pr` command template, and their tests, with its own CI. Each of Strelitzia and
 engineerfamily keeps its own `.claude/` and `agents/` (D4); only the runner code is shared.
 
-**How the repos get it (the one open question).** The user suggested a git submodule in both repos. Recommended instead: **one
-installed copy on the VPS that both repos call.**
-- **Installed copy (recommended):** `~/.local/share/agent-runner/current` is a detached checkout of an `agent-runner` tag that the user
+**How the repos get it: one installed copy on the VPS that both repos call** (user, 2026-10-19).
+- **Installed copy (chosen):** `~/.local/share/agent-runner/current` is a detached checkout of an `agent-runner` tag that the user
   moves with `agent-runner/install.sh <tag>`, and `~/.local/bin/agent-runner` is a small CLI (`agent-runner queue add …`,
   `agent-runner gate --plan …`, `agent-runner inbox ask …`). Cron runs that one copy for both repos, so the repos can't be on two
   runner versions at once. The commands in each repo's `.claude/commands` call `agent-runner …` instead of `python3 scripts/agent/…`.
   Runner changes go live only when the user installs a new tag, and a session on a branch in a dev clone can't change what cron runs.
-- **Submodule (the user's suggestion):** works, and pins a runner version per repo, but those versions can drift apart while
+- **Submodule (considered, not chosen):** would work, and pins a runner version per repo, but those versions can drift apart while
   only one copy actually runs from cron. It also adds steps: every runner worktree needs `git submodule update --init`, both CIs need
   `submodules: true`, every runner change needs a bump PR in two repos, and a private runner repo breaks public clones of Strelitzia
   (AGPL, public), so the runner repo would have to be public too.
@@ -198,8 +197,9 @@ Answered (user, 2026-10-19):
 - `low` PRs auto-merge. `review` PRs merge after the validator approves. Deploying to prod is the only manual step.
 - engineerfamily "gate-only" is moot: with one merge rule there is no per-repo merge policy.
 
-Open:
-- D2: submodule in both repos, or one installed copy that both repos call (recommended)?
+- How the repos get the runner: one installed copy on the VPS that both repos call (`agent-runner` CLI), not a submodule.
+
+No open questions.
 
 ## Validation (of the finished rollout)
 - engineerfamily `scripts/validate.sh` and CI pass on `main`. `agent-runner` CI passes, including the migration tests
