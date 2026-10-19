@@ -106,8 +106,9 @@ The old `https://strelitzia(-preprod).engineerfamily.net/app/api/...` pairs can 
     (`site-sso-4-cutover`) moves the container off the shared `web` network. The headers are ignored in the other modes.
 
 `STRELITZIA_SITE_HEADER_URL` (any mode, e.g. `/shared/site-header.js`): engineerfamily's shared header script. When set,
-the dashboard's top bar starts with `<ef-home>` and ends with `<ef-profile>` (which carries Sign out) instead of its own
-user menu; unset, a self-hosted dashboard keeps its own header.
+the dashboard's top bar starts with `<ef-home>` and ends with `<ef-profile>`. In proxy mode `<ef-profile>` carries Sign
+out and replaces the dashboard's own user menu; in google mode the user menu stays (its session is the dashboard's).
+Unset, a self-hosted dashboard keeps its own header.
 
 ### Google Drive per user
 Each user connects their own Drive on the Claude setup page (**Connect Google Drive**, scope `drive.file` only, a

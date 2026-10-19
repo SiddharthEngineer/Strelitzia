@@ -303,7 +303,8 @@ export function logout(): Promise<{ ok: boolean }> {
 
 /** Proxy mode: end the site's session (its own endpoint, outside the dashboard's API). */
 export async function siteLogout(url: string): Promise<void> {
-  await fetch(url, { method: 'POST', credentials: 'same-origin' });
+  const res = await fetch(url, { method: 'POST', credentials: 'same-origin' });
+  if (!res.ok) throw new ApiError(res.status, `Couldn't sign out of the site (${res.status})`);
 }
 
 // --- The owner's Users page (owner-only: 403 for everyone else) ---

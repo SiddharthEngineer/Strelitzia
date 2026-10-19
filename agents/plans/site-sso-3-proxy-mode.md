@@ -1,5 +1,5 @@
 # Plan: Site-wide sign-in, part 3: the dashboard trusts the site's sign-in and uses the shared header
-**Status:** ❌ Not started
+**Status:** ✅ Done 2026-10-19 (all 4 tasks)
 **Risk:** review (authentication)
 **Depends on:** site-sso-1-site-auth, site-sso-2-site-header (design only: this part can merge before they ship, because
 the defaults are unchanged)

@@ -44,6 +44,7 @@ CLOCK_SKEW_SECONDS = 30  # tolerated drift between this server's clock and Googl
 PUBLIC_API_PATHS = (f"{API_PREFIX}/health",)
 PROXY_EMAIL_HEADER = "X-Auth-Request-Email"
 PROXY_NAME_HEADER = "X-Auth-Request-Preferred-Username"
+REFUSALS = ("not_invited", "disabled")  # the 401 details that say why a signed-in site account can't use the dashboard
 LAST_LOGIN_EVERY = timedelta(hours=1)  # proxy mode: how often `me` refreshes last_login_at
 
 DRIVE_PREFIX = f"{API_PREFIX}/drive"
@@ -300,7 +301,7 @@ def me(request: Request) -> dict:
         user = current_user(request)
     except HTTPException as exc:
         user = None
-        if exc.detail in ("not_invited", "disabled"):
+        if exc.detail in REFUSALS:
             reason = exc.detail
     identity = proxy_identity(request) if mode == "proxy" else None
     if mode == "proxy" and user is not None:
@@ -320,8 +321,7 @@ def me(request: Request) -> dict:
 
 def drive_connect_available() -> bool:
     """The web OAuth client and the token key are both set, so a user can connect their own Drive."""
-    return (auth_enabled() and bool(env("GOOGLE_CLIENT_ID")) and bool(env("GOOGLE_CLIENT_SECRET"))
-            and bool(env("TOKEN_KEY")))
+    return all(env(name) for name in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "TOKEN_KEY"))
 
 
 def _drive_redirect_uri(request: Request) -> str:

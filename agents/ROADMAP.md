@@ -15,7 +15,7 @@ since its defaults change nothing. Rollout order, preprod checks and rollback ar
 |---|---|---|---|---|---|
 | R40 | Site SSO 1: Google sign-in in the engineerfamily Flask app, site privacy page | [site-sso-1-site-auth](plans/site-sso-1-site-auth.md) | review | ⏳ | M29, M30 |
 | R41 | Site SSO 2: shared header (home link top left, profile and Sign out top right) | [site-sso-2-site-header](plans/site-sso-2-site-header.md) | review | ⏳ | R40 |
-| R42 | Site SSO 3: dashboard proxy auth mode and shared header | [site-sso-3-proxy-mode](plans/site-sso-3-proxy-mode.md) | review | ⏳ | - |
+| R42 | Site SSO 3: dashboard proxy auth mode and shared header | [site-sso-3-proxy-mode](plans/site-sso-3-proxy-mode.md) | review | ✅ | - |
 | R43 | Site SSO 4: nginx cutover, rollout and rollback | [site-sso-4-cutover](plans/site-sso-4-cutover.md) | review | ⏳ | R40, R41, R42 |
 
 ## Manual steps (you)
