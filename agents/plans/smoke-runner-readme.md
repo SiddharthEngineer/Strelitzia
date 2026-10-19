@@ -1,5 +1,5 @@
 # Plan: README names the shared runner (smoke test, Strelitzia)
-**Status:** ❌ Not started
+**Status:** ✅ Done 2026-10-19
 **Risk:** low (docs only; auto-merges on green CI, user 2026-10-19)
 **Depends on:** the cutover (agent-runner ROADMAP AM5, cron swapped 2026-10-19)
 
@@ -15,7 +15,7 @@ test for this repo: implementer PR → merged, no validator run.
 **What:** In the "Running Strelitzia next to Claude Code" paragraph, replace "(such as `scripts/agent/run.sh`)" with
 "(such as the shared `agent-runner` that builds this repo's plans)". Change nothing else.
 **Validate:** `scripts/validate.sh` → ALL PASS. `grep -n "scripts/agent/run.sh" README.md` → no match.
-**Status:** ❌
+**Status:** ✅ 2026-10-19 (this commit)
 
 ## Validation
 - `scripts/validate.sh` passes.
