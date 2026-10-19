@@ -21,7 +21,10 @@ export default function App() {
   const [me, setMe] = useState<AuthMe | null>(null);
   const [signedOut, setSignedOut] = useState(false);
   useEffect(() => {
-    onUnauthorized(() => setSignedOut(true));
+    onUnauthorized(() => {
+      setSignedOut(true);
+      getMe().then(setMe).catch(() => {}); // refresh the reason (proxy mode: not invited, or just disabled)
+    });
     getMe().then(setMe).catch(() => setMe({ enabled: false, user: null })); // an older server: no login
     return () => onUnauthorized(null);
   }, []);
@@ -39,13 +42,17 @@ function Shell({ me }: { me: AuthMe | null }) {
   useEffect(refreshPanelDue, [refreshPanelDue]);
   // The Users page is for the owner, and only matters once other accounts can sign in.
   const isOwner = Boolean(me?.enabled && me.user?.role === 'owner');
-  // On engineerfamily.net the site's own home link and profile control frame the header (and carry Sign out).
+  // On engineerfamily.net the site's own home link and profile control frame the header. In proxy mode the session is
+  // the site's, so its profile control also carries Sign out; otherwise the dashboard keeps its own user menu.
   const site = Boolean(me?.site_header_url);
+  const siteSession = site && me?.mode === 'proxy';
   useSiteHeader(me?.site_header_url);
   const loader = <div className="loader-state" aria-live="polite" aria-busy="true"><Flower variant="loader" size={64} />Loading…</div>;
   function signOut() {
-    const done = me?.logout_url ? siteLogout(me.logout_url) : logout();
-    done.catch(() => {}).finally(() => window.location.reload());
+    const siteUrl = me?.logout_url;
+    logout().catch(() => {})
+      .then(() => (siteUrl ? siteLogout(siteUrl) : undefined))
+      .catch(() => {}).finally(() => window.location.reload());
   }
   return (
     <div className="app">
@@ -67,12 +74,13 @@ function Shell({ me }: { me: AuthMe | null }) {
           {isOwner && <NavLink to="/users">Users</NavLink>}
         </nav>
         <button type="button" className="primary add-job-button" onClick={() => setAdding(true)}>Add job</button>
-        {site ? <SiteProfile /> : me?.enabled && me.user && (
+        {!siteSession && me?.enabled && me.user && (
           <span className="user-menu">
             <span className="user-name" title={me.user.email}>{me.user.name || me.user.email}</span>
             <button type="button" onClick={signOut}>Sign out</button>
           </span>
         )}
+        {site && <SiteProfile />}
       </header>
       {adding && <AddJobDialog onClose={() => setAdding(false)} />}
       <main className="content">

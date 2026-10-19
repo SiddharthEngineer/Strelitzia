@@ -38,7 +38,7 @@ export default function SignInPage({ me }: { me?: AuthMe | null }) {
           {refused && <p className="muted">Signed in as <strong>{refused.email}</strong></p>}
           {me?.reason
             ? <a className="button" href={LOGIN_URL}>Use another account</a>
-            : <a className="button" href={LOGIN_URL}>Sign in with Google</a>}
+            : <a className="button" href={LOGIN_URL}>{me?.mode === 'proxy' ? 'Sign in' : 'Sign in with Google'}</a>}
         </div>
       </main>
     </>

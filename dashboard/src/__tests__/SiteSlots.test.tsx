@@ -63,6 +63,15 @@ describe('the shared site header', () => {
     expect(scripts()).toHaveLength(0);
   });
 
+  it("keeps the dashboard's own Sign out when the session isn't the site's (google mode)", async () => {
+    vi.mocked(api.getMe).mockResolvedValue({ ...OWNER, mode: 'google', site_header_url: SCRIPT });
+    const { container } = renderApp();
+    expect(await screen.findByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+    const header = container.querySelector('header.topbar')!;
+    expect(header.firstElementChild?.tagName).toBe('EF-HOME');
+    expect(header.lastElementChild?.tagName).toBe('EF-PROFILE');
+  });
+
   it('gives the sign-in screen the same slots', () => {
     const me: AuthMe = { enabled: true, user: null, mode: 'proxy', reason: 'not_invited',
       identity: { email: 'stranger@example.com', name: null }, site_header_url: SCRIPT };

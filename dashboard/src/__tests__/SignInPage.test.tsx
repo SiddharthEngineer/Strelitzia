@@ -111,8 +111,8 @@ describe('App sign-in gate', () => {
       const user = userEvent.setup();
       renderApp();
       await user.click(await screen.findByRole('button', { name: 'Sign out' }));
-      expect(api.siteLogout).toHaveBeenCalledWith('/auth/logout');
-      expect(api.logout).not.toHaveBeenCalled();
+      await vi.waitFor(() => expect(api.siteLogout).toHaveBeenCalledWith('/auth/logout'));
+      expect(api.logout).toHaveBeenCalled(); // the dashboard's own session (Drive state) ends too
       await vi.waitFor(() => expect(reload).toHaveBeenCalled());
     } finally {
       vi.unstubAllGlobals();
@@ -125,6 +125,18 @@ describe('App sign-in gate', () => {
     renderApp();
     expect(await screen.findByRole('link', { name: 'Use another account' })).toBeInTheDocument();
     expect(screen.getByText(/Signed in as/)).toHaveTextContent('stranger@example.com');
+  });
+
+  it('asks again who is signed in when a request comes back 401', async () => {
+    vi.mocked(api.getMe).mockResolvedValue({ ...OWNER, mode: 'proxy' });
+    renderApp();
+    expect(await screen.findByRole('navigation', { name: 'Main' })).toBeInTheDocument();
+    vi.mocked(api.getMe).mockResolvedValue({ enabled: true, user: null, mode: 'proxy', reason: 'disabled',
+      identity: { email: 'owner@example.com', name: null } });
+    const listener = vi.mocked(api.onUnauthorized).mock.calls.map(([l]) => l).filter(Boolean).pop()!;
+    act(() => listener());
+    expect(await screen.findByRole('alert')).toHaveTextContent('disabled');
+    expect(screen.getByRole('link', { name: 'Use another account' })).toBeInTheDocument();
   });
 
   it('switches to the sign-in screen when a request comes back 401', async () => {
