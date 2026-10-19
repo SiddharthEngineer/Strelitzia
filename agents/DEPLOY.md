@@ -87,6 +87,28 @@ Authorized redirect URIs on the OAuth client, one pair per environment (the user
 
 The old `https://strelitzia(-preprod).engineerfamily.net/app/api/...` pairs can be removed once nothing runs the `/app` build.
 
+### Sign-in modes (`STRELITZIA_AUTH_MODE`)
+`auth.auth_mode()` picks one of three; `GET /strelitzia/dashboard/api/auth/me` reports it as `mode`.
+- **off**: no client id and no `STRELITZIA_AUTH_MODE`. Every request acts as the owner.
+- **google**: `STRELITZIA_GOOGLE_CLIENT_ID` is set. The built-in Google flow above (self-hosters without a proxy, and
+  the rollback path for site-wide sign-in).
+- **proxy**: `STRELITZIA_AUTH_MODE=proxy` (wins over the client id). The dashboard runs no sign-in of its own: the
+  reverse proxy (engineerfamily's nginx `auth_request`, or oauth2-proxy) signs the visitor in and passes two headers:
+  `X-Auth-Request-Email` (required) and `X-Auth-Request-Preferred-Username` (display name, percent-encoded). The invite
+  list, the owner (and its `owner@localhost` re-key), disabled accounts and admin routes work as in google mode; an
+  uninvited or disabled email gets 401 with `not_invited` / `disabled`, and the sign-in screen names the account and
+  offers "Use another account". Needs `STRELITZIA_OWNER_EMAIL` and `STRELITZIA_SESSION_SECRET` (Drive connect's state);
+  Drive connect also needs the Google client id and secret, as before.
+  - `STRELITZIA_SITE_LOGIN_URL` (default `/auth/login`): where the dashboard's Sign in goes, with `?next=/strelitzia/dashboard/`.
+  - `STRELITZIA_SITE_LOGOUT_URL` (default `/auth/logout`): what Sign out POSTs (the site's session, not the dashboard's).
+  - **Proxy mode is safe only when nothing but the proxy can reach the container**: the headers are the whole proof
+    of identity, and anyone who can talk to the app directly can set them. On the VPS: no published port, and part 4
+    (`site-sso-4-cutover`) moves the container off the shared `web` network. The headers are ignored in the other modes.
+
+`STRELITZIA_SITE_HEADER_URL` (any mode, e.g. `/shared/site-header.js`): engineerfamily's shared header script. When set,
+the dashboard's top bar starts with `<ef-home>` and ends with `<ef-profile>` (which carries Sign out) instead of its own
+user menu; unset, a self-hosted dashboard keeps its own header.
+
 ### Google Drive per user
 Each user connects their own Drive on the Claude setup page (**Connect Google Drive**, scope `drive.file` only, a
 separate consent after sign-in). It needs login on and `STRELITZIA_TOKEN_KEY`, a Fernet key
