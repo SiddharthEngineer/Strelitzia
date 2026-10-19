@@ -12,6 +12,7 @@ vi.mock('../api', async (importOriginal) => ({
   getMe: vi.fn(),
   getPanel: vi.fn(),
   logout: vi.fn(),
+  siteLogout: vi.fn(),
   onUnauthorized: vi.fn(),
 }));
 
@@ -31,6 +32,32 @@ describe('SignInPage', () => {
   it('links to Google sign-in', () => {
     render(<MemoryRouter><SignInPage /></MemoryRouter>);
     expect(screen.getByRole('link', { name: 'Sign in with Google' })).toHaveAttribute('href', '/strelitzia/dashboard/api/auth/login');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it("names the site account that isn't invited and offers another (proxy mode)", () => {
+    const me: AuthMe = { enabled: true, user: null, mode: 'proxy', reason: 'not_invited',
+      identity: { email: 'stranger@example.com', name: null } };
+    render(<MemoryRouter><SignInPage me={me} /></MemoryRouter>);
+    expect(screen.getByRole('alert')).toHaveTextContent("isn't invited");
+    expect(screen.getByText(/Signed in as/)).toHaveTextContent('Signed in as stranger@example.com');
+    expect(screen.getByRole('link', { name: 'Use another account' })).toHaveAttribute('href', '/strelitzia/dashboard/api/auth/login');
+    expect(screen.queryByRole('link', { name: 'Sign in with Google' })).toBeNull();
+  });
+
+  it('names a disabled site account (proxy mode)', () => {
+    const me: AuthMe = { enabled: true, user: null, mode: 'proxy', reason: 'disabled',
+      identity: { email: 'friend@example.com', name: 'Friend' } };
+    render(<MemoryRouter><SignInPage me={me} /></MemoryRouter>);
+    expect(screen.getByRole('alert')).toHaveTextContent('disabled');
+    expect(screen.getByText(/Signed in as/)).toHaveTextContent('friend@example.com');
+  });
+
+  it('keeps the Google sign-in screen without a reason', () => {
+    const me: AuthMe = { enabled: true, user: null, mode: 'google', reason: null, identity: null };
+    render(<MemoryRouter><SignInPage me={me} /></MemoryRouter>);
+    expect(screen.getByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument();
+    expect(screen.queryByText(/Signed in as/)).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -73,6 +100,31 @@ describe('App sign-in gate', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it("signs out of the site when it's the site's session (proxy mode)", async () => {
+    const reload = vi.fn();
+    vi.stubGlobal('location', { ...window.location, reload });
+    try {
+      vi.mocked(api.getMe).mockResolvedValue({ ...OWNER, mode: 'proxy', logout_url: '/auth/logout' });
+      vi.mocked(api.siteLogout).mockResolvedValue();
+      const user = userEvent.setup();
+      renderApp();
+      await user.click(await screen.findByRole('button', { name: 'Sign out' }));
+      expect(api.siteLogout).toHaveBeenCalledWith('/auth/logout');
+      expect(api.logout).not.toHaveBeenCalled();
+      await vi.waitFor(() => expect(reload).toHaveBeenCalled());
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('shows who the site signed in when they are not invited', async () => {
+    vi.mocked(api.getMe).mockResolvedValue({ enabled: true, user: null, mode: 'proxy', reason: 'not_invited',
+      identity: { email: 'stranger@example.com', name: null }, logout_url: '/auth/logout' });
+    renderApp();
+    expect(await screen.findByRole('link', { name: 'Use another account' })).toBeInTheDocument();
+    expect(screen.getByText(/Signed in as/)).toHaveTextContent('stranger@example.com');
   });
 
   it('switches to the sign-in screen when a request comes back 401', async () => {

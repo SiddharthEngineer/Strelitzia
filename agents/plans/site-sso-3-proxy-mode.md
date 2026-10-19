@@ -66,7 +66,7 @@ Google's account picker); without it, the `?auth=` messages as today. Sign out: 
 (then reload) instead of the dashboard's own logout. Show the sign-in page when `me.enabled && !me.user` as today.
 **Validate:** `npm --prefix dashboard test -- --run SignInPage` → passes (not-invited state shows the email and the link;
 google mode unchanged); `scripts/validate.sh --full` → passes with the rebuilt bundle.
-**Status:** ❌
+**Status:** ✅ 2026-10-19
 
 ### Task 3: the shared header in the dashboard
 **Runs:** unattended

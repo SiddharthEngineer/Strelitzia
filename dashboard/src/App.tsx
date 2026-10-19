@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getMe, getPanel, logout, onUnauthorized } from './api';
+import { getMe, getPanel, logout, onUnauthorized, siteLogout } from './api';
 import { Link, NavLink, Route, Routes } from 'react-router-dom';
 import AddJobDialog from './components/AddJobDialog';
 import Flower from './components/Flower';
@@ -25,7 +25,7 @@ export default function App() {
     return () => onUnauthorized(null);
   }, []);
   // The app renders while /auth/me loads (login off is the common case); a 401 meanwhile lands on sign-in too.
-  if (signedOut || (me?.enabled && !me.user)) return <SignInPage />;
+  if (signedOut || (me?.enabled && !me.user)) return <SignInPage me={me} />;
   return <Shell me={me} />;
 }
 
@@ -40,7 +40,8 @@ function Shell({ me }: { me: AuthMe | null }) {
   const isOwner = Boolean(me?.enabled && me.user?.role === 'owner');
   const loader = <div className="loader-state" aria-live="polite" aria-busy="true"><Flower variant="loader" size={64} />Loading…</div>;
   function signOut() {
-    logout().catch(() => {}).finally(() => window.location.reload());
+    const done = me?.logout_url ? siteLogout(me.logout_url) : logout();
+    done.catch(() => {}).finally(() => window.location.reload());
   }
   return (
     <div className="app">
