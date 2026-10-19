@@ -1,8 +1,13 @@
-"""Google sign-in for the dashboard: the OAuth 2.0 authorization-code flow and the invite allowlist.
+"""Sign-in for the dashboard: the invite allowlist, behind one of three modes (`auth_mode`).
 
-Login is on only when STRELITZIA_GOOGLE_CLIENT_ID is set. While it's unset every request acts as the owner, as before
-accounts existed. With it on, the owner (STRELITZIA_OWNER_EMAIL) and invited emails get a session cookie holding their
-user id; anyone else is sent back to /strelitzia/dashboard/?auth=not_invited (a disabled account to ?auth=disabled).
+- off: no STRELITZIA_GOOGLE_CLIENT_ID and no proxy mode. Every request acts as the owner, as before accounts existed.
+- google: STRELITZIA_GOOGLE_CLIENT_ID is set. The built-in OAuth 2.0 authorization-code flow: the owner
+  (STRELITZIA_OWNER_EMAIL) and invited emails get a session cookie holding their user id; anyone else is sent back to
+  /strelitzia/dashboard/?auth=not_invited (a disabled account to ?auth=disabled).
+- proxy: STRELITZIA_AUTH_MODE=proxy. A reverse proxy (engineerfamily's nginx auth_request, or oauth2-proxy) has already
+  signed the visitor in and sets X-Auth-Request-Email (and X-Auth-Request-Preferred-Username). Those headers are the
+  whole proof of identity, so they are read only in this mode, and it is safe only when nothing but the proxy can
+  reach the server. Sign-in and sign-out are the site's (STRELITZIA_SITE_LOGIN_URL / STRELITZIA_SITE_LOGOUT_URL).
 """
 
 from __future__ import annotations
@@ -10,7 +15,8 @@ from __future__ import annotations
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlencode
+from typing import Literal
+from urllib.parse import unquote, urlencode
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
@@ -36,6 +42,9 @@ SESSION_COOKIE = "strelitzia_session"
 SESSION_MAX_AGE = 30 * 24 * 3600
 CLOCK_SKEW_SECONDS = 30  # tolerated drift between this server's clock and Google's when checking the ID token
 PUBLIC_API_PATHS = (f"{API_PREFIX}/health",)
+PROXY_EMAIL_HEADER = "X-Auth-Request-Email"
+PROXY_NAME_HEADER = "X-Auth-Request-Preferred-Username"
+LAST_LOGIN_EVERY = timedelta(hours=1)  # proxy mode: how often `me` refreshes last_login_at
 
 DRIVE_PREFIX = f"{API_PREFIX}/drive"
 DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
@@ -46,8 +55,23 @@ drive_router = APIRouter(prefix=DRIVE_PREFIX)
 log = logging.getLogger(__name__)
 
 
+def auth_mode() -> Literal["off", "google", "proxy"]:
+    if (env("AUTH_MODE") or "").strip().lower() == "proxy":
+        return "proxy"
+    return "google" if env("GOOGLE_CLIENT_ID") else "off"
+
+
 def auth_enabled() -> bool:
-    return bool(env("GOOGLE_CLIENT_ID"))
+    return auth_mode() != "off"
+
+
+def proxy_identity(request: Request) -> tuple[str, str | None] | None:
+    """The email and display name the proxy vouches for, or None without an email. Call it only in proxy mode."""
+    email = request.headers.get(PROXY_EMAIL_HEADER, "").strip().lower()
+    if not email:
+        return None
+    name = unquote(request.headers.get(PROXY_NAME_HEADER, "")).strip()
+    return email, name or None
 
 
 def public_url() -> str:
@@ -73,13 +97,22 @@ def _redirect_uri(request: Request) -> str:
 
 
 def current_user(request: Request) -> users.User:
-    """The signed-in user: the owner while login is off, else the session's active account (401 without one)."""
+    """The signed-in user: the owner while login is off, the proxy's account in proxy mode, else the session's
+    active account. 401 without one (in proxy mode with the reason: "not_invited" or "disabled")."""
     cached = getattr(request.state, "user", None)
     if cached is not None:
         return cached
     conn = _conn(request)
-    if not auth_enabled():
+    mode = auth_mode()
+    if mode == "off":
         user = users.owner(conn)
+    elif mode == "proxy":
+        identity = proxy_identity(request)
+        if identity is None:
+            raise HTTPException(401, "Not signed in")
+        user = _account_for(conn, *identity)
+        if user is None:
+            raise HTTPException(401, _refusal(conn, identity[0]))
     else:
         uid = request.session.get("uid")
         user = users.get(conn, uid) if isinstance(uid, str) else None
@@ -89,9 +122,22 @@ def current_user(request: Request) -> users.User:
     return user
 
 
+def _refusal(conn: Connection, email: str) -> str:
+    known = users.by_email(conn, email)
+    return "disabled" if known and known.status == "disabled" else "not_invited"
+
+
 def check_config() -> None:
     """With login on, refuse to start without the keys sign-in can't work without."""
-    if not auth_enabled():
+    mode = auth_mode()
+    if mode == "off":
+        return
+    if mode == "proxy":
+        # SESSION_SECRET signs Drive connect's state; Drive connect itself still needs the Google client.
+        missing = [f"STRELITZIA_{name}" for name in ("OWNER_EMAIL", "SESSION_SECRET") if not env(name)]
+        if missing:
+            raise RuntimeError(f"STRELITZIA_AUTH_MODE=proxy is set but {', '.join(missing)} is not "
+                               "(see agents/DEPLOY.md, Google sign-in)")
         return
     missing = [f"STRELITZIA_{name}" for name in ("GOOGLE_CLIENT_SECRET", "SESSION_SECRET", "OWNER_EMAIL")
                if not env(name)]
@@ -158,10 +204,23 @@ def _back(outcome: str | None = None) -> RedirectResponse:
     return RedirectResponse(f"{UI_PREFIX}/" + (f"?auth={outcome}" if outcome else ""), status_code=303)
 
 
+def _site_login_url() -> str:
+    return env("SITE_LOGIN_URL") or "/auth/login"
+
+
+def _site_logout_url() -> str:
+    return env("SITE_LOGOUT_URL") or "/auth/logout"
+
+
 @router.get("/login")
 def login(request: Request):
-    if not auth_enabled():
+    mode = auth_mode()
+    if mode == "off":
         return _back()
+    if mode == "proxy":
+        url = _site_login_url()
+        sep = "&" if "?" in url else "?"
+        return RedirectResponse(f"{url}{sep}{urlencode({'next': f'{UI_PREFIX}/'})}", status_code=303)
     state = secrets.token_urlsafe(32)
     request.session["oauth_state"] = state
     params = {
@@ -177,8 +236,8 @@ def login(request: Request):
 
 @router.get("/callback", name="auth_callback")
 def callback(request: Request, code: str | None = None, state: str | None = None, error: str | None = None):
-    if not auth_enabled():
-        raise HTTPException(404, "Login is off")
+    if auth_mode() != "google":
+        raise HTTPException(404, "Login is off" if auth_mode() == "off" else "Sign-in is the site's")
     expected = request.session.pop("oauth_state", None)
     if not _state_matches(state, expected):
         # A forged callback, or a stale one (a second login tab, Back into the callback): nobody is signed in.
@@ -204,8 +263,7 @@ def callback(request: Request, code: str | None = None, state: str | None = None
     user = _sign_in(_conn(request), info["email"], info.get("name"))
     request.session.clear()
     if user is None:
-        known = users.by_email(_conn(request), info["email"])
-        return _back("disabled" if known and known.status == "disabled" else "not_invited")
+        return _back(_refusal(_conn(request), info["email"]))
     request.session["uid"] = user.id
     return _back()
 
@@ -213,18 +271,48 @@ def callback(request: Request, code: str | None = None, state: str | None = None
 @router.post("/logout")
 def logout(request: Request) -> dict:
     request.session.clear()
+    if auth_mode() == "proxy":
+        # The site's cookie is the site's to end: the dashboard POSTs this URL next.
+        return {"ok": True, "logout_url": _site_logout_url()}
     return {"ok": True}
+
+
+def _note_login(conn: Connection, user: users.User) -> None:
+    """Proxy mode has no sign-in moment, so `me` records one, at most once every LAST_LOGIN_EVERY."""
+    now = datetime.now(timezone.utc)
+    try:
+        last = datetime.fromisoformat(user.last_login_at) if user.last_login_at else None
+    except ValueError:
+        last = None
+    if last is not None and last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    if last is not None and now - last < LAST_LOGIN_EVERY:
+        return
+    conn.execute("UPDATE users SET last_login_at = ? WHERE id = ?", (now.isoformat(), user.id))
+    conn.commit()
 
 
 @router.get("/me")
 def me(request: Request) -> dict:
+    mode = auth_mode()
+    reason = None
     try:
         user = current_user(request)
-    except HTTPException:
+    except HTTPException as exc:
         user = None
+        if exc.detail in ("not_invited", "disabled"):
+            reason = exc.detail
+    identity = proxy_identity(request) if mode == "proxy" else None
+    if mode == "proxy" and user is not None:
+        _note_login(_conn(request), user)
     return {
-        "enabled": auth_enabled(),
+        "enabled": mode != "off",
         "user": {"email": user.email, "name": user.name, "role": user.role} if user else None,
+        "mode": mode,
+        "identity": {"email": identity[0], "name": identity[1]} if identity else None,
+        "reason": reason,
+        "logout_url": _site_logout_url() if mode == "proxy" else None,
+        "site_header_url": env("SITE_HEADER_URL") or None,
     }
 
 
@@ -232,7 +320,8 @@ def me(request: Request) -> dict:
 
 def drive_connect_available() -> bool:
     """The web OAuth client and the token key are both set, so a user can connect their own Drive."""
-    return auth_enabled() and bool(env("TOKEN_KEY"))
+    return (auth_enabled() and bool(env("GOOGLE_CLIENT_ID")) and bool(env("GOOGLE_CLIENT_SECRET"))
+            and bool(env("TOKEN_KEY")))
 
 
 def _drive_redirect_uri(request: Request) -> str:

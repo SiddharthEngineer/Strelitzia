@@ -54,7 +54,7 @@ Without the settings nothing changes: login is off without a client id, and Goog
 email reaches `/strelitzia/dashboard/api/jobs`; no header → 401; an uninvited email → 401 `not_invited` and `me`
 shows the identity; a disabled account → `disabled`; owner re-key from `owner@localhost` works; admin routes 403 for
 a non-owner; the headers are ignored in `google` and `off` modes; `login` redirects to the site with `next`.
-**Status:** ❌
+**Status:** ✅ 2026-10-19
 
 ### Task 2: dashboard sign-in screen and sign-out in proxy mode
 **Runs:** unattended

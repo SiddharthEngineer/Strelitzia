@@ -18,7 +18,7 @@ def _login_off(monkeypatch):
     """Login is off in every web test (a developer's STRELITZIA_GOOGLE_CLIENT_ID never leaks in); see `auth_client`."""
     for prefix in ("STRELITZIA_", "APPLYPILOT_"):
         for name in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "SESSION_SECRET", "OWNER_EMAIL", "PUBLIC_URL",
-                     "TOKEN_KEY"):
+                     "TOKEN_KEY", "AUTH_MODE", "SITE_LOGIN_URL", "SITE_LOGOUT_URL", "SITE_HEADER_URL"):
             monkeypatch.delenv(prefix + name, raising=False)
 
 
