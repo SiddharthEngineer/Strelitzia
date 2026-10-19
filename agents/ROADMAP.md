@@ -61,7 +61,12 @@ None. R25-R39 (issues #45-#49, PRs #57-#71) are merged, on prod and archived (20
   - Shared header: a Strelitzia link in the engineerfamily header; the dashboard keeps its header but gains a link back to
     engineerfamily.net. Same styling, the home link always looks the same and sits in the same spot, profile/sign-in always top right.
   - Google sign-in moves to the engineerfamily.net site level (one session for the whole domain). Only the dashboard needs an
-    invited account; everything else stays open to signed-out and uninvited visitors.
+    invited account; everything else stays open to signed-out and uninvited visitors. Draft plans (waiting for the user's
+    review, not yet in Active): [site-sso-1-site-auth](plans/site-sso-1-site-auth.md),
+    [site-sso-2-site-header](plans/site-sso-2-site-header.md), [site-sso-3-proxy-mode](plans/site-sso-3-proxy-mode.md),
+    [site-sso-4-cutover](plans/site-sso-4-cutover.md). They also cover the Shared header item's home link (top left) and
+    profile / sign-in / Sign out control (top right); matching the rest of the nav styling stays in that item.
+    User, 2026-10-18: consent screen renamed `engineerfamily`; the dashboard keeps a Sign out button.
   - Bring the unattended build setup (PIV loop, `/schedule-build` queue, the 5-minute cron `scripts/agent/run.sh` that picks
     up queued plans, `gate.py` risk gate, inbox issues + ntfy) into the engineerfamily repo too, so engineerfamily gets the
     same continuous development as Strelitzia becomes part of it. May need a redesign (one shared runner for both repos, or
