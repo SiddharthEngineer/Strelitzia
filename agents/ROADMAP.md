@@ -17,7 +17,7 @@ since its defaults change nothing. Rollout order, preprod checks and rollback ar
 | R41 | Site SSO 2: shared header (home link top left, profile and Sign out top right) | [site-sso-2-site-header](plans/site-sso-2-site-header.md) | review | ✅ | R40 |
 | R42 | Site SSO 3: dashboard proxy auth mode and shared header | [site-sso-3-proxy-mode](plans/site-sso-3-proxy-mode.md) | review | ✅ | - |
 | R43 | Site SSO 4: nginx cutover, rollout and rollback | [site-sso-4-cutover](plans/site-sso-4-cutover.md) | review | 🟡 engineerfamily #36 on preprod, steps 1-10 pass; prod is M31 | R40, R41, R42 |
-| R44 | Shared agent-runner: Strelitzia `runner.toml` and agent settings (add-only) | [strelitzia-runner-config](plans/strelitzia-runner-config.md) | low | ⏳ | agent-runner A10 |
+| R44 | Shared agent-runner: Strelitzia `runner.toml` and agent settings (add-only) | [strelitzia-runner-config](plans/strelitzia-runner-config.md) | low | ✅ | agent-runner A10 |
 | R45 | Shared agent-runner: commands on the `agent-runner` CLI, delete `scripts/agent/` | [strelitzia-runner-cleanup](plans/strelitzia-runner-cleanup.md) | low | ⏳ | R44, agent-runner cutover + 1 week |
 
 ## Manual steps (you)
