@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
 
 // engineerfamily's shared header (`/shared/site-header.js`) defines these; they render and style themselves.
+// React 18 writes `className` on a custom element as a literal `classname` attribute, so these take `class`.
 declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
-      'ef-home': HTMLAttributes<HTMLElement>;
-      'ef-profile': HTMLAttributes<HTMLElement> & { next?: string };
+      'ef-home': HTMLAttributes<HTMLElement> & { class?: string };
+      'ef-profile': HTMLAttributes<HTMLElement> & { class?: string; next?: string };
     }
   }
 }
@@ -22,10 +23,10 @@ export function useSiteHeader(url: string | null | undefined): void {
 
 /** engineerfamily's home link: the first thing in the header. */
 export function SiteHome() {
-  return <ef-home className="site-home" />;
+  return <ef-home class="site-home" />;
 }
 
 /** engineerfamily's sign-in / profile / Sign out control: the last thing in the header. */
 export function SiteProfile() {
-  return <ef-profile className="site-profile" next="/strelitzia/dashboard/" />;
+  return <ef-profile class="site-profile" next="/strelitzia/dashboard/" />;
 }

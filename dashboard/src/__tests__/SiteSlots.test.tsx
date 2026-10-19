@@ -38,6 +38,9 @@ describe('the shared site header', () => {
     expect(header.firstElementChild?.tagName).toBe('EF-HOME');
     expect(header.lastElementChild?.tagName).toBe('EF-PROFILE');
     expect(header.lastElementChild).toHaveAttribute('next', '/strelitzia/dashboard/');
+    // A real class (not React 18's literal `classname`), so the phone-width grid in styles.css can place them.
+    expect(header.firstElementChild).toHaveClass('site-home');
+    expect(header.lastElementChild).toHaveClass('site-profile');
     expect(container.querySelector('.user-menu')).toBeNull();
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
     expect(scripts()).toHaveLength(1);
