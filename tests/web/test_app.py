@@ -103,7 +103,8 @@ def test_login_on_needs_a_session_for_the_api(auth_client):
     assert auth_client.get("/strelitzia/dashboard/api/openapi.json").status_code == 401
     assert auth_client.post("/strelitzia/dashboard/api/auth/logout").status_code == 200
     assert auth_client.get("/strelitzia/dashboard/api/health").status_code == 200
-    assert auth_client.get("/strelitzia/dashboard/api/auth/me").json() == {"enabled": True, "user": None}
+    me = auth_client.get("/strelitzia/dashboard/api/auth/me").json()
+    assert me["enabled"] is True and me["user"] is None
     # the UI stays public so the SPA can show its login screen
     assert auth_client.get("/strelitzia/dashboard/").status_code == 200
     assert auth_client.get("/strelitzia/dashboard/assets/app.js").status_code == 200

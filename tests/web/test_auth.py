@@ -99,7 +99,8 @@ def test_owner_signs_in(auth_on, client, conn, google):
     assert google.token_requests[-1]["code"] == "c0de"
     assert google.token_requests[-1]["redirect_uri"] == "https://strelitzia.example.net/strelitzia/dashboard/api/auth/callback"
     me = client.get("/strelitzia/dashboard/api/auth/me").json()
-    assert me == {"enabled": True, "user": {"email": OWNER, "name": None, "role": "owner"}}
+    assert me == {"enabled": True, "user": {"email": OWNER, "name": None, "role": "owner"}, "mode": "google",
+                  "identity": None, "reason": None, "logout_url": None, "site_header_url": None}
     assert client.get("/strelitzia/dashboard/api/whoami").json() == {"email": owner.email}
 
 
@@ -129,7 +130,9 @@ def test_uninvited_email_gets_no_session(auth_on, client, conn, google):
     resp = sign_in(client)
     assert resp.headers["location"] == "/strelitzia/dashboard/?auth=not_invited"
     assert users.by_email(conn, "stranger@example.com") is None
-    assert client.get("/strelitzia/dashboard/api/auth/me").json() == {"enabled": True, "user": None}
+    assert client.get("/strelitzia/dashboard/api/auth/me").json() == {
+        "enabled": True, "user": None, "mode": "google", "identity": None, "reason": None, "logout_url": None,
+        "site_header_url": None}
     assert client.get("/strelitzia/dashboard/api/whoami").status_code == 401
 
 
@@ -241,7 +244,8 @@ def test_login_off_acts_as_owner(client, conn, monkeypatch):
     owner = users.owner(conn)
     assert client.get("/strelitzia/dashboard/api/whoami").json() == {"email": owner.email}
     assert client.get("/strelitzia/dashboard/api/auth/me").json() == {
-        "enabled": False, "user": {"email": owner.email, "name": None, "role": "owner"}}
+        "enabled": False, "user": {"email": owner.email, "name": None, "role": "owner"}, "mode": "off",
+        "identity": None, "reason": None, "logout_url": None, "site_header_url": None}
     assert client.get("/strelitzia/dashboard/api/auth/login").headers["location"] == "/strelitzia/dashboard/"
     assert client.get("/strelitzia/dashboard/api/auth/callback", params={"code": "c", "state": "s"}).status_code == 404
 
@@ -381,3 +385,160 @@ def test_drive_disconnect_forgets_the_token_when_google_is_unreachable(auth_on, 
     monkeypatch.setattr(auth.httpx, "post", unreachable)
     assert client.post("/strelitzia/dashboard/api/drive/disconnect").json() == {"ok": True}
     assert _token_rows(conn) == {}
+
+
+# --- Proxy mode (site-sso-3-proxy-mode): the reverse proxy signs visitors in and passes the email in a header ---
+
+ME = "/strelitzia/dashboard/api/auth/me"
+JOBS = "/strelitzia/dashboard/api/jobs"
+
+
+def as_email(email, name=None):
+    headers = {"X-Strelitzia": "1", auth.PROXY_EMAIL_HEADER: email}
+    if name is not None:
+        headers[auth.PROXY_NAME_HEADER] = name
+    return headers
+
+
+@pytest.fixture
+def proxy_on(monkeypatch):
+    monkeypatch.setenv("STRELITZIA_AUTH_MODE", "proxy")
+    monkeypatch.setenv("STRELITZIA_OWNER_EMAIL", OWNER)
+    monkeypatch.setenv("STRELITZIA_SESSION_SECRET", "test-secret")
+
+
+@pytest.fixture
+def session_secret(monkeypatch):
+    monkeypatch.setenv("STRELITZIA_SESSION_SECRET", "test-secret")
+
+
+@pytest.fixture
+def full_client(db, web_dir):
+    """The whole app (its require_session middleware included), on the same database as `conn`."""
+    from strelitzia.web.app import create_app
+
+    with TestClient(create_app(static_dir=web_dir, db=db), follow_redirects=False) as c:
+        yield c
+
+
+def test_proxy_mode_needs_the_mode_setting(monkeypatch):
+    assert auth.auth_mode() == "off"
+    monkeypatch.setenv("STRELITZIA_GOOGLE_CLIENT_ID", "client-123")
+    assert auth.auth_mode() == "google"
+    monkeypatch.setenv("STRELITZIA_AUTH_MODE", "proxy")
+    assert auth.auth_mode() == "proxy" and auth.auth_enabled()
+
+
+def test_proxy_invited_email_reaches_the_api(proxy_on, full_client, conn):
+    invited = users.invite(conn, "friend@example.com")
+    assert full_client.get(JOBS, headers=as_email(" Friend@Example.com ", "Friend%20F%C3%A9")).status_code == 200
+    activated = users.get(conn, invited.id)
+    assert (activated.status, activated.name) == ("active", "Friend Fé")
+    me = full_client.get(ME, headers=as_email("friend@example.com")).json()
+    assert me["user"] == {"email": "friend@example.com", "name": "Friend Fé", "role": "user"}
+    assert me["mode"] == "proxy" and me["reason"] is None and me["logout_url"] == "/auth/logout"
+
+
+def test_proxy_without_the_header_is_401(proxy_on, full_client):
+    resp = full_client.get(JOBS, headers={"X-Strelitzia": "1"})
+    assert resp.status_code == 401 and resp.json() == {"detail": "Not signed in"}
+    me = full_client.get(ME).json()
+    assert me["enabled"] and me["user"] is None and me["identity"] is None and me["reason"] is None
+
+
+def test_proxy_uninvited_email_is_told_why(proxy_on, full_client, conn):
+    resp = full_client.get(JOBS, headers=as_email("stranger@example.com"))
+    assert resp.status_code == 401 and resp.json() == {"detail": "not_invited"}
+    me = full_client.get(ME, headers=as_email("stranger@example.com", "Stranger")).json()
+    assert me["user"] is None and me["reason"] == "not_invited"
+    assert me["identity"] == {"email": "stranger@example.com", "name": "Stranger"}
+    assert users.by_email(conn, "stranger@example.com") is None
+
+
+def test_proxy_disabled_account_is_told_why(proxy_on, full_client, conn):
+    friend = users.invite(conn, "friend@example.com")
+    assert full_client.get(JOBS, headers=as_email("friend@example.com")).status_code == 200
+    users.set_status(conn, friend.id, "disabled")
+    resp = full_client.get(JOBS, headers=as_email("friend@example.com"))
+    assert resp.status_code == 401 and resp.json() == {"detail": "disabled"}
+    assert full_client.get(ME, headers=as_email("friend@example.com")).json()["reason"] == "disabled"
+
+
+def test_proxy_rekeys_the_placeholder_owner(full_client, conn, proxy_on):
+    # The database (and its owner row) was created before STRELITZIA_OWNER_EMAIL was set.
+    placeholder = users.owner(conn)
+    assert placeholder.email == users.FALLBACK_OWNER_EMAIL
+    me = full_client.get(ME, headers=as_email("Owner@Example.com", "Owner")).json()
+    assert me["user"] == {"email": OWNER, "name": "Owner", "role": "owner"}
+    assert users.owner(conn).id == placeholder.id
+
+
+def test_proxy_admin_routes_are_owner_only(proxy_on, full_client, conn):
+    users.invite(conn, "friend@example.com")
+    assert full_client.get("/strelitzia/dashboard/api/admin/users", headers=as_email("friend@example.com")).status_code == 403
+    assert full_client.get("/strelitzia/dashboard/api/admin/users", headers=as_email(OWNER)).status_code == 200
+
+
+def test_proxy_headers_are_ignored_in_google_mode(auth_on, session_secret, full_client, conn):
+    users.invite(conn, "friend@example.com")
+    for email in (OWNER, "friend@example.com"):
+        assert full_client.get(JOBS, headers=as_email(email)).status_code == 401
+        me = full_client.get(ME, headers=as_email(email)).json()
+        assert me["user"] is None and me["identity"] is None and me["mode"] == "google" and me["logout_url"] is None
+
+
+def test_proxy_headers_are_ignored_with_login_off(full_client, conn):
+    users.invite(conn, "friend@example.com")
+    me = full_client.get(ME, headers=as_email("friend@example.com")).json()
+    assert me["user"]["role"] == "owner" and me["identity"] is None and me["mode"] == "off"
+
+
+def test_proxy_login_sends_to_the_site(proxy_on, client, monkeypatch):
+    resp = client.get("/strelitzia/dashboard/api/auth/login")
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/auth/login?next=%2Fstrelitzia%2Fdashboard%2F"
+    monkeypatch.setenv("STRELITZIA_SITE_LOGIN_URL", "https://example.net/auth/login?prompt=select_account")
+    assert client.get("/strelitzia/dashboard/api/auth/login").headers["location"] == (
+        "https://example.net/auth/login?prompt=select_account&next=%2Fstrelitzia%2Fdashboard%2F")
+    assert client.get("/strelitzia/dashboard/api/auth/callback", params={"code": "c", "state": "s"}).status_code == 404
+
+
+def test_proxy_logout_points_at_the_site(proxy_on, client, monkeypatch):
+    monkeypatch.setenv("STRELITZIA_SITE_LOGOUT_URL", "https://example.net/auth/logout")
+    resp = client.post("/strelitzia/dashboard/api/auth/logout")
+    assert resp.json() == {"ok": True, "logout_url": "https://example.net/auth/logout"}
+
+
+def test_site_header_url_in_any_mode(client, monkeypatch):
+    assert client.get(ME).json()["site_header_url"] is None
+    monkeypatch.setenv("STRELITZIA_SITE_HEADER_URL", "/shared/site-header.js")
+    assert client.get(ME).json()["site_header_url"] == "/shared/site-header.js"
+
+
+def test_proxy_me_records_last_login_at_most_hourly(proxy_on, client, conn):
+    def last_login():
+        return conn.execute("SELECT last_login_at FROM users WHERE role = 'owner'").fetchone()[0]
+
+    client.get(ME, headers=as_email(OWNER))
+    first = last_login()
+    assert first
+    client.get(ME, headers=as_email(OWNER))
+    assert last_login() == first
+    client.get("/strelitzia/dashboard/api/whoami", headers=as_email(OWNER))
+    assert last_login() == first
+    conn.execute("UPDATE users SET last_login_at = '2000-01-01T00:00:00+00:00' WHERE role = 'owner'")
+    conn.commit()
+    client.get(ME, headers=as_email(OWNER))
+    assert last_login() > "2000-01-01"
+
+
+def test_proxy_config_needs_owner_and_session_secret(monkeypatch):
+    monkeypatch.setenv("STRELITZIA_AUTH_MODE", "proxy")
+    with pytest.raises(RuntimeError, match="OWNER_EMAIL"):
+        auth.check_config()
+    monkeypatch.setenv("STRELITZIA_OWNER_EMAIL", OWNER)
+    with pytest.raises(RuntimeError, match="SESSION_SECRET"):
+        auth.check_config()
+    monkeypatch.setenv("STRELITZIA_SESSION_SECRET", "s")
+    auth.check_config()  # no Google secret needed
+    assert not auth.drive_connect_available()
