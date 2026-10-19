@@ -163,7 +163,7 @@ An override that isn't a `claude-*` model id (say, a leftover Gemini setting) is
   the job an attempt.
 
 **Running Strelitzia next to Claude Code:** keep `ANTHROPIC_API_KEY` in `~/.strelitzia/.env` only, never in your
-shell profile or in the environment of an unattended `claude -p` runner (such as `scripts/agent/run.sh`). In `-p`
+shell profile or in the environment of an unattended `claude -p` runner (such as the shared `agent-runner` that builds this repo's plans). In `-p`
 mode Claude Code prefers `ANTHROPIC_API_KEY` over its subscription login, so the runner would bill the API instead.
 
 ### Job sources
