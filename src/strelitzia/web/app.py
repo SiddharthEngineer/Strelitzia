@@ -1137,10 +1137,13 @@ def _mount_ui(app: FastAPI, static_dir: Path | None) -> None:
             return JSONResponse({"detail": "Not Found"}, status_code=404)
         if root is None or not (root / "index.html").is_file():
             return JSONResponse({"detail": "Dashboard UI not built (cd dashboard && npm ci && npm run build)"}, status_code=404)
+        # index.html names the hashed bundle, so browsers must revalidate it or they keep the old bundle after a
+        # deploy (with only Last-Modified, Chrome caches it heuristically).
+        no_cache = {"Cache-Control": "no-cache"}
         if path:
             candidate = (root / path).resolve()
             if candidate.is_relative_to(root) and candidate.is_file():
-                return FileResponse(candidate)
+                return FileResponse(candidate, headers=no_cache if candidate.name == "index.html" else None)
             if path.startswith("assets/"):  # a missing asset is a real 404, not the SPA page
                 return JSONResponse({"detail": "Not Found"}, status_code=404)
-        return FileResponse(root / "index.html")
+        return FileResponse(root / "index.html", headers=no_cache)

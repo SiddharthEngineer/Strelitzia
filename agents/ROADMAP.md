@@ -17,6 +17,8 @@ since its defaults change nothing. Rollout order, preprod checks and rollback ar
 | R41 | Site SSO 2: shared header (home link top left, profile and Sign out top right) | [site-sso-2-site-header](plans/site-sso-2-site-header.md) | review | ✅ | R40 |
 | R42 | Site SSO 3: dashboard proxy auth mode and shared header | [site-sso-3-proxy-mode](plans/site-sso-3-proxy-mode.md) | review | ✅ | - |
 | R43 | Site SSO 4: nginx cutover, rollout and rollback | [site-sso-4-cutover](plans/site-sso-4-cutover.md) | review | 🟡 on prod (v1.3.0, proxy mode) 2026-10-19; prod steps 1-7 pass except header layout: signed-in profile wraps on `/strelitzia/` pages at 1280 px; at 390 px the site nav and the dashboard nav shrink to ~0 px and the dashboard's Sign out overflows. Fix before closing | R40, R41, R42 |
+| R44 | Shared agent-runner: Strelitzia `runner.toml` and agent settings (add-only) | [strelitzia-runner-config](plans/strelitzia-runner-config.md) | low | ✅ | agent-runner A10 |
+| R45 | Shared agent-runner: commands on the `agent-runner` CLI, delete `scripts/agent/` | [strelitzia-runner-cleanup](plans/strelitzia-runner-cleanup.md) | low | ⏳ | R44, agent-runner cutover + 1 week |
 
 ## Manual steps (you)
 
@@ -83,9 +85,10 @@ since its defaults change nothing. Rollout order, preprod checks and rollback ar
     one per repo). Keep the cron that picks up plans. Also settle the folder layout: today `agents/` holds the tool-agnostic
     docs (ROADMAP, plans, DEPLOY) and `.claude/` holds Claude Code's commands and settings, which is confusing; pick one
     layout and use it in both repos.
-    Design: [shared-agent-runner](plans/shared-agent-runner.md) (runner in its own `agent-runner` repo; manager/implementation/
-    validation roles; `low` auto-merges, `review` merges after the validator approves; prod deploys stay manual).
-    One installed copy on the VPS that both repos call (no submodule). Decisions settled; next, split into Part plans.
+    Moved to the `agent-runner` repo (the renamed inbox repo) on 2026-10-19: design
+    [shared-agent-runner](https://github.com/SiddharthEngineer/agent-runner/blob/main/agents/plans/shared-agent-runner.md),
+    tracked in that repo's `agents/ROADMAP.md`, along with the new VPS-health agent. Every Part is planned (2026-10-19);
+    Strelitzia's are R44 and R45. Programme PRs are `low` and auto-merge on green CI (user).
 - "Posting closed" liveness check, so jobs without a stated deadline can turn Inactive.
 - Nightly `pg_dump` of the `applypilot` DB to `/srv/backups`.
 - Split the god-files (`smartextract.py`, `cli.py`; `scoring/tailor.py` shrank to 69 lines in R23); review risk.
