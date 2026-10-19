@@ -14,12 +14,12 @@ with the same sign-in / profile / Sign out control as every other engineerfamily
 Without the settings nothing changes: login is off without a client id, and Google sign-in is built in with one.
 
 ## Context
-- `src/strelitzia/web/auth.py:49-90`: `auth_enabled`, `public_url`, `is_public_path`, `current_user` (the one seam every
-  route and `web/admin.py:_owner` goes through), `check_config`. `:99-127`: `_sign_in` / `_account_for` (owner re-key,
-  invited → active via `users.activate`). `:153-215`: `login`, `callback`, `logout`, `me`.
+- `src/strelitzia/web/auth.py:49-101`: `auth_enabled`, `public_url`, `is_public_path`, `current_user` (the one seam every
+  route and `web/admin.py:_owner` goes through), `check_config`. `:103-131`: `_sign_in` / `_account_for` (owner re-key,
+  invited → active via `users.activate`). `:157-232`: `login`, `callback`, `logout`, `me`.
 - `src/strelitzia/web/app.py:1106-1118`: `require_session` middleware and `SessionMiddleware`.
   Keep `SessionMiddleware`: Drive connect stores `drive_state` in it.
-- `src/strelitzia/web/auth.py:218-317`: Drive connect. Unchanged, except `login_hint` comes from `current_user`.
+- `src/strelitzia/web/auth.py:233-317`: Drive connect. Unchanged, except `login_hint` comes from `current_user`.
 - `tests/web/test_auth.py`, `tests/web/web_helpers.py`: patterns for env monkeypatching and the stubbed Google flow.
 - `dashboard/src/api.ts:37-45, 290-302` (`onUnauthorized`, `getMe`, `LOGIN_URL`, `logout`), `dashboard/src/types.ts:487-498`
   (`AuthMe`), `dashboard/src/pages/SignInPage.tsx` (the `?auth=` messages), `dashboard/src/App.tsx:20-69` (the `.topbar`

@@ -29,13 +29,13 @@ dashboard checks invites, and it keeps using its own sign-in until part 4. The h
   privacy policy `https://engineerfamily.net/privacy` (new in this part). Same project and Web client as today.
 
 ## Context
-- `~/src/engineerfamily/services/app/app.py` (68 lines): routes `/`, `/games/`, `/assets/*`; serves the Vite build.
+- `~/src/engineerfamily/services/app/app.py` (66 lines): routes `/`, `/games/`, `/assets/*`; serves the Vite build.
 - `~/src/engineerfamily/services/app/requirements.txt`: `flask`, `gunicorn`. Add `google-auth>=2.0`, `requests>=2.31`
   (google-auth's transport) and `pytest` for a dev-only test.
 - `~/src/engineerfamily/services/strelitzia/privacy.html`: Strelitzia's privacy page (Drive, dashboard data); the site page links to it.
 - `~/src/engineerfamily/docker-compose.{prod,preprod}.yml`, `app:` service (`environment:`): add
   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SITE_SESSION_SECRET`, `PUBLIC_URL` from the env file.
-- Mirror `src/strelitzia/web/auth.py:139-200` (this repo): state in the session, `requests` token exchange,
+- Mirror `src/strelitzia/web/auth.py:137-215` (this repo): state in the session, `requests` token exchange,
   `id_token.verify_oauth2_token` with 30 s clock skew, require `email_verified`. Never log tokens.
 - Gotchas: `next` must be a same-site path (starts with `/`, not `//` or `/\`) to avoid an open redirect.
   `/auth/me` and `/auth/verify` send `Cache-Control: no-store` (Cloudflare must not cache them). The callback goes
