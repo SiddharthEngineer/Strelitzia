@@ -83,9 +83,10 @@ since its defaults change nothing. Rollout order, preprod checks and rollback ar
     one per repo). Keep the cron that picks up plans. Also settle the folder layout: today `agents/` holds the tool-agnostic
     docs (ROADMAP, plans, DEPLOY) and `.claude/` holds Claude Code's commands and settings, which is confusing; pick one
     layout and use it in both repos.
-    Design: [shared-agent-runner](plans/shared-agent-runner.md) (runner in its own `agent-runner` repo; manager/implementation/
-    validation roles; `low` auto-merges, `review` merges after the validator approves; prod deploys stay manual).
-    One installed copy on the VPS that both repos call (no submodule). Decisions settled; next, split into Part plans.
+    Moved to the `agent-runner` repo (the renamed inbox repo) on 2026-10-19: design
+    [shared-agent-runner](https://github.com/SiddharthEngineer/agent-runner/blob/main/agents/plans/shared-agent-runner.md),
+    tracked in that repo's `agents/ROADMAP.md`, along with the new VPS-health agent. Wave-1 plans are written there; the
+    Strelitzia Parts (`strelitzia-runner-config`, `strelitzia-runner-cleanup`) come in a later wave.
 - "Posting closed" liveness check, so jobs without a stated deadline can turn Inactive.
 - Nightly `pg_dump` of the `applypilot` DB to `/srv/backups`.
 - Split the god-files (`smartextract.py`, `cli.py`; `scoring/tailor.py` shrank to 69 lines in R23); review risk.
