@@ -25,7 +25,7 @@ point at it (design: agent-runner `shared-agent-runner.md`, Rollout step 7).
 **What:** Apply the map from Context. The queue's state path in `schedule-build.md` becomes `~/.local/state/agent-runner/`.
 The crontab check looks for `agent-runner`.
 **Validate:** `grep -rn 'scripts/agent' .claude/commands` → no matches. `agent-runner check-commands strelitzia agent-runner` → `same` for every command, or only expected differences (dashboard and `--full`).
-**Status:** ❌
+**Status:** ✅ 2026-10-21 (this commit)
 
 ### Task 2: delete the old runner
 **Runs:** unattended

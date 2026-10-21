@@ -34,12 +34,12 @@ argument-hint: <agents/plans/<slug>.md> [--unattended]
    - **Interactive:** run `/ship`.
    - **Unattended** (`--unattended`): `git push -u origin HEAD`, then `gh pr create --repo SiddharthEngineer/Strelitzia --base trunk`
      with a body that follows `.github/pull_request_template.md` (copy the plan's Human test steps verbatim). Don't merge;
-     the runner decides that with `scripts/agent/gate.py`. Then write the result file (§4).
+     the runner decides that with `agent-runner gate`. Then write the result file (§4).
 
 ## 3. When you're stuck (unattended)
 You get at most 2 attempts per plan, and each one is time-boxed. Don't loop on the same failure.
 - **Need a decision from the user:** write the question (context, options, your recommendation) to a temp file, then run
-  `python3 scripts/agent/inbox.py ask <slug> --title "<one line>" --body-file <file>`. Commit and push the work done so far
+  `agent-runner inbox ask strelitzia/<slug> --title "<one line>" --body-file <file>`. Commit and push the work done so far
   (`git push -u origin HEAD`), write the result file with `"status": "question"`, and stop.
 - **Blocked by the environment** (a broken dependency, missing access, or the same validation failure after 3 genuinely different fixes):
   push what you have, write `"status": "blocked"` with a precise summary, and stop.

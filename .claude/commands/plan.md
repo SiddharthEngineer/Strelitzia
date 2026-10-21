@@ -18,9 +18,9 @@ conversation can implement and validate on its own, unattended.
 ## 2. Decide risk with the user
 - `low`: may auto-merge to trunk after green validation. Fits docs, tests, small refactors and lint fixes, and scraper or prompt tweaks.
 - `review`: a PR that's deployed to preprod and tested by the user. Use it for everything else, and whenever you're unsure.
-- `scripts/agent/gate.py` re-checks a `low` plan after the code is written and downgrades it to `review` if the diff
-  touches high-risk paths (see `HIGH_RISK` there), goes over the size budget, or weakens tests. Tell the user this.
-- After writing the plan (step 4), run `python3 scripts/agent/gate.py agents/plans/<slug>.md --plan`. If a `low` plan
+- `agent-runner gate --config agents/runner.toml` re-checks a `low` plan after the code is written and downgrades it to `review` if the diff
+  touches high-risk paths (`[gate] high_risk` in `agents/runner.toml`), goes over the size budget, or weakens tests. Tell the user this.
+- After writing the plan (step 4), run `agent-runner gate agents/plans/<slug>.md --plan --config agents/runner.toml`. If a `low` plan
   comes back `review`, tell the user which files caused it (the `touches high-risk path` reasons), then either change
   the risk to `review` or narrow the files. If `"split"` isn't empty, go back to step 3 and split it.
 - Mark a task `Runs: interactive` if it needs the user, prod, engineerfamily, secrets, or live job boards or Gemini.
