@@ -36,7 +36,9 @@ repo from `agents/runner.toml`". DEPLOY.md: worktrees are under `~/.local/state/
 `agent-runner preprod`, and the netrc is in `~/.config/agent-runner/`.
 **Validate:** `scripts/validate.sh --full` → all PASS; `grep -rn 'scripts/agent\|strelitzia-agent' --exclude-dir=.git --exclude-dir=done .` →
 only `agents/plans/done/` history and this plan.
-**Status:** ❌
+**Status:** 🟡 2026-10-21: AGENTS.md and DEPLOY.md updated. Left for the user: `git rm -r scripts/agent tests/test_agent_runner.py`
+(the unattended run's permission check denied it), then dropping `--preprod` from `validate.sh` (tests/test_agent_runner.py still runs it).
+Other stale references: README (plan smoke-runner-readme), `agents/runner.toml:2,14`, `agents/settings/*.json`, `scripts/seed_preprod.py:3`.
 
 ### Task 3: interactive permissions
 **Runs:** interactive (`.claude/settings.json` is denied to the unattended implementer)
