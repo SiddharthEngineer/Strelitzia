@@ -1,5 +1,5 @@
 # Plan: switch Strelitzia to the shared agent-runner and delete `scripts/agent/`
-**Status:** ❌ Not started
+**Status:** 🟡 Partly done 2026-10-21 (Task 1 ✅; Task 2 docs only; Task 3 interactive)
 **Risk:** low (no prod impact; auto-merges on green CI, user 2026-10-19)
 **Depends on:** strelitzia-runner-config, plus the cutover (agent-runner ROADMAP AM5) and a week without trouble on the new runner
 
