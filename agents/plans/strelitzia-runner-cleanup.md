@@ -1,5 +1,5 @@
 # Plan: switch Strelitzia to the shared agent-runner and delete `scripts/agent/`
-**Status:** 🟡 Partly done 2026-10-21 (Task 1 ✅; Task 2 docs only; Task 3 interactive)
+**Status:** ✅ Done 2026-10-21 (PR #89)
 **Risk:** low (no prod impact; auto-merges on green CI, user 2026-10-19)
 **Depends on:** strelitzia-runner-config, plus the cutover (agent-runner ROADMAP AM5) and a week without trouble on the new runner
 
@@ -36,9 +36,8 @@ repo from `agents/runner.toml`". DEPLOY.md: worktrees are under `~/.local/state/
 `agent-runner preprod`, and the netrc is in `~/.config/agent-runner/`.
 **Validate:** `scripts/validate.sh --full` → all PASS; `grep -rn 'scripts/agent\|strelitzia-agent' --exclude-dir=.git --exclude-dir=done .` →
 only `agents/plans/done/` history and this plan.
-**Status:** 🟡 2026-10-21: AGENTS.md and DEPLOY.md updated. Left for the user: `git rm -r scripts/agent tests/test_agent_runner.py`
-(the unattended run's permission check denied it), then dropping `--preprod` from `validate.sh` (tests/test_agent_runner.py still runs it).
-Other stale references: README (plan smoke-runner-readme), `agents/runner.toml:2,14`, `agents/settings/*.json`, `scripts/seed_preprod.py:3`.
+**Status:** ✅ 2026-10-21: AGENTS.md and DEPLOY.md updated by the runner; `scripts/agent/`, `tests/test_agent_runner.py` and `validate.sh --preprod` removed interactively (the unattended run may not delete its own runner).
+Stale references left for later: README (plan smoke-runner-readme), `agents/runner.toml:2`, `agents/settings/implement.json` (`Edit(scripts/agent/**)`), `scripts/seed_preprod.py:3`, and the `scripts/migrate_to_strelitzia.sh` entry in `agents/runner.toml` high_risk (the finished M15 migration script was deleted here too: it called `scripts/agent/buildqueue.py` and rewrote the crontab to the old runner).
 
 ### Task 3: interactive permissions
 **Runs:** interactive (`.claude/settings.json` is denied to the unattended implementer)
@@ -46,7 +45,7 @@ Other stale references: README (plan smoke-runner-readme), `agents/runner.toml:2
 **What:** Replace the four `scripts/agent` allow lines with `Bash(agent-runner queue:*)`, `Bash(agent-runner gate:*)`,
 `Bash(agent-runner inbox:*)`, `Bash(agent-runner preprod status)`.
 **Validate:** `grep -c scripts/agent .claude/settings.json` → `0`.
-**Status:** ❌
+**Status:** ✅ already on trunk (7e8de4e, "settings: allow the agent-runner CLI instead of scripts/agent")
 
 ## Validation
 - `scripts/validate.sh --full` passes; CI is green.
