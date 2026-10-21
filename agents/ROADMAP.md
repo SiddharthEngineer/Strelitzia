@@ -12,7 +12,7 @@ R25-R43 are on prod and archived (R40-R43, site-wide Google sign-in and the shar
 | ID | Initiative | Plan | Risk | Status | Depends on |
 |---|---|---|---|---|---|
 | R44 | Shared agent-runner: Strelitzia `runner.toml` and agent settings (add-only) | [strelitzia-runner-config](plans/strelitzia-runner-config.md) | low | ✅ | agent-runner A10 |
-| R45 | Shared agent-runner: commands on the `agent-runner` CLI, delete `scripts/agent/` | [strelitzia-runner-cleanup](plans/strelitzia-runner-cleanup.md) | low | ⏳ queued for 2026-10-26 (Task 3, `.claude/settings.json`, stays interactive) | R44, agent-runner cutover + 1 week |
+| R45 | Shared agent-runner: commands on the `agent-runner` CLI, delete `scripts/agent/` | [strelitzia-runner-cleanup](plans/strelitzia-runner-cleanup.md) | low | ✅ (#89) | R44, agent-runner cutover + 1 week |
 | R46 | Dashboard header in the Strelitzia page style (pairs with engineerfamily E3), plus: the narrow nav shows it scrolls; the signed-out page keeps the site header | [dashboard-header-polish](plans/dashboard-header-polish.md) | review | ⏳ queued 2026-10-21 (after engineerfamily E3) | engineerfamily E3 (queue order) |
 | R47 | Site permissions 4/4: dashboard access, admin flag and cap come from engineerfamily's Users page (nginx headers); retire the dashboard Users page | [site-perms-4-strelitzia](plans/site-perms-4-strelitzia.md) | review | ⏳ planned 2026-10-21 | engineerfamily E10 |
 

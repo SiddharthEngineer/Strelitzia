@@ -13,10 +13,10 @@ For running a deploy step by step, Claude has the `engineerfamily-deploy` skill 
 ## Layout
 | Path | Role |
 |---|---|
-| `~/src/Strelitzia` | Dev clone (`AGENT_REPO`). All edits, branches and commits happen here; unattended agents work in worktrees under `~/.local/state/strelitzia-agent/worktrees/`. Nothing builds from it. |
+| `~/src/Strelitzia` | Dev clone (`AGENT_REPO`). All edits, branches and commits happen here; unattended agents work in worktrees under `~/.local/state/agent-runner/worktrees/strelitzia/`. Nothing builds from it. |
 | `~/src/engineerfamily` | engineerfamily dev clone (`main`). Commit here. |
 | `/srv/Strelitzia-prod` | Prod build context, detached at a trunk commit. Moved only by `make strelitzia-deploy`; never edited by hand. It has no `.env`: the dashboard reads `~/.strelitzia/.env` through its `~/.strelitzia` mount. |
-| `/srv/Strelitzia-preprod` | Preprod build context, moved to a review PR's head by `scripts/agent/preprod.sh`. |
+| `/srv/Strelitzia-preprod` | Preprod build context, moved to a review PR's head by `agent-runner preprod`. |
 | `/srv/engineerfamily-prod` | prod checkout (branch `prod`, compose project `engineerfamily`). |
 | `/srv/engineerfamily-preprod` | preprod checkout (compose project `engineerfamily-preprod`, port 8080). |
 
@@ -30,7 +30,7 @@ Untracked server files (`.env`, `services/nginx/ssl/`, `.htpasswd*`) exist only 
 ## How a change reaches each environment
 | Change | Preprod | Prod (the user approves each one) |
 |---|---|---|
-| Strelitzia (this repo) | Review PRs only: the runner's `preprod.sh` deploys the PR head (see below). Low-risk PRs auto-merge and skip preprod. | `make -C ~/src/engineerfamily strelitzia-deploy [ref=<sha>]`: moves `/srv/Strelitzia-prod` to `origin/trunk` (or `ref`) and rebuilds only the dashboard. |
+| Strelitzia (this repo) | Review PRs only: `agent-runner preprod` deploys the PR head (see below). Low-risk PRs auto-merge and skip preprod. | `make -C ~/src/engineerfamily strelitzia-deploy [ref=<sha>]`: moves `/srv/Strelitzia-prod` to `origin/trunk` (or `ref`) and rebuilds only the dashboard. |
 | engineerfamily | `make -C ~/src/engineerfamily preprod-deploy [ref=<sha\|origin/branch>]`, no tag needed | Merge to `main`, then `make tag-prod v=X.Y.Z` and `make deploy-prod ref=vX.Y.Z` |
 
 Prod tagging alone deploys nothing: `make deploy-prod ref=<tag>` dispatches engineerfamily's `deploy.yml` workflow, which resets the
@@ -47,16 +47,15 @@ Check from outside, through Cloudflare. A loopback check doesn't prove the hostn
 2. If one doesn't: for Strelitzia, run `make -C ~/src/engineerfamily strelitzia-deploy ref=<previous sha>`. For engineerfamily, run `make deploy-prod ref=<previous tag>`.
 
 ## Preprod (review PRs)
-`scripts/agent/preprod.sh` holds a one-PR lock: `deploy <pr>` checks the PR head out in `$PREPROD_APP_DIR` (`/srv/Strelitzia-preprod`), runs
-`make -C /srv/engineerfamily-preprod preprod-strelitzia-up`, and health-checks `http://127.0.0.1:8080/strelitzia/dashboard/api/health`
-(credentials in `~/.config/strelitzia-agent/preprod.netrc`). Merging or closing the PR frees the lock, and the next tick resets preprod to trunk.
+`agent-runner preprod` holds one lock for every repo: `deploy strelitzia <pr>` checks the PR head out in `/srv/Strelitzia-preprod`, runs
+`make -C /srv/engineerfamily-preprod preprod-strelitzia-up`, and health-checks `https://preprod.engineerfamily.net/strelitzia/dashboard/api/health`
+through Cloudflare (the netrc is in `~/.config/agent-runner/`). Merging or closing the PR frees the lock, and the next tick resets preprod to trunk.
 Test at `https://preprod.engineerfamily.net/strelitzia/dashboard/` (or the same path on `strelitzia-preprod.engineerfamily.net`)
 with the preprod login.
-The same preprod commands (app dir, deploy, seed, and a health check through Cloudflare) also live in `agents/runner.toml`, which the
-shared agent-runner reads after the cutover; until then `scripts/agent/preprod.sh` and the runner env are what run.
+These preprod commands (app dir, deploy, seed, health check) come from the `[preprod]` section of `agents/runner.toml`.
 Preprod uses its own disposable `strelitzia_preprod` DB (preprod postgres-db) and app dir (`~/.strelitzia-preprod`), never prod data.
-**Preprod data is wiped and reseeded on every deploy** (a PR deploy or the reset to trunk): after the deploy command, `preprod.sh` runs
-`PREPROD_SEED_CMD`, which runs `scripts/seed_preprod.py` in a one-off container of the preprod image with the checkout mounted at `/seed`.
+**Preprod data is wiped and reseeded on every deploy** (a PR deploy or the reset to trunk): after the deploy command, the runner runs
+the `[preprod] seed` command, which runs `scripts/seed_preprod.py` in a one-off container of the preprod image with the checkout mounted at `/seed`.
 It leaves 18 fake jobs across every pipeline stage and user status, and refuses any DB not named exactly `strelitzia_preprod`
 (or `applypilot_preprod`, its name before the rename).
 A PR branched before the script existed deploys with `seed skipped` in `runs.log`.

@@ -3,7 +3,6 @@
 #
 #   scripts/validate.sh            # fast: ruff + hermetic pytest (+ dashboard tests if dashboard/ changed vs trunk)
 #   scripts/validate.sh --full     # fast + dashboard tests/build (bundle must be committed) + docker build
-#   scripts/validate.sh --preprod  # health check of the deployed preprod service (after scripts/agent/preprod.sh deploy)
 #   scripts/validate.sh --setup    # create .venv with uv if missing (worktrees start without one), then run fast
 #
 # Prints one PASS/FAIL line per step and exits non-zero on the first failure.
@@ -14,9 +13,8 @@ SETUP=0
 for arg in "$@"; do
     case "$arg" in
         --full) MODE=full ;;
-        --preprod) MODE=preprod ;;
         --setup) SETUP=1 ;;
-        -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,8p' "$0"; exit 0 ;;
         *) echo "unknown option: $arg" >&2; exit 2 ;;
     esac
 done
@@ -32,17 +30,6 @@ step() {  # step <name> <command...>
         exit 1
     fi
 }
-
-if [ "$MODE" = preprod ]; then
-    # Only curls the deployed service, so no checkout is needed (preprod.sh runs this from cron, whose cwd is $HOME).
-    # Settings come from ~/.config/strelitzia-agent/env (the same file as scripts/agent/run.sh).
-    [ -f "$HOME/.config/strelitzia-agent/env" ] && . "$HOME/.config/strelitzia-agent/env"
-    : "${PREPROD_HEALTH_URL:?PREPROD_HEALTH_URL is not set; preprod is not configured yet (agents/DEPLOY.md, Preprod section)}"
-    netrc=()
-    [ -n "${PREPROD_NETRC:-}" ] && netrc=(--netrc-file "$PREPROD_NETRC")
-    step "preprod health ($PREPROD_HEALTH_URL)" bash -c "curl -fsS --max-time 20 ${netrc[*]} '$PREPROD_HEALTH_URL' | grep -q '\"ok\": *true'"
-    exit 0
-fi
 
 ROOT=$(git rev-parse --show-toplevel) || exit 2
 cd "$ROOT" || exit 2

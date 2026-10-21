@@ -1,5 +1,5 @@
 # Plan: switch Strelitzia to the shared agent-runner and delete `scripts/agent/`
-**Status:** ❌ Not started
+**Status:** ✅ Done 2026-10-21 (PR #89)
 **Risk:** low (no prod impact; auto-merges on green CI, user 2026-10-19)
 **Depends on:** strelitzia-runner-config, plus the cutover (agent-runner ROADMAP AM5) and a week without trouble on the new runner
 
@@ -25,7 +25,7 @@ point at it (design: agent-runner `shared-agent-runner.md`, Rollout step 7).
 **What:** Apply the map from Context. The queue's state path in `schedule-build.md` becomes `~/.local/state/agent-runner/`.
 The crontab check looks for `agent-runner`.
 **Validate:** `grep -rn 'scripts/agent' .claude/commands` → no matches. `agent-runner check-commands strelitzia agent-runner` → `same` for every command, or only expected differences (dashboard and `--full`).
-**Status:** ❌
+**Status:** ✅ 2026-10-21 (this commit)
 
 ### Task 2: delete the old runner
 **Runs:** unattended
@@ -36,7 +36,8 @@ repo from `agents/runner.toml`". DEPLOY.md: worktrees are under `~/.local/state/
 `agent-runner preprod`, and the netrc is in `~/.config/agent-runner/`.
 **Validate:** `scripts/validate.sh --full` → all PASS; `grep -rn 'scripts/agent\|strelitzia-agent' --exclude-dir=.git --exclude-dir=done .` →
 only `agents/plans/done/` history and this plan.
-**Status:** ❌
+**Status:** ✅ 2026-10-21: AGENTS.md and DEPLOY.md updated by the runner; `scripts/agent/`, `tests/test_agent_runner.py` and `validate.sh --preprod` removed interactively (the unattended run may not delete its own runner).
+Stale references left for later: README (plan smoke-runner-readme), `agents/runner.toml:2`, `agents/settings/implement.json` (`Edit(scripts/agent/**)`), `scripts/seed_preprod.py:3`, and the `scripts/migrate_to_strelitzia.sh` entry in `agents/runner.toml` high_risk (the finished M15 migration script was deleted here too: it called `scripts/agent/buildqueue.py` and rewrote the crontab to the old runner).
 
 ### Task 3: interactive permissions
 **Runs:** interactive (`.claude/settings.json` is denied to the unattended implementer)
@@ -44,7 +45,7 @@ only `agents/plans/done/` history and this plan.
 **What:** Replace the four `scripts/agent` allow lines with `Bash(agent-runner queue:*)`, `Bash(agent-runner gate:*)`,
 `Bash(agent-runner inbox:*)`, `Bash(agent-runner preprod status)`.
 **Validate:** `grep -c scripts/agent .claude/settings.json` → `0`.
-**Status:** ❌
+**Status:** ✅ already on trunk (7e8de4e, "settings: allow the agent-runner CLI instead of scripts/agent")
 
 ## Validation
 - `scripts/validate.sh --full` passes; CI is green.
