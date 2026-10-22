@@ -13,7 +13,7 @@ R25-R43 are on prod and archived (R40-R43, site-wide Google sign-in and the shar
 |---|---|---|---|---|---|
 | R44 | Shared agent-runner: Strelitzia `runner.toml` and agent settings (add-only) | [strelitzia-runner-config](plans/strelitzia-runner-config.md) | low | ✅ | agent-runner A10 |
 | R45 | Shared agent-runner: commands on the `agent-runner` CLI, delete `scripts/agent/` | [strelitzia-runner-cleanup](plans/strelitzia-runner-cleanup.md) | low | ✅ (#89) | R44, agent-runner cutover + 1 week |
-| R46 | Dashboard header in the Strelitzia page style (pairs with engineerfamily E3), plus: the narrow nav shows it scrolls; the signed-out page keeps the site header | [dashboard-header-polish](plans/dashboard-header-polish.md) | review | ⏳ queued 2026-10-21 (after engineerfamily E3) | engineerfamily E3 (queue order) |
+| R46 | Dashboard header: Users moves to the site profile menu (proxy mode), the narrow nav shows it scrolls, the signed-out page keeps the site header; look unchanged (it is the house style now) | [dashboard-header-polish](plans/dashboard-header-polish.md) | review | ⏳ queued 2026-10-22 (after engineerfamily E3) | engineerfamily E3 (queue order) |
 | R47 | Site permissions 4/4: dashboard access, admin flag and cap come from engineerfamily's Users page (nginx headers); retire the dashboard Users page | [site-perms-4-strelitzia](plans/site-perms-4-strelitzia.md) | review | ⏳ planned 2026-10-21 | engineerfamily E10 |
 
 ## Manual steps (you)
@@ -66,7 +66,7 @@ R25-R43 are on prod and archived (R40-R43, site-wide Google sign-in and the shar
 ## Backlog (not yet planned)
 - Site reorganization (user, 2026-10-18): the path move (`engineerfamily.net/strelitzia`, dashboard at `/strelitzia/dashboard`),
   site-wide Google sign-in and the shared header are done (R40-R43, engineerfamily v1.3.x). Left, and planned 2026-10-19:
-  one header style everywhere, the Strelitzia page's (engineerfamily E3 + R46), and the homepage as a scrollable demo with
+  one header style everywhere, the dashboard's top bar (engineerfamily E3 + R46; changed from the Strelitzia page's on 2026-10-22), and the homepage as a scrollable demo with
   made-up data, since the public can't open the dashboard (engineerfamily E4). The shared runner moved to the `agent-runner` repo.
 - Rescore all reprocesses only Active jobs (user, 2026-10-19). Jobs already turn Inactive by themselves once their deadline
   passes (`tracking.py:36-42`), so no separate "posting closed" check is wanted. Today Rescore all's `active` scope is every
