@@ -54,11 +54,20 @@ function Shell({ me }: { me: AuthMe | null }) {
   const { pathname } = useLocation();
   useEffect(() => {
     const nav = navRef.current;
-    const link = nav?.querySelector('a.active');
-    if (!nav || !link || nav.scrollWidth <= nav.clientWidth) return;
-    const box = nav.getBoundingClientRect(), at = link.getBoundingClientRect(), margin = 32;
-    if (at.left < box.left) nav.scrollLeft -= box.left - at.left + margin;
-    else if (at.right > box.right) nav.scrollLeft += at.right - box.right + margin;
+    if (!nav) return;
+    const keepInView = () => {
+      const link = nav.querySelector('a.active');
+      if (!link || nav.scrollWidth <= nav.clientWidth) return;
+      const box = nav.getBoundingClientRect(), at = link.getBoundingClientRect(), margin = 32;
+      if (at.left < box.left) nav.scrollLeft -= box.left - at.left + margin;
+      else if (at.right > box.right) nav.scrollLeft += at.right - box.right + margin;
+    };
+    keepInView();
+    // Again when the nav's width changes: the window narrows, or the site's profile control loads beside it.
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(keepInView);
+    observer.observe(nav);
+    return () => observer.disconnect();
   }, [pathname, site]); // the narrow layout only applies once `site` is known
   const loader = <div className="loader-state" aria-live="polite" aria-busy="true"><Flower variant="loader" size={64} />Loading…</div>;
   function signOut() {
