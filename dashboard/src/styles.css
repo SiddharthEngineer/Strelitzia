@@ -335,7 +335,16 @@ button.danger { color: var(--danger); border-color: var(--danger); }
   .site-topbar .site-home { grid-area: home; }
   .site-topbar .brand { grid-area: brand; font-size: 0; gap: 0; }
   .site-topbar .site-profile { grid-area: profile; margin-left: 0; }
-  .site-topbar .nav { grid-area: nav; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  /* The edge with more links casts a shadow (scroll-linked backgrounds: the covers move with the links, the shadows stay). */
+  .site-topbar .nav {
+    grid-area: nav; min-width: 0; overflow-x: auto; scrollbar-width: none;
+    background:
+      linear-gradient(to right, var(--surface) 40%, transparent) left / 32px 100% no-repeat local,
+      linear-gradient(to left, var(--surface) 40%, transparent) right / 32px 100% no-repeat local,
+      radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.18), transparent) left / 14px 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.18), transparent) right / 14px 100% no-repeat scroll;
+  }
+  .site-topbar .nav::-webkit-scrollbar { display: none; }
   .site-topbar .nav a { white-space: nowrap; }
   .site-topbar .add-job-button { grid-area: add; justify-self: end; margin-left: 0; }
   .hero { grid-template-columns: 1fr; justify-items: center; text-align: center; padding: 16px; }
