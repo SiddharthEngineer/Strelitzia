@@ -61,6 +61,15 @@ describe('SignInPage', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  it("keeps the site's home link and profile control above the card", () => {
+    const me: AuthMe = { enabled: true, user: null, mode: 'proxy', reason: null, identity: null,
+      site_header_url: '/shared/site-header.js' };
+    const { container } = render(<MemoryRouter><SignInPage me={me} /></MemoryRouter>);
+    expect(container.querySelector('header ef-home')).not.toBeNull();
+    expect(container.querySelector('header ef-profile')).toHaveAttribute('next', '/strelitzia/dashboard/');
+    expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
+  });
+
   it('explains an uninvited account', () => {
     render(<MemoryRouter initialEntries={['/?auth=not_invited']}><SignInPage /></MemoryRouter>);
     expect(screen.getByRole('alert')).toHaveTextContent("isn't invited");
@@ -147,6 +156,33 @@ describe('App sign-in gate', () => {
     act(() => listener());
     expect(screen.getByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull();
+  });
+
+  it("shows the site header once /auth/me answers after the first render (proxy mode, signed out)", async () => {
+    let answer: (me: AuthMe) => void = () => {};
+    vi.mocked(api.getMe).mockReturnValue(new Promise((resolve) => { answer = resolve; }));
+    const { container } = renderApp();
+    const listener = vi.mocked(api.onUnauthorized).mock.calls.map(([l]) => l).filter(Boolean).pop()!;
+    act(() => listener()); // the page's first requests come back 401 before /auth/me does
+    expect(screen.getByRole('link', { name: 'Sign in with Google' })).toBeInTheDocument();
+    expect(container.querySelector('ef-home')).toBeNull();
+    await act(async () => answer({ enabled: true, user: null, mode: 'proxy', reason: null, identity: null,
+      logout_url: '/auth/logout', site_header_url: '/shared/site-header.js' }));
+    expect(container.querySelector('header ef-home')).not.toBeNull();
+    expect(container.querySelector('header ef-profile')).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
+  });
+
+  it('keeps the site header when the session ends in place and /auth/me then fails (proxy mode)', async () => {
+    vi.mocked(api.getMe).mockResolvedValue({ ...OWNER, mode: 'proxy', site_header_url: '/shared/site-header.js' });
+    const { container } = renderApp();
+    expect(await screen.findByRole('navigation', { name: 'Main' })).toBeInTheDocument();
+    vi.mocked(api.getMe).mockRejectedValue(new Error('offline'));
+    const listener = vi.mocked(api.onUnauthorized).mock.calls.map(([l]) => l).filter(Boolean).pop()!;
+    await act(async () => listener());
+    expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull();
+    expect(container.querySelector('header ef-home')).not.toBeNull();
+    expect(container.querySelector('header ef-profile')).not.toBeNull();
   });
 
   it('changes nothing when login is off', async () => {

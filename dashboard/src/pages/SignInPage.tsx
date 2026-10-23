@@ -24,7 +24,7 @@ export default function SignInPage({ me }: { me?: AuthMe | null }) {
   return (
     <>
       {me?.site_header_url && (
-        <header className="topbar site-topbar">
+        <header className="topbar site-topbar sign-in-topbar">
           <SiteHome />
           <SiteProfile />
         </header>

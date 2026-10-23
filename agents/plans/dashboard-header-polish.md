@@ -55,7 +55,7 @@ Or let the links wrap onto a second line if that reads better; pick one and reco
 `<ef-profile>` (Sign in) above the card. Test: `SignInPage` with a `me` that has `site_header_url` renders both slots, and
 the header appears when `me` arrives after the first render.
 **Validate:** `npm test --prefix dashboard` passes, including the new test; `scripts/validate.sh` passes.
-**Status:** ❌
+**Status:** ✅ 2026-10-23 (this commit)
 
 ### Task 3: bundle and tracking
 **Runs:** unattended
@@ -83,3 +83,9 @@ the header appears when `me` arrives after the first render.
    shows hidden links with scroll-linked edge shadows (`background-attachment: local` covers over fixed shadows), which
    work in every browser, unlike scroll-driven `mask-image` animations. The active link is brought into view by setting
    the nav's `scrollLeft`, not `scrollIntoView`, which would also scroll the page up to the (non-sticky) top bar.
+4. 2026-10-23 (Task 2, build): not reproduced on the preprod build of that day. In a fresh, signed-out browser at 1280 and
+   390 px, `/strelitzia/dashboard/` showed the home icon and the site's Sign in pill above the card (`/auth/me` had
+   `site_header_url`, the script loaded, both elements rendered). The code path is sound: a full load starts with
+   `me = null`, so the card shows alone until `/auth/me` answers, then the header appears; after an in-place 401 the last
+   known `me` keeps the header even if the refetch fails. Both are now tested. The one fix: at ≤640 px the sign-in header
+   used the app's two-row grid, so an empty nav row made it taller; it now has a one-row grid (home, gap, profile).

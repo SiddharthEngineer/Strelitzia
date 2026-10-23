@@ -332,6 +332,7 @@ button.danger { color: var(--danger); border-color: var(--danger); }
     display: grid; gap: 8px; grid-template-columns: auto auto minmax(0, 1fr) auto;
     grid-template-areas: "home brand . profile" "nav nav nav add";
   }
+  .sign-in-topbar { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "home . profile"; }
   .site-topbar .site-home { grid-area: home; }
   .site-topbar .brand { grid-area: brand; font-size: 0; gap: 0; }
   .site-topbar .site-profile { grid-area: profile; margin-left: 0; }
