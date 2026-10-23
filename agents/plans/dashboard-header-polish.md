@@ -36,7 +36,7 @@ site menu has it). Keep the `/users` route for the owner in both modes. Tests: o
 `site_header_url` set) has no Users link in the Main nav and `/users` still renders the page; the existing owner/other tests
 keep passing (they are non-proxy).
 **Validate:** `npm test --prefix dashboard` passes; `scripts/validate.sh` passes.
-**Status:** ❌
+**Status:** ✅ 2026-10-23 (this commit)
 
 ### Task 1: the narrow nav shows that it scrolls
 **Runs:** unattended

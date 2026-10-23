@@ -129,6 +129,13 @@ describe('Users nav link', () => {
     expect(await screen.findByRole('heading', { name: 'Users' })).toBeInTheDocument();
   });
 
+  it('leaves Users to the site profile menu in proxy mode, and the page still opens', async () => {
+    renderApp({ enabled: true, user: { email: 'owner@example.com', name: 'Ada', role: 'owner' }, mode: 'proxy',
+      site_header_url: '/shared/site-header.js' });
+    expect(await screen.findByRole('heading', { name: 'Users' })).toBeInTheDocument();
+    expect(within(screen.getByRole('navigation', { name: 'Main' })).queryByRole('link', { name: 'Users' })).toBeNull();
+  });
+
   it('waits for the account instead of showing Page not found', async () => {
     vi.mocked(api.getMe).mockReturnValue(new Promise(() => {}));
     vi.mocked(api.getPanel).mockResolvedValue({ due: null } as Awaited<ReturnType<typeof api.getPanel>>);
