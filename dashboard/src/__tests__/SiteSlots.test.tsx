@@ -90,3 +90,33 @@ describe('the shared site header', () => {
     expect(container.querySelector('header')).toBeNull();
   });
 });
+
+describe('the narrow nav', () => {
+  it('scrolls the current page into view', async () => {
+    // jsdom has no layout: the nav is 300px wide with 600px of links, and "Claude setup" sits at 400-480px.
+    const scrolled = new WeakMap<Element, number>();
+    const isNav = (el: Element) => el.matches('nav.nav');
+    const spies = [
+      vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockImplementation(function (this: Element) { return isNav(this) ? 600 : 0; }),
+      vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(function (this: Element) { return isNav(this) ? 300 : 0; }),
+      vi.spyOn(Element.prototype, 'scrollLeft', 'get').mockImplementation(function (this: Element) { return scrolled.get(this) ?? 0; }),
+      vi.spyOn(Element.prototype, 'scrollLeft', 'set').mockImplementation(function (this: Element, value: number) { scrolled.set(this, value); }),
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+        const nav = this.closest('nav.nav');
+        const shift = nav ? scrolled.get(nav) ?? 0 : 0;
+        if (this === nav) return { left: 0, right: 300 } as DOMRect;
+        if (this.matches('a.active')) return { left: 400 - shift, right: 480 - shift } as DOMRect;
+        return { left: 0, right: 0 } as DOMRect;
+      }),
+    ];
+    try {
+      vi.mocked(api.getMe).mockResolvedValue({ ...OWNER, mode: 'proxy', site_header_url: SCRIPT });
+      render(<MemoryRouter initialEntries={['/claude-setup']}><App /></MemoryRouter>);
+      const nav = screen.getByRole('navigation', { name: 'Main' });
+      await vi.waitFor(() => expect(nav.closest('header')).toHaveClass('site-topbar'));
+      expect(nav.scrollLeft).toBe(480 - 300 + 32); // the link's right edge, plus room past the edge shadow
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+    }
+  });
+});

@@ -342,8 +342,8 @@ button.danger { color: var(--danger); border-color: var(--danger); }
     background:
       linear-gradient(to right, var(--surface) 40%, transparent) left / 32px 100% no-repeat local,
       linear-gradient(to left, var(--surface) 40%, transparent) right / 32px 100% no-repeat local,
-      radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.18), transparent) left / 14px 100% no-repeat scroll,
-      radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.18), transparent) right / 14px 100% no-repeat scroll;
+      radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--text) 22%, transparent), transparent) left / 14px 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--text) 22%, transparent), transparent) right / 14px 100% no-repeat scroll;
   }
   .site-topbar .nav::-webkit-scrollbar { display: none; }
   .site-topbar .nav a { white-space: nowrap; }
