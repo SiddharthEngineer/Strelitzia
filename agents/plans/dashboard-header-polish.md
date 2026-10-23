@@ -1,5 +1,5 @@
 # Plan: dashboard header: Users moves to the profile menu, the narrow nav shows it scrolls, the signed-out page keeps the site header
-**Status:** ❌ Not started
+**Status:** ✅ 2026-10-23 (#93)
 **Risk:** review (dashboard UI; `dashboard/*` is high-risk in `agents/runner.toml`, so the PR needs a human)
 **Depends on:** engineerfamily E3 [site-header-bar](https://github.com/SiddharthEngineer/engineerfamily/blob/main/agents/plans/site-header-bar.md)
 (queue order: it puts Users and Sign out in `<ef-profile>`'s menu and turns `<ef-home>` into a home icon)
@@ -36,7 +36,7 @@ site menu has it). Keep the `/users` route for the owner in both modes. Tests: o
 `site_header_url` set) has no Users link in the Main nav and `/users` still renders the page; the existing owner/other tests
 keep passing (they are non-proxy).
 **Validate:** `npm test --prefix dashboard` passes; `scripts/validate.sh` passes.
-**Status:** ✅ 2026-10-23 (this commit)
+**Status:** ✅ 2026-10-23 (#93)
 
 ### Task 1: the narrow nav shows that it scrolls
 **Runs:** unattended
@@ -46,7 +46,7 @@ shadows), and on route change scroll the active link into view (`scrollIntoView(
 Or let the links wrap onto a second line if that reads better; pick one and record it in Decisions. Check the top row
 (home icon, brand, profile) still fits at 390 px. Don't change the ≥641 px layout.
 **Validate:** `npm test --prefix dashboard` passes; `scripts/validate.sh` passes.
-**Status:** ✅ 2026-10-23 (this commit)
+**Status:** ✅ 2026-10-23 (#93)
 
 ### Task 2: the signed-out page keeps the site header
 **Runs:** unattended
@@ -55,14 +55,14 @@ Or let the links wrap onto a second line if that reads better; pick one and reco
 `<ef-profile>` (Sign in) above the card. Test: `SignInPage` with a `me` that has `site_header_url` renders both slots, and
 the header appears when `me` arrives after the first render.
 **Validate:** `npm test --prefix dashboard` passes, including the new test; `scripts/validate.sh` passes.
-**Status:** ✅ 2026-10-23 (this commit)
+**Status:** ✅ 2026-10-23 (#93)
 
 ### Task 3: bundle and tracking
 **Runs:** unattended
 **Files:** src/strelitzia/web/static/index.html (modify), src/strelitzia/web/static/assets/* (regenerate), agents/ROADMAP.md (modify), agents/plans/dashboard-header-polish.md (modify)
 **What:** `npm run build --prefix dashboard` and commit the bundle. Task statuses; R46's status to ✅ with the PR number.
 **Validate:** `scripts/validate.sh --full` passes (includes "dashboard bundle committed").
-**Status:** ❌
+**Status:** ✅ 2026-10-23 (#93)
 
 ## Validation
 - `scripts/validate.sh --full` passes; CI is green.
