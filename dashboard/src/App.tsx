@@ -40,7 +40,8 @@ function Shell({ me }: { me: AuthMe | null }) {
     getPanel().then((p) => setPanelDue(p.due)).catch(() => {}); // the reminder is optional
   }, []);
   useEffect(refreshPanelDue, [refreshPanelDue]);
-  // The Users page is for the owner, and only matters once other accounts can sign in.
+  // The Users page is for the owner, and only matters once other accounts can sign in. In proxy mode the site's profile
+  // menu links to it, so the nav doesn't.
   const isOwner = Boolean(me?.enabled && me.user?.role === 'owner');
   // On engineerfamily.net the site's own home link and profile control frame the header. In proxy mode the session is
   // the site's, so its profile control also carries Sign out; otherwise the dashboard keeps its own user menu.
@@ -71,7 +72,7 @@ function Shell({ me }: { me: AuthMe | null }) {
             Panel{panelDue && <span className="nav-dot" role="img" aria-label="due" title={`Panel due: ${panelDue}`} />}
           </NavLink>
           <NavLink to="/claude-setup">Claude setup</NavLink>
-          {isOwner && <NavLink to="/users">Users</NavLink>}
+          {isOwner && !siteSession && <NavLink to="/users">Users</NavLink>}
         </nav>
         <button type="button" className="primary add-job-button" onClick={() => setAdding(true)}>Add job</button>
         {!siteSession && me?.enabled && me.user && (
