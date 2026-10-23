@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getMe, getPanel, logout, onUnauthorized, siteLogout } from './api';
-import { Link, NavLink, Route, Routes } from 'react-router-dom';
+import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import AddJobDialog from './components/AddJobDialog';
 import Flower from './components/Flower';
 import Footer from './components/Footer';
@@ -48,6 +48,18 @@ function Shell({ me }: { me: AuthMe | null }) {
   const site = Boolean(me?.site_header_url);
   const siteSession = site && me?.mode === 'proxy';
   useSiteHeader(me?.site_header_url);
+  // On a narrow screen the nav scrolls sideways: keep the current page's link in view. Only the nav scrolls (not
+  // scrollIntoView, which would also move the page to the top bar).
+  const navRef = useRef<HTMLElement>(null);
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const nav = navRef.current;
+    const link = nav?.querySelector('a.active');
+    if (!nav || !link || nav.scrollWidth <= nav.clientWidth) return;
+    const box = nav.getBoundingClientRect(), at = link.getBoundingClientRect(), margin = 32;
+    if (at.left < box.left) nav.scrollLeft -= box.left - at.left + margin;
+    else if (at.right > box.right) nav.scrollLeft += at.right - box.right + margin;
+  }, [pathname, site]); // the narrow layout only applies once `site` is known
   const loader = <div className="loader-state" aria-live="polite" aria-busy="true"><Flower variant="loader" size={64} />Loading…</div>;
   function signOut() {
     const siteUrl = me?.logout_url;
@@ -63,7 +75,7 @@ function Shell({ me }: { me: AuthMe | null }) {
           <Flower variant="mark" size={28} />
           Strelitzia
         </Link>
-        <nav className="nav" aria-label="Main">
+        <nav className="nav" aria-label="Main" ref={navRef}>
           <NavLink to="/" end>Jobs</NavLink>
           <NavLink to="/contacts">Contacts</NavLink>
           <NavLink to="/profile">Profile</NavLink>

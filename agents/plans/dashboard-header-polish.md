@@ -46,7 +46,7 @@ shadows), and on route change scroll the active link into view (`scrollIntoView(
 Or let the links wrap onto a second line if that reads better; pick one and record it in Decisions. Check the top row
 (home icon, brand, profile) still fits at 390 px. Don't change the ≥641 px layout.
 **Validate:** `npm test --prefix dashboard` passes; `scripts/validate.sh` passes.
-**Status:** ❌
+**Status:** ✅ 2026-10-23 (this commit)
 
 ### Task 2: the signed-out page keeps the site header
 **Runs:** unattended
@@ -79,3 +79,7 @@ the header appears when `me` arrives after the first render.
 1. Split from engineerfamily E1 because both fixes are in the dashboard (2026-10-19, user asked to save them for later).
 2. 2026-10-22 (user): the dashboard's bar is the house style and keeps its own links; no restyle toward the static
    `/strelitzia/` page (that part of the 2026-10-19 plan is dropped). Users and Sign out live in the site profile menu.
+3. 2026-10-23 (Task 1, build): the narrow nav keeps one scrolling row (wrapping costs a second nav line at 390 px) and
+   shows hidden links with scroll-linked edge shadows (`background-attachment: local` covers over fixed shadows), which
+   work in every browser, unlike scroll-driven `mask-image` animations. The active link is brought into view by setting
+   the nav's `scrollLeft`, not `scrollIntoView`, which would also scroll the page up to the (non-sticky) top bar.
