@@ -8,15 +8,19 @@
   signed the visitor in and sets X-Auth-Request-Email (and X-Auth-Request-Preferred-Username). Those headers are the
   whole proof of identity, so they are read only in this mode, and it is safe only when nothing but the proxy can
   reach the server. Sign-in and sign-out are the site's (STRELITZIA_SITE_LOGIN_URL / STRELITZIA_SITE_LOGOUT_URL).
+  When the proxy also sends X-Auth-Request-Access: strelitzia (engineerfamily's nginx, from its Users page), that
+  grant replaces the invite list: the account is created or re-activated, and its monthly cap is the one the
+  proxy sends (`site_grant`). Without that header, the invite list decides as before.
 """
 
 from __future__ import annotations
 
 import logging
 import secrets
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Literal
-from urllib.parse import unquote, urlencode
+from urllib.parse import unquote, urlencode, urlsplit
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
@@ -44,6 +48,10 @@ CLOCK_SKEW_SECONDS = 30  # tolerated drift between this server's clock and Googl
 PUBLIC_API_PATHS = (f"{API_PREFIX}/health",)
 PROXY_EMAIL_HEADER = "X-Auth-Request-Email"
 PROXY_NAME_HEADER = "X-Auth-Request-Preferred-Username"
+ACCESS_HEADER = "X-Auth-Request-Access"  # "strelitzia" when the site grants this visitor the dashboard
+ADMIN_HEADER = "X-Auth-Request-Admin"  # "1" for a site admin
+CAP_HEADER = "X-Auth-Request-Cap-Usd"  # the monthly Claude cap in USD, or "none"
+SITE_ACCESS = "strelitzia"
 REFUSALS = ("not_invited", "disabled")  # the 401 details that say why a signed-in site account can't use the dashboard
 LAST_LOGIN_EVERY = timedelta(hours=1)  # proxy mode: how often `me` refreshes last_login_at
 
@@ -73,6 +81,48 @@ def proxy_identity(request: Request) -> tuple[str, str | None] | None:
         return None
     name = unquote(request.headers.get(PROXY_NAME_HEADER, "")).strip()
     return email, name or None
+
+
+@dataclass
+class SiteGrant:
+    """The site's say on this visitor: dashboard access is implied, plus admin and the monthly cap (None = none)."""
+    admin: bool
+    cap_usd: float | None
+
+
+_logged_bad_caps: set[str] = set()
+
+
+def _parse_cap(raw: str) -> float | None:
+    raw = raw.strip()
+    if raw.lower() == "none":
+        return None
+    try:
+        cap = float(raw)
+    except ValueError:
+        cap = -1.0
+    if cap >= 0 and cap != float("inf"):
+        return cap
+    if raw not in _logged_bad_caps:
+        _logged_bad_caps.add(raw)
+        log.warning("malformed %s %r; using the default cap", CAP_HEADER, raw)
+    return users.DEFAULT_CAP_USD
+
+
+def site_grant(request: Request) -> SiteGrant | None:
+    """The site's grant, or None when the proxy sent no Access header for Strelitzia (an older proxy, or no access).
+    Like the email header, it is proof only in proxy mode: call it only there."""
+    if request.headers.get(ACCESS_HEADER, "").strip().lower() != SITE_ACCESS:
+        return None
+    return SiteGrant(admin=request.headers.get(ADMIN_HEADER, "").strip() == "1",
+                     cap_usd=_parse_cap(request.headers.get(CAP_HEADER, "")))
+
+
+def site_users_url() -> str:
+    """The site's Users page, on PUBLIC_URL's origin (same-origin path without one)."""
+    parts = urlsplit(public_url())
+    origin = f"{parts.scheme}://{parts.netloc}" if parts.scheme and parts.netloc else ""
+    return f"{origin}/users/"
 
 
 def public_url() -> str:
@@ -111,9 +161,12 @@ def current_user(request: Request) -> users.User:
         identity = proxy_identity(request)
         if identity is None:
             raise HTTPException(401, "Not signed in")
-        user = _account_for(conn, *identity)
+        grant = site_grant(request)
+        user = _account_for(conn, *identity, grant=grant)
         if user is None:
             raise HTTPException(401, _refusal(conn, identity[0]))
+        if grant is not None and user.role != "owner" and user.monthly_cap_usd != grant.cap_usd:
+            user = users.set_cap(conn, user.id, grant.cap_usd)
     else:
         uid = request.session.get("uid")
         user = users.get(conn, uid) if isinstance(uid, str) else None
@@ -157,7 +210,9 @@ def _sign_in(conn: Connection, email: str, name: str | None) -> users.User | Non
     return user
 
 
-def _account_for(conn: Connection, email: str, name: str | None) -> users.User | None:
+def _account_for(conn: Connection, email: str, name: str | None,
+                 grant: SiteGrant | None = None) -> users.User | None:
+    """The owner (re-keyed from the placeholder if need be), else the site-granted or invited account, else None."""
     owner = users.owner(conn)
     email = email.strip().lower()
     if email == owner.email:
@@ -174,6 +229,8 @@ def _account_for(conn: Connection, email: str, name: str | None) -> users.User |
     user = users.by_email(conn, email)
     if user is not None and user.role == "owner":
         return user
+    if grant is not None:
+        return users.ensure_active(conn, email, name)
     return users.activate(conn, email, name)
 
 
@@ -304,6 +361,7 @@ def me(request: Request) -> dict:
         if exc.detail in REFUSALS:
             reason = exc.detail
     identity = proxy_identity(request) if mode == "proxy" else None
+    grant = site_grant(request) if mode == "proxy" else None
     if mode == "proxy" and user is not None:
         _note_login(_conn(request), user)
     return {
@@ -314,6 +372,8 @@ def me(request: Request) -> dict:
         "reason": reason,
         "logout_url": _site_logout_url() if mode == "proxy" else None,
         "site_header_url": env("SITE_HEADER_URL") or None,
+        "site_admin": bool(grant and grant.admin),
+        "users_url": site_users_url() if grant else None,
     }
 
 

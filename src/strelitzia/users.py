@@ -122,6 +122,18 @@ def activate(conn, email: str, name: str | None) -> User | None:
     return get(conn, user.id)
 
 
+def ensure_active(conn, email: str, name: str | None) -> User:
+    """The account for an email the site has granted access to: invited if missing, and active (a disabled or
+    invited account is re-activated). The owner is returned as is."""
+    user = by_email(conn, email) or invite(conn, email)
+    if user.status == "active":
+        return user
+    conn.execute("UPDATE users SET status = 'active', name = COALESCE(?, name), last_login_at = ? WHERE id = ?",
+                 (name, _now(), user.id))
+    conn.commit()
+    return get(conn, user.id)
+
+
 def set_status(conn, user_id: str, status: str) -> User | None:
     if status not in STATUSES:
         raise ValueError(f"unknown status {status!r}")
