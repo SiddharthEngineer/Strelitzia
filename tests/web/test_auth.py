@@ -546,25 +546,30 @@ def test_proxy_config_needs_owner_and_session_secret(monkeypatch):
 
 # --- Site grant (site-perms-4): engineerfamily's nginx says who may use the dashboard and with what cap ---
 
+@pytest.fixture
+def grants_on(proxy_on, monkeypatch):
+    monkeypatch.setenv("STRELITZIA_SITE_GRANT", "1")
+
+
 def granted(email, name=None, cap="5", admin="0"):
     return {**as_email(email, name), auth.ACCESS_HEADER: "strelitzia", auth.ADMIN_HEADER: admin,
             auth.CAP_HEADER: cap}
 
 
-def test_grant_creates_and_activates_an_unknown_email(proxy_on, full_client, conn):
+def test_grant_creates_and_activates_an_unknown_email(grants_on, full_client, conn):
     assert full_client.get(JOBS, headers=granted("New@Example.com", "New%20Person", cap="1.5")).status_code == 200
     user = users.by_email(conn, "new@example.com")
     assert (user.role, user.status, user.name, user.monthly_cap_usd) == ("user", "active", "New Person", 1.5)
 
 
-def test_grant_reactivates_a_disabled_account(proxy_on, full_client, conn):
+def test_grant_reactivates_a_disabled_account(grants_on, full_client, conn):
     friend = users.invite(conn, "friend@example.com")
     users.set_status(conn, friend.id, "disabled")
     assert full_client.get(JOBS, headers=granted("friend@example.com")).status_code == 200
     assert users.get(conn, friend.id).status == "active"
 
 
-def test_grant_writes_the_cap(proxy_on, full_client, conn):
+def test_grant_writes_the_cap(grants_on, full_client, conn):
     friend = users.invite(conn, "friend@example.com")
     full_client.get(JOBS, headers=granted("friend@example.com", cap="0"))
     assert users.get(conn, friend.id).monthly_cap_usd == 0
@@ -574,14 +579,14 @@ def test_grant_writes_the_cap(proxy_on, full_client, conn):
     assert users.get(conn, friend.id).monthly_cap_usd == users.DEFAULT_CAP_USD
 
 
-def test_grant_leaves_the_owner_alone(proxy_on, full_client, conn):
+def test_grant_leaves_the_owner_alone(grants_on, full_client, conn):
     owner = users.owner(conn)
     full_client.get(JOBS, headers=granted(OWNER, cap="1"))
     after = users.get(conn, owner.id)
     assert (after.role, after.status, after.monthly_cap_usd) == ("owner", "active", None)
 
 
-def test_grant_is_shown_in_me(proxy_on, full_client, conn, monkeypatch):
+def test_grant_is_shown_in_me(grants_on, full_client, conn, monkeypatch):
     monkeypatch.setenv("STRELITZIA_PUBLIC_URL", "https://preprod.example.net/strelitzia/dashboard")
     me = full_client.get(ME, headers=granted("friend@example.com", admin="1", cap="none")).json()
     assert me["user"]["email"] == "friend@example.com"
@@ -592,7 +597,7 @@ def test_grant_is_shown_in_me(proxy_on, full_client, conn, monkeypatch):
     assert me["site_admin"] is False and me["users_url"] is None
 
 
-def test_without_the_access_header_the_invite_list_decides(proxy_on, full_client, conn):
+def test_without_the_access_header_the_invite_list_decides(grants_on, full_client, conn):
     for headers in (as_email("stranger@example.com"),
                     {**as_email("stranger@example.com"), auth.ACCESS_HEADER: "other", auth.CAP_HEADER: "1"}):
         resp = full_client.get(JOBS, headers=headers)
@@ -600,12 +605,26 @@ def test_without_the_access_header_the_invite_list_decides(proxy_on, full_client
     assert users.by_email(conn, "stranger@example.com") is None
 
 
-def test_grant_headers_are_ignored_in_google_mode(auth_on, session_secret, full_client, conn):
+def test_grant_headers_are_ignored_without_the_opt_in(proxy_on, full_client, conn):
+    # An older nginx passes client copies of the grant headers through: they mean nothing until SITE_GRANT is set.
+    resp = full_client.get(JOBS, headers=granted("stranger@example.com", admin="1", cap="none"))
+    assert resp.status_code == 401 and resp.json() == {"detail": "not_invited"}
+    assert users.by_email(conn, "stranger@example.com") is None
+    friend = users.invite(conn, "friend@example.com", cap=2.0)
+    assert full_client.get(JOBS, headers=granted("friend@example.com", cap="none")).status_code == 200
+    assert users.get(conn, friend.id).monthly_cap_usd == 2.0
+    me = full_client.get(ME, headers=granted("friend@example.com", admin="1")).json()
+    assert me["site_admin"] is False and me["users_url"] is None
+    assert full_client.get("/strelitzia/dashboard/api/admin/users", headers=granted(OWNER, admin="1")).status_code == 200
+
+
+def test_grant_headers_are_ignored_in_google_mode(auth_on, monkeypatch, session_secret, full_client, conn):
+    monkeypatch.setenv("STRELITZIA_SITE_GRANT", "1")
     assert full_client.get(JOBS, headers=granted("stranger@example.com")).status_code == 401
     assert users.by_email(conn, "stranger@example.com") is None
 
 
-def test_admin_api_is_gone_with_a_grant(proxy_on, full_client, conn, monkeypatch):
+def test_admin_api_is_gone_with_a_grant(grants_on, full_client, conn, monkeypatch):
     monkeypatch.setenv("STRELITZIA_PUBLIC_URL", "https://preprod.example.net/strelitzia/dashboard")
     resp = full_client.get("/strelitzia/dashboard/api/admin/users", headers=granted(OWNER, admin="1", cap="none"))
     assert resp.status_code == 410

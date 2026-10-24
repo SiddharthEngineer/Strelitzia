@@ -8,9 +8,10 @@
   signed the visitor in and sets X-Auth-Request-Email (and X-Auth-Request-Preferred-Username). Those headers are the
   whole proof of identity, so they are read only in this mode, and it is safe only when nothing but the proxy can
   reach the server. Sign-in and sign-out are the site's (STRELITZIA_SITE_LOGIN_URL / STRELITZIA_SITE_LOGOUT_URL).
-  When the proxy also sends X-Auth-Request-Access: strelitzia (engineerfamily's nginx, from its Users page), that
-  grant replaces the invite list: the account is created or re-activated, and its monthly cap is the one the
-  proxy sends (`site_grant`). Without that header, the invite list decides as before.
+  With STRELITZIA_SITE_GRANT=1 (set only behind an engineerfamily nginx that overwrites the grant headers), when the
+  proxy also sends X-Auth-Request-Access: strelitzia (from engineerfamily's Users page), that grant replaces the
+  invite list: the account is created or re-activated, and its monthly cap is the one the proxy sends
+  (`site_grant`). Without the setting or the header, the invite list decides as before.
 """
 
 from __future__ import annotations
@@ -110,13 +111,19 @@ def _parse_cap(raw: str) -> float | None:
     return users.DEFAULT_CAP_USD
 
 
+def site_grant_enabled() -> bool:
+    """STRELITZIA_SITE_GRANT=1: the proxy overwrites the grant headers, so they can be trusted. An older nginx passes
+    client copies through, so this stays off until the nginx that sets them is live."""
+    return (env("SITE_GRANT") or "").strip().lower() in ("1", "true", "yes")
+
+
 def site_grant(request: Request) -> SiteGrant | None:
-    """The site's grant, or None when the proxy sent no Access header for Strelitzia (an older proxy, or no access).
-    Like the email header, it is proof only in proxy mode: call it only there. Parsed once per request."""
+    """The site's grant, or None when grants are off (`site_grant_enabled`) or the proxy sent no Access header for
+    Strelitzia. Like the email header, it is proof only in proxy mode: call it only there. Parsed once per request."""
     if hasattr(request.state, "site_grant"):
         return request.state.site_grant
     grant = None
-    if request.headers.get(ACCESS_HEADER, "").strip().lower() == SITE_ACCESS:
+    if site_grant_enabled() and request.headers.get(ACCESS_HEADER, "").strip().lower() == SITE_ACCESS:
         grant = SiteGrant(admin=request.headers.get(ADMIN_HEADER, "").strip() == "1",
                           cap_usd=_parse_cap(request.headers.get(CAP_HEADER, "")))
     request.state.site_grant = grant
