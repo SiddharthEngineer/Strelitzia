@@ -1,5 +1,5 @@
 # Plan: Site permissions 4/4: Strelitzia trusts engineerfamily for access, admin and cap
-**Status:** 🔄 In progress
+**Status:** ✅ Done 2026-10-24 (preprod human test left for you)
 **Risk:** review (who can use the dashboard, and how much Claude spend they may run up)
 **Depends on:** engineerfamily site-perms-3-gate (nginx sends the new headers)
 
