@@ -110,10 +110,13 @@ The old `https://strelitzia(-preprod).engineerfamily.net/app/api/...` pairs can 
     (`site-sso-4-cutover`) moves the container off the shared `web` network. The headers are ignored in the other modes.
   - **Access and caps come from engineerfamily's Users page** (`/users/`, site-perms): its nginx also sends
     `X-Auth-Request-Access: strelitzia`, `X-Auth-Request-Admin: 1|0` and `X-Auth-Request-Cap-Usd: <number>|none`
-    (always overwriting client copies). With the Access header, the email gets an account on first visit (a disabled
-    one is re-activated), its monthly cap is set from the Cap header (never the owner's), site admins see a nav link
-    to `/users/`, and the dashboard's admin API answers 410. Without it (an older nginx, google mode), the invite list
-    and `strelitzia users` decide as before. Accounts are matched by email, so existing users keep their data.
+    (overwriting client copies). These are trusted **only with `STRELITZIA_SITE_GRANT=1`** in the Strelitzia env: an
+    older nginx overwrites only the identity headers and passes client copies of these through, so a visitor could
+    forge access with no cap. Set it on an environment only after that environment's nginx sends them (site-perms 3).
+    With the setting and the Access header, the email gets an account on first visit (a disabled one is re-activated),
+    its monthly cap is set from the Cap header (never the owner's), site admins see a nav link to `/users/`, and the
+    dashboard's admin API answers 410. Without either (an older nginx, google mode), the invite list and
+    `strelitzia users` decide as before. Accounts are matched by email, so existing users keep their data.
 
 `STRELITZIA_SITE_HEADER_URL` (any mode, e.g. `/shared/site-header.js`): engineerfamily's shared header script. When set,
 the dashboard's top bar starts with `<ef-home>` and ends with `<ef-profile>`. In proxy mode `<ef-profile>` carries Sign

@@ -21,8 +21,10 @@ engineerfamily's. Per-user data (jobs, documents, spend) stays keyed by email, s
   replaced): `X-Auth-Request-Access: strelitzia`, `X-Auth-Request-Admin: 1|0`, `X-Auth-Request-Cap-Usd: <number>|none`.
 - Gotcha (deploy order): prod Strelitzia ships on its own (`strelitzia-deploy`) and may run behind an older
   engineerfamily nginx that doesn't send these headers. So: **only** when `X-Auth-Request-Access` is present and equals
-  `strelitzia` do we trust engineerfamily; without it, keep today's invite-list behaviour exactly. That's safe in either
-  order, since an old nginx can't send the header and nginx always overwrites client copies.
+  `strelitzia` do we trust engineerfamily; without it, keep today's invite-list behaviour exactly. Header presence alone
+  is **not** enough (corrected after validator review): an older nginx overwrites only Email/User/Preferred-Username and
+  passes client copies of the grant headers through, so a signed-in visitor could forge access with Cap `none`. So trust
+  also needs `STRELITZIA_SITE_GRANT=1`, set per environment only once that environment's nginx overwrites the headers.
 - `tests/web/`: proxy-mode tests to extend (search for `X-Auth-Request-Email`).
 
 ## Tasks
@@ -68,6 +70,7 @@ applies only without them. AGENTS.md Map line for `web/admin.py` updated to matc
   https://preprod.engineerfamily.net/strelitzia/dashboard/api/health` → 200.
 
 ## Human test steps (preprod)
+0. First (ROADMAP M34): add `STRELITZIA_SITE_GRANT=1` to `~/.strelitzia-preprod/.env` and recreate the preprod dashboard.
 1. On `https://preprod.engineerfamily.net/users/` invite a second Google account you own and tick Strelitzia, cap $1.
 2. Sign in with it and open the dashboard: it loads with no Strelitzia-side invite needed.
 3. Back on the Users page, set its cap to $0 and run anything that calls Claude from that account: it's refused for the cap.
@@ -76,5 +79,6 @@ applies only without them. AGENTS.md Map line for `web/admin.py` updated to matc
 
 ## Decisions
 1. engineerfamily is the source of truth for access and caps; Strelitzia keeps enforcing the cap and its owner concept.
-2. The header-presence check keeps prod safe whichever repo deploys first.
+2. The `STRELITZIA_SITE_GRANT=1` opt-in (set only alongside the part-3 nginx) plus the header check keeps prod safe
+   whichever repo deploys first; the header check alone did not (an older nginx passes client copies through).
 3. Existing Strelitzia accounts are matched by email, so nobody loses data; the user re-invites them on engineerfamily.
