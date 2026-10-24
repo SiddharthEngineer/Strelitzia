@@ -45,4 +45,10 @@ deploy = "make -C /srv/engineerfamily-preprod preprod-strelitzia-up"
 seed = "docker compose -p engineerfamily-preprod --project-directory /srv/engineerfamily-preprod -f /srv/engineerfamily-preprod/docker-compose.base.yml -f /srv/engineerfamily-preprod/docker-compose.preprod.yml run --rm --no-deps -T -v /srv/Strelitzia-preprod:/seed:ro strelitzia python /seed/scripts/seed_preprod.py"
 netrc_env = "PREPROD_NETRC"
 # Through Cloudflare, not 127.0.0.1:8080, so the check also proves the public host routes to the right nginx.
-health = [{ url = "https://preprod.engineerfamily.net/strelitzia/dashboard/api/health", json_ok = true }]
+# engineerfamily's Site gate (site-perms-3) puts the dashboard behind sign-in, so its health URL is 401 through
+# Cloudflare. Check routing with an open page through Cloudflare, and the dashboard on nginx's 127.0.0.1:8080 health
+# server (no auth_request), which preprod.sh reaches because it runs on the VPS.
+health = [
+    { url = "https://preprod.engineerfamily.net/strelitzia/privacy", status = 200 },
+    { url = "http://127.0.0.1:8080/strelitzia/dashboard/api/health", json_ok = true },
+]
