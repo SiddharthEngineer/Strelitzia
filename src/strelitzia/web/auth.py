@@ -90,7 +90,7 @@ class SiteGrant:
     cap_usd: float | None
 
 
-_logged_bad_caps: set[str] = set()
+_logged_bad_cap = False
 
 
 def _parse_cap(raw: str) -> float | None:
@@ -103,19 +103,24 @@ def _parse_cap(raw: str) -> float | None:
         cap = -1.0
     if cap >= 0 and cap != float("inf"):
         return cap
-    if raw not in _logged_bad_caps:
-        _logged_bad_caps.add(raw)
+    global _logged_bad_cap
+    if not _logged_bad_cap:
+        _logged_bad_cap = True
         log.warning("malformed %s %r; using the default cap", CAP_HEADER, raw)
     return users.DEFAULT_CAP_USD
 
 
 def site_grant(request: Request) -> SiteGrant | None:
     """The site's grant, or None when the proxy sent no Access header for Strelitzia (an older proxy, or no access).
-    Like the email header, it is proof only in proxy mode: call it only there."""
-    if request.headers.get(ACCESS_HEADER, "").strip().lower() != SITE_ACCESS:
-        return None
-    return SiteGrant(admin=request.headers.get(ADMIN_HEADER, "").strip() == "1",
-                     cap_usd=_parse_cap(request.headers.get(CAP_HEADER, "")))
+    Like the email header, it is proof only in proxy mode: call it only there. Parsed once per request."""
+    if hasattr(request.state, "site_grant"):
+        return request.state.site_grant
+    grant = None
+    if request.headers.get(ACCESS_HEADER, "").strip().lower() == SITE_ACCESS:
+        grant = SiteGrant(admin=request.headers.get(ADMIN_HEADER, "").strip() == "1",
+                          cap_usd=_parse_cap(request.headers.get(CAP_HEADER, "")))
+    request.state.site_grant = grant
+    return grant
 
 
 def site_users_url() -> str:

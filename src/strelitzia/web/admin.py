@@ -28,9 +28,9 @@ def _conn(request: Request) -> Connection:
 
 
 def _owner(request: Request) -> users.User:
+    user = auth.current_user(request)
     if auth.auth_mode() == "proxy" and auth.site_grant(request) is not None:
         raise HTTPException(410, f"Users are managed at {auth.site_users_url()}")
-    user = auth.current_user(request)
     if user.role != "owner":
         raise HTTPException(403, "Only the owner can manage users")
     return user
