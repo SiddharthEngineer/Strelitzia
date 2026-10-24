@@ -60,7 +60,7 @@ load, new tab not needed). Remove the now-unused API client code and types. Rebu
 **What:** DEPLOY.md: access and caps now come from engineerfamily's Users page via nginx headers; the old invite list
 applies only without them. AGENTS.md Map line for `web/admin.py` updated to match. Keep AGENTS.md short.
 **Validate:** `scripts/validate.sh` → passes.
-**Status:** ❌
+**Status:** ✅ 2026-10-24 (this commit)
 
 ## Validation
 - `scripts/validate.sh --full` passes.
