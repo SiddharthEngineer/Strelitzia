@@ -1,6 +1,8 @@
 """The owner's Users page API: invite emails, see each account's spend this month, change caps, disable or re-enable.
 
 Owner-only (403 for everyone else). Removing a user disables the account and keeps its data, so it can be undone.
+When engineerfamily's proxy grants access (`auth.site_grant`), users are managed on its Users page instead, so every
+route answers 410; without the grant (built-in Google sign-in, an older proxy) the API keeps working.
 """
 
 from __future__ import annotations
@@ -26,6 +28,8 @@ def _conn(request: Request) -> Connection:
 
 
 def _owner(request: Request) -> users.User:
+    if auth.auth_mode() == "proxy" and auth.site_grant(request) is not None:
+        raise HTTPException(410, f"Users are managed at {auth.site_users_url()}")
     user = auth.current_user(request)
     if user.role != "owner":
         raise HTTPException(403, "Only the owner can manage users")

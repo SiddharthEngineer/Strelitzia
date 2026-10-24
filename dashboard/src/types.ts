@@ -505,20 +505,10 @@ export interface AuthMe {
   logout_url?: string | null;
   /** engineerfamily's shared header script (`<ef-home>`, `<ef-profile>`), when the dashboard should use it. */
   site_header_url?: string | null;
-}
-
-/** A row on the owner's Users page (GET /admin/users). */
-export interface AdminUser {
-  id: string;
-  email: string;
-  name: string | null;
-  role: 'owner' | 'user';
-  status: 'invited' | 'active' | 'disabled';
-  /** USD per calendar month; null = no cap. */
-  monthly_cap_usd: number | null;
-  /** Claude spend so far this month, including open batches at their estimate. */
-  month_spend_usd: number;
-  last_login_at: string | null;
+  /** Proxy mode with engineerfamily's grant: the visitor is a site admin. */
+  site_admin?: boolean;
+  /** engineerfamily's Users page (where access and caps are set), when the site grants access. */
+  users_url?: string | null;
 }
 
 /** The fields the Profile page edits (GET/PUT /profile). */

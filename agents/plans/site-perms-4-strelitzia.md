@@ -52,7 +52,7 @@ without one (old nginx, or `strelitzia users` CLI setups) it keeps working, so t
 Dashboard: drop the Users route/page; when `me.site_admin`, the nav shows "Users" linking to `me.users_url` (full page
 load, new tab not needed). Remove the now-unused API client code and types. Rebuild the committed bundle.
 **Validate:** `scripts/validate.sh --full` → passes (dashboard tests and build included).
-**Status:** ❌
+**Status:** ✅ 2026-10-24 (this commit)
 
 ### Task 3: Docs
 **Runs:** unattended
