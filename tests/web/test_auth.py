@@ -100,7 +100,7 @@ def test_owner_signs_in(auth_on, client, conn, google):
     assert google.token_requests[-1]["redirect_uri"] == "https://strelitzia.example.net/strelitzia/dashboard/api/auth/callback"
     me = client.get("/strelitzia/dashboard/api/auth/me").json()
     assert me == {"enabled": True, "user": {"email": OWNER, "name": None, "role": "owner"}, "mode": "google",
-                  "identity": None, "reason": None, "logout_url": None, "site_header_url": None}
+                  "identity": None, "reason": None, "logout_url": None, "site_header_url": None, "site_admin": False, "users_url": None}
     assert client.get("/strelitzia/dashboard/api/whoami").json() == {"email": owner.email}
 
 
@@ -132,7 +132,7 @@ def test_uninvited_email_gets_no_session(auth_on, client, conn, google):
     assert users.by_email(conn, "stranger@example.com") is None
     assert client.get("/strelitzia/dashboard/api/auth/me").json() == {
         "enabled": True, "user": None, "mode": "google", "identity": None, "reason": None, "logout_url": None,
-        "site_header_url": None}
+        "site_header_url": None, "site_admin": False, "users_url": None}
     assert client.get("/strelitzia/dashboard/api/whoami").status_code == 401
 
 
@@ -245,7 +245,7 @@ def test_login_off_acts_as_owner(client, conn, monkeypatch):
     assert client.get("/strelitzia/dashboard/api/whoami").json() == {"email": owner.email}
     assert client.get("/strelitzia/dashboard/api/auth/me").json() == {
         "enabled": False, "user": {"email": owner.email, "name": None, "role": "owner"}, "mode": "off",
-        "identity": None, "reason": None, "logout_url": None, "site_header_url": None}
+        "identity": None, "reason": None, "logout_url": None, "site_header_url": None, "site_admin": False, "users_url": None}
     assert client.get("/strelitzia/dashboard/api/auth/login").headers["location"] == "/strelitzia/dashboard/"
     assert client.get("/strelitzia/dashboard/api/auth/callback", params={"code": "c", "state": "s"}).status_code == 404
 
@@ -542,3 +542,64 @@ def test_proxy_config_needs_owner_and_session_secret(monkeypatch):
     monkeypatch.setenv("STRELITZIA_SESSION_SECRET", "s")
     auth.check_config()  # no Google secret needed
     assert not auth.drive_connect_available()
+
+
+# --- Site grant (site-perms-4): engineerfamily's nginx says who may use the dashboard and with what cap ---
+
+def granted(email, name=None, cap="5", admin="0"):
+    return {**as_email(email, name), auth.ACCESS_HEADER: "strelitzia", auth.ADMIN_HEADER: admin,
+            auth.CAP_HEADER: cap}
+
+
+def test_grant_creates_and_activates_an_unknown_email(proxy_on, full_client, conn):
+    assert full_client.get(JOBS, headers=granted("New@Example.com", "New%20Person", cap="1.5")).status_code == 200
+    user = users.by_email(conn, "new@example.com")
+    assert (user.role, user.status, user.name, user.monthly_cap_usd) == ("user", "active", "New Person", 1.5)
+
+
+def test_grant_reactivates_a_disabled_account(proxy_on, full_client, conn):
+    friend = users.invite(conn, "friend@example.com")
+    users.set_status(conn, friend.id, "disabled")
+    assert full_client.get(JOBS, headers=granted("friend@example.com")).status_code == 200
+    assert users.get(conn, friend.id).status == "active"
+
+
+def test_grant_writes_the_cap(proxy_on, full_client, conn):
+    friend = users.invite(conn, "friend@example.com")
+    full_client.get(JOBS, headers=granted("friend@example.com", cap="0"))
+    assert users.get(conn, friend.id).monthly_cap_usd == 0
+    full_client.get(JOBS, headers=granted("friend@example.com", cap="none"))
+    assert users.get(conn, friend.id).monthly_cap_usd is None
+    full_client.get(JOBS, headers=granted("friend@example.com", cap="lots"))
+    assert users.get(conn, friend.id).monthly_cap_usd == users.DEFAULT_CAP_USD
+
+
+def test_grant_leaves_the_owner_alone(proxy_on, full_client, conn):
+    owner = users.owner(conn)
+    full_client.get(JOBS, headers=granted(OWNER, cap="1"))
+    after = users.get(conn, owner.id)
+    assert (after.role, after.status, after.monthly_cap_usd) == ("owner", "active", None)
+
+
+def test_grant_is_shown_in_me(proxy_on, full_client, conn, monkeypatch):
+    monkeypatch.setenv("STRELITZIA_PUBLIC_URL", "https://preprod.example.net/strelitzia/dashboard")
+    me = full_client.get(ME, headers=granted("friend@example.com", admin="1", cap="none")).json()
+    assert me["user"]["email"] == "friend@example.com"
+    assert me["site_admin"] is True and me["users_url"] == "https://preprod.example.net/users/"
+    me = full_client.get(ME, headers=granted("friend@example.com")).json()
+    assert me["site_admin"] is False
+    me = full_client.get(ME, headers=as_email("friend@example.com")).json()
+    assert me["site_admin"] is False and me["users_url"] is None
+
+
+def test_without_the_access_header_the_invite_list_decides(proxy_on, full_client, conn):
+    for headers in (as_email("stranger@example.com"),
+                    {**as_email("stranger@example.com"), auth.ACCESS_HEADER: "other", auth.CAP_HEADER: "1"}):
+        resp = full_client.get(JOBS, headers=headers)
+        assert resp.status_code == 401 and resp.json() == {"detail": "not_invited"}
+    assert users.by_email(conn, "stranger@example.com") is None
+
+
+def test_grant_headers_are_ignored_in_google_mode(auth_on, session_secret, full_client, conn):
+    assert full_client.get(JOBS, headers=granted("stranger@example.com")).status_code == 401
+    assert users.by_email(conn, "stranger@example.com") is None

@@ -1,5 +1,5 @@
 # Plan: Site permissions 4/4: Strelitzia trusts engineerfamily for access, admin and cap
-**Status:** ❌ Not started
+**Status:** 🔄 In progress
 **Risk:** review (who can use the dashboard, and how much Claude spend they may run up)
 **Depends on:** engineerfamily site-perms-3-gate (nginx sends the new headers)
 
@@ -42,7 +42,7 @@ engineerfamily's. Per-user data (jobs, documents, spend) stays keyed by email, s
 **Validate:** `scripts/validate.sh` → passes; the new tests cover: grant creates and activates an unknown email; a
 disabled account with a grant comes back active; the cap header is written to `monthly_cap_usd` ("none" → NULL); the
 owner's role and cap are untouched; no Access header → a never-invited email still gets 401 `not_invited`.
-**Status:** ❌
+**Status:** ✅ 2026-10-24 (this commit)
 
 ### Task 2: Retire the dashboard Users page
 **Runs:** unattended
