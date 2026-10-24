@@ -403,9 +403,3 @@ button.danger { color: var(--danger); border-color: var(--danger); }
 .site-profile { margin-left: auto; }
 .add-job-button + .site-profile { margin-left: 0; }
 .sign-in.with-site-topbar { min-height: calc(100vh - 56px); }
-
-/* The owner's Users page */
-.invite-form { display: flex; align-items: flex-end; gap: 8px; margin: 12px 0 16px; }
-.invite-form .field { flex: 0 1 320px; }
-.users-table { min-width: 720px; }
-.cap-input { width: 7rem; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }

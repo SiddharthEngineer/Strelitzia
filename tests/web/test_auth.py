@@ -603,3 +603,11 @@ def test_without_the_access_header_the_invite_list_decides(proxy_on, full_client
 def test_grant_headers_are_ignored_in_google_mode(auth_on, session_secret, full_client, conn):
     assert full_client.get(JOBS, headers=granted("stranger@example.com")).status_code == 401
     assert users.by_email(conn, "stranger@example.com") is None
+
+
+def test_admin_api_is_gone_with_a_grant(proxy_on, full_client, conn, monkeypatch):
+    monkeypatch.setenv("STRELITZIA_PUBLIC_URL", "https://preprod.example.net/strelitzia/dashboard")
+    resp = full_client.get("/strelitzia/dashboard/api/admin/users", headers=granted(OWNER, admin="1", cap="none"))
+    assert resp.status_code == 410
+    assert resp.json() == {"detail": "Users are managed at https://preprod.example.net/users/"}
+    assert full_client.get("/strelitzia/dashboard/api/admin/users", headers=as_email(OWNER)).status_code == 200

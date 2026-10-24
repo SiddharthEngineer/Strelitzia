@@ -1,6 +1,6 @@
 // Typed fetch helpers for the dashboard API (<base>/api, e.g. /strelitzia/dashboard/api). Mutating calls send `X-Strelitzia: 1` (the server's CSRF check).
 import type {
-  AddJobInput, AddJobResult, AdminUser, AuthMe, ClaudeSetup, Contact, ContactFields, ContactListItem, ContactWithJobs,
+  AddJobInput, AddJobResult, AuthMe, ClaudeSetup, Contact, ContactFields, ContactListItem, ContactWithJobs,
   Facets, Interview, ImportResult, InterviewFields, JobDetail, JobList, JobQuery, PacketResult, PanelGradeOutcome,
   PanelMode, PanelOverview, PanelRun, PanelWinner, PasteOutcome, Preferences, PreferencesResponse, ProfileResponse,
   ProfileSave, ReassessPreview, ReassessScope, Relation, RescoreAllResult, RescorePreview, ResumeUploadResult,
@@ -305,31 +305,6 @@ export function logout(): Promise<{ ok: boolean }> {
 export async function siteLogout(url: string): Promise<void> {
   const res = await fetch(url, { method: 'POST', credentials: 'same-origin' });
   if (!res.ok) throw new ApiError(res.status, `Couldn't sign out of the site (${res.status})`);
-}
-
-// --- The owner's Users page (owner-only: 403 for everyone else) ---
-
-export async function listUsers(signal?: AbortSignal): Promise<AdminUser[]> {
-  return (await request<{ users: AdminUser[] }>('/admin/users', { signal })).users;
-}
-
-/** Invite an email; without a cap the server's default applies. 409 when the email already has an account. */
-export function inviteUser(email: string, monthlyCapUsd?: number | null): Promise<AdminUser> {
-  const body: Record<string, string | number | null> = { email };
-  if (monthlyCapUsd !== undefined) body.monthly_cap_usd = monthlyCapUsd;
-  return request<AdminUser>('/admin/users', { method: 'POST', body: JSON.stringify(body) });
-}
-
-/** Change a user's cap (null = no cap) or re-enable them. */
-export function updateUser(
-  id: string, patch: { status?: 'active' | 'disabled'; monthly_cap_usd?: number | null },
-): Promise<AdminUser> {
-  return request<AdminUser>(`/admin/users/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
-}
-
-/** Disable a user: they can't sign in, and their data is kept. */
-export function disableUser(id: string): Promise<AdminUser> {
-  return request<AdminUser>(`/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export function getProfile(signal?: AbortSignal): Promise<ProfileResponse> {
