@@ -153,6 +153,8 @@ def job_detail(conn: Connection, job: dict) -> dict:
             "resume": job.get("resume_drive_url"),
             "cover_letter": job.get("cover_letter_drive_url"),
             "packet": job.get("packet_doc_url"),
+            "resume_draft": job.get("resume_draft_doc_url"),
+            "cover_draft": job.get("cover_draft_doc_url"),
             **_file_links(job),
         },
         **_draft_fields(job),
@@ -191,6 +193,8 @@ def _draft_fields(job: dict) -> dict:
         "notes_for_user": report.get("notes_for_user") or "",
         "draft_history": workbench.draft_history(job),
         "packet_doc_url": job.get("packet_doc_url"),
+        "resume_draft_url": job.get("resume_draft_doc_url"),
+        "cover_draft_url": job.get("cover_draft_doc_url"),
     }
 
 
@@ -340,14 +344,16 @@ def post_packet(key: str, request: Request) -> dict:
         client = _drive_client(request)
         if client is not None:
             _, url = workbench.publish_packet(client, conn, job, inputs)
+            drafts = workbench.publish_drafts(client, conn, job_by_key(conn, user.id, key), inputs)
             packet = workbench.packet_for(job, inputs, inline=False)
-            return {"prompt": packet.prompt, "doc_url": url, "inline": False, "rules_version": workbench.RULES_VERSION}
+            return {"prompt": packet.prompt, "doc_url": url, "inline": False, "rules_version": workbench.RULES_VERSION,
+                    "resume_draft_url": drafts.get("resume"), "cover_draft_url": drafts.get("cover")}
     except Exception as e:  # noqa: BLE001 -- Drive trouble shouldn't block the clipboard flow
         log.warning("Drive packet failed for %s: %s", key, e)
         drive_error = f"Couldn't write the packet to Drive ({e}); the full packet was copied instead."
     packet = workbench.packet_for(job, inputs, inline=True)
     return {"prompt": packet.prompt, "doc_url": None, "inline": True, "rules_version": workbench.RULES_VERSION,
-            "drive_error": drive_error}
+            "drive_error": drive_error, "resume_draft_url": None, "cover_draft_url": None}
 
 
 class PastedResult(BaseModel):
@@ -362,13 +368,20 @@ def post_result(key: str, body: PastedResult, request: Request):
     _owner_content(user)
     job = job_by_key(conn, user.id, key)
     outcome = workbench.import_result(conn, job, body.text, _workbench_inputs(request))
+    return _import_response(request, key, outcome)
+
+
+def _import_response(request: Request, key: str, outcome: workbench.ImportOutcome, client=None):
+    """422 with the errors and the fix prompt, or the saved draft (uploaded to Drive when it's connected) and the job."""
+    conn = db_conn(request)
+    user = current_user(request)
     if not outcome.ok:
         return JSONResponse({"detail": outcome.errors[0] if outcome.errors else "The result didn't pass the checks",
                              "errors": outcome.errors, "warnings": outcome.warnings,
                              "fix_prompt": outcome.fix_prompt}, status_code=422)
     warnings = list(outcome.warnings)
     try:
-        client = _drive_client(request)
+        client = client or _drive_client(request)
         if client is not None:
             from strelitzia.storage.sync import sync_job
 
@@ -379,6 +392,29 @@ def post_result(key: str, body: PastedResult, request: Request):
     return {"outcome": {"draft_version": outcome.draft_version, "warnings": warnings,
                         "coverage": outcome.coverage, "unmet": outcome.unmet},
             "job": job_detail(conn, job_by_key(conn, user.id, key))}
+
+
+@api.post("/jobs/{key}/drafts/check")
+def check_drafts(key: str, request: Request):
+    """Read the job's two draft Docs, run every check and, when they pass, save the draft and make the PDFs.
+
+    409 without Drive or before the draft Docs exist; 422 with the errors and a fix prompt for Claude.
+    """
+    conn = db_conn(request)
+    user = current_user(request)
+    _owner_content(user)
+    job = job_by_key(conn, user.id, key)
+    client = _require_drive(request)
+    inputs = _workbench_inputs(request)  # pulls the Profile Docs first
+    texts = {}
+    for kind in workbench.DRAFT_KINDS:
+        doc_id = job.get(f"{kind}_draft_doc_id")
+        meta = client.doc_meta(doc_id) if doc_id else None
+        if not meta or meta.get("trashed"):
+            raise HTTPException(status_code=409, detail="Open the job in Claude first: its draft Docs don't exist yet")
+        texts[kind] = client.export_text(doc_id, "text/markdown")
+    outcome = workbench.import_drafts(conn, job, texts["resume"], texts["cover"], inputs)
+    return _import_response(request, key, outcome, client)
 
 
 @api.get("/claude/setup")

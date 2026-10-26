@@ -69,7 +69,7 @@ def test_static_docs_are_written_once_and_skip_unchanged(drive, client, conn):
     assert set(docs) == {"Strelitzia rules", "Strelitzia panel rubric"}
     for d in docs.values():
         assert drive.path_of(d["id"]) == ["Strelitzia", "_Claude", d["name"]]
-    assert b"notes_for_user" in docs["Strelitzia rules"]["content"]  # the schema is in the rules Doc
+    assert b"## Notes for me" in docs["Strelitzia rules"]["content"]  # the draft format is in the rules Doc
     assert b"not_met" in docs["Strelitzia panel rubric"]["content"]
 
     calls = dict(drive.calls)
