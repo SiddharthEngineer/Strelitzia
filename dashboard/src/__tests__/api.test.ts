@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  addJob, ApiError, jobsQueryString, linkContact, listJobs, onUnauthorized, openPacket, pasteResult, putDescription,
+  addJob, ApiError, checkDrafts, jobsQueryString, linkContact, listJobs, onUnauthorized, openPacket, putDescription,
   rescore, rescoreAll, savePreferences, setStatus,
 } from '../api';
 import type { Preferences } from '../types';
@@ -55,33 +55,35 @@ describe('api', () => {
   });
 
   it('POSTs the packet request with the CSRF header', async () => {
-    const fetch = mockFetch(200, { prompt: 'p', doc_url: null, inline: true, rules_version: 'abcd1234' });
-    expect((await openPacket('k1')).inline).toBe(true);
+    const fetch = mockFetch(200, { prompt: 'p', doc_url: 'd', rules_version: 'abcd1234', resume_draft_url: 'r', cover_draft_url: 'c' });
+    expect((await openPacket('k1')).resume_draft_url).toBe('r');
     const [url, init] = fetch.mock.calls[0];
     expect(url).toBe('/strelitzia/dashboard/api/jobs/k1/packet');
     expect(init.method).toBe('POST');
     expect(init.headers['X-Strelitzia']).toBe('1');
   });
 
-  it('returns a failed paste as errors and a fix message instead of throwing', async () => {
+  it('returns a failed check as errors and a fix prompt instead of throwing', async () => {
     const fetch = mockFetch(422, { detail: 'bad', errors: ['bad', 'worse'], warnings: [], fix_prompt: 'These problems…' });
-    const out = await pasteResult('k1', 'reply text');
+    const out = await checkDrafts('k1');
     expect(out).toEqual({ ok: false, errors: ['bad', 'worse'], warnings: [], fix_prompt: 'These problems…' });
     const [url, init] = fetch.mock.calls[0];
-    expect(url).toBe('/strelitzia/dashboard/api/jobs/k1/result');
+    expect(url).toBe('/strelitzia/dashboard/api/jobs/k1/drafts/check');
+    expect(init.method).toBe('POST');
     expect(init.headers['X-Strelitzia']).toBe('1');
-    expect(JSON.parse(init.body)).toEqual({ text: 'reply text' });
   });
 
-  it('returns a saved paste with the job, and throws other errors', async () => {
+  it('returns a passing check with the job, and throws other errors with their body', async () => {
     mockFetch(200, { outcome: { draft_version: 2, warnings: [], coverage: null, unmet: [] }, job: { key: 'k1' } });
-    const out = await pasteResult('k1', 'reply');
+    const out = await checkDrafts('k1');
     expect(out.ok && out.outcome.draft_version).toBe(2);
 
-    mockFetch(409, { detail: 'No content library' });
-    const err = await pasteResult('k1', 'reply').catch((e) => e);
+    mockFetch(409, { detail: 'Your Profile Docs have problems', problems: ['x'] });
+    const err = await checkDrafts('k1').catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
-    expect(err.message).toBe('No content library');
+    expect(err.message).toBe('Your Profile Docs have problems');
+    expect(err.status).toBe(409);
+    expect(err.body).toEqual({ detail: 'Your Profile Docs have problems', problems: ['x'] });
   });
 
   it('reads the message of a structured error (the 402 budget stop)', async () => {
