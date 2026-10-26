@@ -157,6 +157,8 @@ export interface JobLinks {
   resume: string | null;
   cover_letter: string | null;
   packet?: string | null;
+  resume_draft?: string | null;
+  cover_draft?: string | null;
   // Local draft files served by the API (left out once the PDF has moved to Drive).
   resume_pdf?: string;
   resume_docx?: string;
@@ -177,21 +179,22 @@ export interface DraftHistoryEntry {
 }
 
 /** POST /jobs/{key}/packet */
+/** POST /jobs/{key}/packet: the packet and the two draft Docs in the job's Drive folder, and the prompt. */
 export interface PacketResult {
   prompt: string;
-  doc_url: string | null;
-  inline: boolean; // no Drive: the prompt carries the whole packet
+  doc_url: string;
   rules_version: string;
-  drive_error?: string | null;
+  resume_draft_url: string | null;
+  cover_draft_url: string | null;
 }
 
-/** POST /jobs/{key}/result on success */
+/** POST /jobs/{key}/drafts/check on success */
 export interface ImportResult {
   outcome: { draft_version: number; warnings: string[]; coverage: Coverage; unmet: string[] };
   job: JobDetail;
 }
 
-export type PasteOutcome =
+export type DraftCheckOutcome =
   | ({ ok: true } & ImportResult)
   | { ok: false; errors: string[]; warnings: string[]; fix_prompt: string };
 
@@ -268,6 +271,8 @@ export interface JobDetail {
   notes_for_user?: string;
   draft_history?: DraftHistoryEntry[];
   packet_doc_url?: string | null;
+  resume_draft_url?: string | null;
+  cover_draft_url?: string | null;
 }
 
 export interface Criterion<V = unknown> {

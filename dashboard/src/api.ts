@@ -1,8 +1,8 @@
 // Typed fetch helpers for the dashboard API (<base>/api, e.g. /strelitzia/dashboard/api). Mutating calls send `X-Strelitzia: 1` (the server's CSRF check).
 import type {
-  AddJobInput, AddJobResult, AuthMe, ClaudeSetup, Contact, ContactFields, ContactListItem, ContactWithJobs,
+  AddJobInput, AddJobResult, AuthMe, ClaudeSetup, Contact, DraftCheckOutcome, ContactFields, ContactListItem, ContactWithJobs,
   Facets, Interview, ImportResult, InterviewFields, JobDetail, JobList, JobQuery, PacketResult, PanelGradeOutcome,
-  PanelMode, PanelOverview, PanelRun, PanelWinner, PasteOutcome, Preferences, PreferencesResponse, ProfileDocsSetupOutcome,
+  PanelMode, PanelOverview, PanelRun, PanelWinner, Preferences, PreferencesResponse, ProfileDocsSetupOutcome,
   ProfileResponse, ProfileSave, ProfileSyncResult, ReassessPreview, ReassessScope, Relation, RescoreAllResult,
   RescorePreview, SavePreferencesResult, Task, UserStatus,
 } from './types';
@@ -95,17 +95,16 @@ export function patchJob(key: string, patch: { submitted_at?: string; notes?: st
   return request<JobDetail>(`/jobs/${encodeURIComponent(key)}`, { method: 'PATCH', body: JSON.stringify(patch) });
 }
 
-/** Write the job's Claude packet (a Google Doc when Drive is set up) and get the prompt to paste in Claude. */
+/** Write the job's Claude packet and draft Docs to Drive and get the prompt to paste in Claude (409 without Drive). */
 export function openPacket(key: string): Promise<PacketResult> {
   return request<PacketResult>(`/jobs/${encodeURIComponent(key)}/packet`, { method: 'POST' });
 }
 
-/** Check and save a pasted Claude reply: ok with the saved draft, or not ok with the errors and a fix message. */
-export async function pasteResult(key: string, text: string): Promise<PasteOutcome> {
-  const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(key)}/result`, {
+/** Check & format the job's draft Docs: ok with the saved draft, or not ok with the errors and a fix prompt. */
+export async function checkDrafts(key: string): Promise<DraftCheckOutcome> {
+  const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(key)}/drafts/check`, {
     method: 'POST',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Strelitzia': '1' },
-    body: JSON.stringify({ text }),
+    headers: { Accept: 'application/json', 'X-Strelitzia': '1' },
   });
   if (res.status === 422) {
     const body = await res.clone().json().catch(() => null);

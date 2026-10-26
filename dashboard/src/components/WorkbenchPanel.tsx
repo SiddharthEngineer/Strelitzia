@@ -18,49 +18,66 @@ type Check =
   | { state: 'failed'; errors: string[]; warnings: string[]; fixPrompt: string; copied: boolean }
   | { state: 'saved'; version: number; warnings: string[] };
 
-/** Resume & cover letter: open the job in Claude, paste the reply back, and see the saved files and coverage. */
+/** An API failure as the panel shows it: Drive not connected (a pointer to Claude setup, not an error), else the
+ * message with any Profile Docs problems. */
+type Failure = { kind: 'drive' } | { kind: 'error'; message: string; problems: string[] };
+
+function failure(err: unknown): Failure {
+  if (err instanceof api.ApiError && err.status === 409) {
+    const problems = (err.body as { problems?: unknown } | null)?.problems;
+    if (Array.isArray(problems)) return { kind: 'error', message: err.message, problems: problems.map(String) };
+    if (/Google Drive/.test(err.message)) return { kind: 'drive' };
+  }
+  return { kind: 'error', message: err instanceof Error ? err.message : String(err), problems: [] };
+}
+
+/** Resume & cover letter: open the job in Claude (the packet and two draft Docs), Check & format the drafts, and
+ * see the saved files and coverage. */
 export default function WorkbenchPanel({ job, onSaved }: Props) {
   const [packet, setPacket] = useState<PacketResult | null>(null);
-  const [copyFailed, setCopyFailed] = useState(false);
+  const [copied, setCopied] = useState<'ok' | 'failed' | null>(null);
   const [opening, setOpening] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [text, setText] = useState('');
+  const [problem, setProblem] = useState<Failure | null>(null);
   const [check, setCheck] = useState<Check>({ state: 'idle' });
+
+  async function copyPrompt(prompt: string) {
+    try {
+      await api.copyText(prompt);
+      setCopied('ok');
+    } catch {
+      setCopied('failed');
+    }
+  }
 
   async function openInClaude() {
     setOpening(true);
-    setError(null);
-    setCopyFailed(false);
+    setProblem(null);
+    setCopied(null);
     try {
       const p = await api.openPacket(job.key);
       setPacket(p);
-      try {
-        await api.copyText(p.prompt);
-      } catch {
-        setCopyFailed(true);
-      }
+      await copyPrompt(p.prompt);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setProblem(failure(err));
     } finally {
       setOpening(false);
     }
   }
 
-  async function checkAndSave() {
+  async function checkAndFormat() {
     setCheck({ state: 'checking' });
-    setError(null);
+    setProblem(null);
     try {
-      const out = await api.pasteResult(job.key, text);
+      const out = await api.checkDrafts(job.key);
       if (out.ok) {
         setCheck({ state: 'saved', version: out.outcome.draft_version, warnings: out.outcome.warnings });
-        setText('');
         onSaved(out.job);
       } else {
         setCheck({ state: 'failed', errors: out.errors, warnings: out.warnings, fixPrompt: out.fix_prompt, copied: false });
       }
     } catch (err) {
       setCheck({ state: 'idle' });
-      setError(err instanceof Error ? err.message : String(err));
+      setProblem(failure(err));
     }
   }
 
@@ -70,10 +87,16 @@ export default function WorkbenchPanel({ job, onSaved }: Props) {
       await api.copyText(check.fixPrompt);
       setCheck({ ...check, copied: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setProblem(failure(err));
     }
   }
 
+  const docs: [string, string | null | undefined][] = [
+    ['Packet', packet?.doc_url ?? job.packet_doc_url],
+    ['Resume draft', packet?.resume_draft_url ?? job.resume_draft_url],
+    ['Cover letter draft', packet?.cover_draft_url ?? job.cover_draft_url],
+  ];
+  const hasDrafts = Boolean(packet?.resume_draft_url ?? job.resume_draft_url);
   // A PDF still on the server is the newest draft (a successful Drive upload removes it), so it wins over Drive.
   const files: [string, string | null | undefined][] = [
     ['Resume PDF', job.links.resume_pdf || job.links.resume],
@@ -97,38 +120,51 @@ export default function WorkbenchPanel({ job, onSaved }: Props) {
         <button type="button" className="primary" disabled={opening} onClick={openInClaude}>
           {opening ? 'Preparing…' : 'Open in Claude'}
         </button>
+        <button type="button" disabled={!hasDrafts || check.state === 'checking'} onClick={checkAndFormat}
+          title={hasDrafts ? undefined : 'Open in Claude first: it creates the draft Docs'}>
+          {check.state === 'checking' ? 'Checking…' : 'Check & format'}
+        </button>
       </div>
+      {problem?.kind === 'drive' && (
+        <p className="notice" role="status">
+          Resumes are written through Google Drive. Connect Google Drive on
+          the <Link to="/claude-setup">Claude setup page</Link>, then Open in Claude again.
+        </p>
+      )}
       {packet && (
         <div className="progress ok" role="status">
           <span>
-            {copyFailed ? 'Couldn\'t copy: select the prompt below and copy it. '
-              : packet.inline ? 'Copied the full packet (Drive isn\'t set up). ' : 'Copied the prompt. '}
-            Paste it into a new chat in your project.{' '}
-            {packet.doc_url && <><a href={packet.doc_url} target="_blank" rel="noreferrer noopener">Packet Doc ↗</a>{' · '}</>}
-            <a href={CLAUDE_URL} target="_blank" rel="noreferrer noopener">claude.ai ↗</a>
+            {copied === 'failed' ? 'Couldn\'t copy: select the prompt below and copy it. ' : 'Copied the prompt. '}
+            Paste it into a new chat in your project; Claude writes the two draft Docs, then press Check &amp; format.
             {' · '}rules {packet.rules_version}
           </span>
         </div>
       )}
-      {packet?.drive_error && <p className="error small">{packet.drive_error}</p>}
-      {packet && copyFailed && <textarea readOnly rows={4} aria-label="Prompt" value={packet.prompt} />}
-
-      <label className="notes">
-        <span>Paste result</span>
-        <textarea rows={6} value={text} placeholder="Paste Claude's whole reply, including the ```json block at the end."
-          onChange={(e) => setText(e.target.value)} />
-      </label>
-      <div className="action-group">
-        <button type="button" disabled={!text.trim() || check.state === 'checking'} onClick={checkAndSave}>
-          {check.state === 'checking' ? 'Checking…' : 'Check & save'}
-        </button>
-      </div>
-      {error && <p className="error" role="alert">{error}</p>}
+      {docs.some(([, href]) => href) && (
+        <nav className="link-row" aria-label="Claude Docs">
+          {docs.filter(([, href]) => href).map(([label, href]) => (
+            <a key={label} href={href!} target="_blank" rel="noreferrer noopener">{label} ↗</a>
+          ))}
+          <a href={CLAUDE_URL} target="_blank" rel="noreferrer noopener">claude.ai ↗</a>
+          {packet && (
+            <button type="button" onClick={() => copyPrompt(packet.prompt)}>
+              {copied === 'ok' ? 'Copied prompt' : 'Copy prompt'}
+            </button>
+          )}
+        </nav>
+      )}
+      {packet && copied === 'failed' && <textarea readOnly rows={4} aria-label="Prompt" value={packet.prompt} />}
+      {problem?.kind === 'error' && (
+        <div className="error" role="alert">
+          <p>{problem.message}</p>
+          {problem.problems.length > 0 && <ul>{problem.problems.map((p) => <li key={p}>{p}</li>)}</ul>}
+        </div>
+      )}
       {check.state === 'failed' && (
         <div className="check-errors" role="alert">
-          <p><strong>Not saved.</strong> Fix these in the same chat:</p>
+          <p><strong>Not saved.</strong> Copy the fix prompt into the same chat; Claude fixes the Docs.</p>
           <ol aria-label="Problems">{check.errors.map((e, i) => <li key={i}>{e}</li>)}</ol>
-          <button type="button" onClick={copyFix}>{check.copied ? 'Copied fix message' : 'Copy fix message'}</button>
+          <button type="button" onClick={copyFix}>{check.copied ? 'Copied fix prompt' : 'Copy fix prompt'}</button>
         </div>
       )}
       {check.state === 'saved' && (
