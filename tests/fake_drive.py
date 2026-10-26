@@ -6,6 +6,7 @@ to DriveClient so uploads carry the file's bytes.
 
 import hashlib
 import itertools
+from datetime import datetime, timedelta, timezone
 import re
 from collections import Counter
 from pathlib import Path
@@ -59,6 +60,7 @@ class FakeFiles:
                 "id": f"id{next(self._d.ids)}", "name": body["name"], "mimeType": body.get("mimeType", ""),
                 "parents": list(body.get("parents", ["root"])), "trashed": False,
                 "appProperties": dict(body.get("appProperties", {})), "content": media_body,
+                "modifiedTime": self._d.tick(),
             }
             self._d.store[f["id"]] = f
             return self._d.public(f)
@@ -71,6 +73,7 @@ class FakeFiles:
             f = self._d.store[fileId]
             if media_body is not None:
                 f["content"] = media_body
+                f["modifiedTime"] = self._d.tick()
             return self._d.public(f)
         return _Req(run)
 
@@ -87,6 +90,16 @@ class FakeFiles:
         self._d.calls["get_media"] += 1
         return _Req(lambda: self._d.store[fileId]["content"])
 
+    def export(self, fileId, mimeType):
+        """The uploaded text as is (the fake doesn't convert formats)."""
+        self._d.calls["export"] += 1
+
+        def run():
+            if fileId not in self._d.store:
+                raise FakeNotFound(fileId)
+            return self._d.store[fileId]["content"]
+        return _Req(run)
+
 
 class FakeDrive:
     """A fake Drive service: `FakeDrive().files()` behaves like `service.files()`."""
@@ -96,6 +109,17 @@ class FakeDrive:
         self.calls: Counter = Counter()
         self.ids = itertools.count(1)
         self.corrupt_md5 = corrupt_md5
+        self._clock = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+    def tick(self) -> str:
+        """A new modifiedTime, one second after the last one."""
+        self._clock += timedelta(seconds=1)
+        return self._clock.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+    def edit(self, file_id: str, content: bytes) -> None:
+        """Change a file as if the user edited it in Drive."""
+        self.store[file_id]["content"] = content
+        self.store[file_id]["modifiedTime"] = self.tick()
 
     def files(self):
         return FakeFiles(self)

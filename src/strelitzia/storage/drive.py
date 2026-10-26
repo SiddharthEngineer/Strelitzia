@@ -32,7 +32,7 @@ SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 FOLDER_MIME = "application/vnd.google-apps.folder"
 PDF_MIME = "application/pdf"
 DOC_MIME = "application/vnd.google-apps.document"  # uploading HTML with this target type makes a Google Doc
-_FILE_FIELDS = "id, name, mimeType, parents, trashed, md5Checksum, webViewLink, appProperties"
+_FILE_FIELDS = "id, name, mimeType, parents, trashed, md5Checksum, webViewLink, appProperties, modifiedTime"
 # appProperties key prefix. Kept from before the rename (legacy): files already in Drive are tagged with it.
 PROP_PREFIX = "applypilot_"
 INSTALL_HINT = 'Install the Drive extra: pip install -e ".[drive]"'
@@ -297,14 +297,23 @@ def _html_media(html: str):
     return MediaIoBaseUpload(io.BytesIO(html.encode("utf-8")), mimetype="text/html", resumable=False)
 
 
+def _text_media(text: str, mime: str):
+    import io
+
+    from googleapiclient.http import MediaIoBaseUpload
+    return MediaIoBaseUpload(io.BytesIO(text.encode("utf-8")), mimetype=mime, resumable=False)
+
+
 class DriveClient:
     """Thin wrapper around a googleapiclient Drive v3 service (injectable for tests)."""
 
     def __init__(self, service, media_factory: Callable[[Path], object] | None = None,
-                 html_media_factory: Callable[[str], object] | None = None, conn=None, user_id: str | None = None):
+                 html_media_factory: Callable[[str], object] | None = None, conn=None, user_id: str | None = None,
+                 text_media_factory: Callable[[str, str], object] | None = None):
         self._service = service
         self._media = media_factory or _pdf_media
         self._html_media = html_media_factory or _html_media
+        self._text_media = text_media_factory or _text_media
         self._folders: dict[tuple[str, str], str] = {}
         # With a user, the root folder's id is cached in their user_drive row (drive_layout.cached_root_folder_id).
         self._conn, self._user_id = conn, user_id
@@ -431,28 +440,54 @@ class DriveClient:
         The existing Doc is `known_id` (if it is still there), else a same-named Doc in the folder; with the
         drive.file scope both can only be Docs this app created.
         """
+        return self._upsert_doc(folder_id, name, lambda: self._html_media(html), known_id)
+
+    def create_doc_from_text(self, folder_id: str, name: str, text: str, source_mime: str,
+                             known_id: str | None = None) -> DriveFile:
+        """Like upsert_doc, from markdown ("text/markdown") or plain text ("text/plain"); Google converts it to a Doc."""
+        return self._upsert_doc(folder_id, name, lambda: self._text_media(text, source_mime), known_id)
+
+    def _upsert_doc(self, folder_id: str, name: str, media: Callable[[], object], known_id: str | None) -> DriveFile:
         existing = None
         if known_id:
             meta = self._get(known_id)
             if meta and not meta.get("trashed") and meta.get("mimeType", DOC_MIME) == DOC_MIME:
                 existing = meta
         if existing is None:
-            found = self._list(f"name = {_q(name)} and mimeType = {_q(DOC_MIME)} and {_q(folder_id)} in parents "
-                               "and trashed = false")
-            existing = found[0] if found else None
+            existing = self.find_doc(folder_id, name)
         if existing:
             meta = self._service.files().update(
-                fileId=existing["id"], media_body=self._html_media(html), fields=_FILE_FIELDS,
+                fileId=existing["id"], media_body=media(), fields=_FILE_FIELDS,
             ).execute()
             created = False
         else:
             body = {"name": name, "parents": [folder_id], "mimeType": DOC_MIME}
             meta = self._service.files().create(
-                body=body, media_body=self._html_media(html), fields=_FILE_FIELDS,
+                body=body, media_body=media(), fields=_FILE_FIELDS,
             ).execute()
             created = True
         return DriveFile(id=meta["id"], url=meta.get("webViewLink", ""), md5=meta.get("md5Checksum"), created=created,
                          folder_id=folder_id)
+
+    def find_doc(self, folder_id: str, name: str) -> dict | None:
+        """A Google Doc named `name` in folder_id that isn't trashed, if any."""
+        found = self._list(f"name = {_q(name)} and mimeType = {_q(DOC_MIME)} and {_q(folder_id)} in parents "
+                           "and trashed = false")
+        return found[0] if found else None
+
+    def doc_meta(self, file_id: str) -> dict | None:
+        """id, name, modifiedTime, trashed and webViewLink of a file, or None if it is gone or not ours."""
+        meta = self._get(file_id)
+        if meta is None:
+            return None
+        return {k: meta.get(k) for k in ("id", "name", "modifiedTime", "trashed", "webViewLink")}
+
+    def export_text(self, file_id: str, mime: str) -> str:
+        """A Google Doc exported as text in `mime` ("text/markdown" or "text/plain")."""
+        data = self._service.files().export(fileId=file_id, mimeType=mime).execute()
+        if isinstance(data, bytes):
+            data = data.decode("utf-8")
+        return data.lstrip("\ufeff")
 
     def download(self, file_id: str, dest: Path) -> Path:
         data = self._service.files().get_media(fileId=file_id).execute()
