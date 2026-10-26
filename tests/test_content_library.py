@@ -365,3 +365,24 @@ class TestDocsExport:
 
     def test_headings_keep_hashes_inside_text(self):
         assert normalize_docs_markdown("## CURRENT ROLE — C# Dev ##") == "## CURRENT ROLE — C# Dev"
+
+    def test_dunder_names_are_not_bold(self):
+        line = "- **Tools/Actions:** Python __init__ hooks, __bold text__"
+        assert normalize_docs_markdown(line) == "- **Tools/Actions:** Python __init__ hooks, **bold text**"
+        assert normalize_docs_markdown(normalize_docs_markdown(line)) == normalize_docs_markdown(line)
+
+    def test_role_at_h1_with_projects_at_h3_and_partly_bold_headings(self):
+        text = textwrap.dedent("""\
+            # **CURRENT ROLE** — Engineer, Initech (2023–Present)
+
+            ### **Billing Revamp** (2023)
+
+            #### Details
+
+            * **Context:** Billing.
+            * **Angles:** BACKEND
+            """)
+        lib = parse_content_library_text(text)
+        [proj] = lib.roles[0].projects
+        assert lib.roles[0].title == "Engineer, Initech (2023–Present)" and proj.name == "Billing Revamp"
+        assert proj.context == "Billing." and proj.angles == ["BACKEND"]

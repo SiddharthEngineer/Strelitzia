@@ -228,25 +228,27 @@ _ROLE_TEXT = re.compile(r"^(CURRENT|PRIOR) ROLE\b")
 _LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
 # Backslash escapes in Drive's markdown export: \- \* \_ \# \. \( and so on.
 _ESCAPE = re.compile(r"\\([!-/:-@\[-`{-~])")
-_UNDERSCORE_BOLD = re.compile(r"(?<![\\\w])__(?=\S)(.+?)(?<=\S)__(?!\w)")
+# __bold__, but not a dunder name such as __init__ (a single word between the underscores).
+_UNDERSCORE_BOLD = re.compile(r"(?<![\\\w])__(?=\S)(?!\w+__)(.+?)(?<=\S)__(?!\w)")
 
 
 def _strip_bold(text: str) -> str:
-    m = re.fullmatch(r"(\*\*|__)(.+)\1", text)
-    return m.group(2).strip() if m else text
+    return _UNDERSCORE_BOLD.sub(r"\1", text).replace("**", "").strip()
 
 
 def normalize_docs_markdown(text: str) -> str:
     """Undo the quirks of a Google Doc's markdown export, so it parses like content_library.md.
 
     Handles `*` or `+` bullets, `\\` escapes, `__bold__`, blank lines between list items, bold heading text,
-    `**Field**:` with the colon outside the bold, and heading levels shifted by one (a role heading at `#` or
-    `###`; deeper headings are projects, and headings at or above the role level are sections).
+    `**Field**:` with the colon outside the bold, and shifted heading levels: a role heading at any level
+    becomes `##`, the first deeper level under it is projects (`###`), and headings at or above the role level are
+    sections (`##`).
     """
     text = text.replace("\r\n", "\n").replace("\u00a0", " ").lstrip("\ufeff")
     lines = text.split("\n")
     out: list[str] = []
     role_level: int | None = None
+    project_level: int | None = None
     for i, line in enumerate(lines):
         if not line.strip():
             prev = out[-1] if out else ""
@@ -259,9 +261,12 @@ def normalize_docs_markdown(text: str) -> str:
         if m:
             level, heading = len(m.group(1)), _strip_bold(_ESCAPE.sub(r"\1", m.group(2)))
             if _ROLE_TEXT.match(heading):
-                role_level, level = level, 2
+                role_level, project_level, level = level, None, 2
+            elif role_level is not None and level <= role_level:
+                level = 2
             elif role_level is not None:
-                level = 2 if level <= role_level else 3 + (level - role_level - 1)
+                project_level = project_level or level
+                level = 3 + max(level - project_level, 0)
             out.append("#" * level + " " + heading)
             continue
         line = re.sub(r"^(\s*)[*+](\s+)", r"\1-\2", line)

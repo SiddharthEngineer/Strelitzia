@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -147,8 +148,7 @@ def setup_profile_docs(client, conn, user_id: str, *, overwrite: bool) -> Profil
     for kind, name in PROFILE_DOCS.items():
         prev = getattr(docs, kind) or {}
         f = client.create_doc_from_text(folder_id, name, seed[kind], _MIME[kind], known_id=prev.get("id"))
-        meta = client.doc_meta(f.id) or {}
-        state = {"id": f.id, "url": f.url, "synced_at": _now(), "modified": meta.get("modifiedTime")}
+        state = {"id": f.id, "url": f.url, "synced_at": _now(), "modified": f.modified}
         _save_state(conn, user_id, kind, state)
         setattr(docs, kind, state)
     conn.commit()
@@ -176,15 +176,15 @@ def pull_profile(client, conn, user_id: str, *, is_owner: bool) -> SyncResult:
     metas: dict[str, dict] = {}
     for kind, name in PROFILE_DOCS.items():
         stored = getattr(docs, kind) or {}
-        meta = client.doc_meta(stored["id"]) if stored.get("id") else None
-        if not meta or meta.get("trashed"):
-            state = "isn't set up" if not stored.get("id") else "is in the trash" if meta else "is missing"
-            problems.append(f"The {name} Doc {state}.")
-            continue
         try:
+            meta = client.doc_meta(stored["id"]) if stored.get("id") else None
+            if not meta or meta.get("trashed"):
+                state = "isn't set up" if not stored.get("id") else "is in the trash" if meta else "is missing"
+                problems.append(f"The {name} Doc {state}.")
+                continue
             texts[kind] = client.export_text(meta["id"], _MIME[kind])
         except Exception as e:  # noqa: BLE001 -- any Drive error is reported, never raised
-            log.warning("Exporting the %s Doc failed: %s", name, e)
+            log.warning("Reading the %s Doc from Drive failed: %s", name, e)
             problems.append(f"The {name} Doc couldn't be read from Drive.")
             continue
         metas[kind] = meta
@@ -198,18 +198,29 @@ def pull_profile(client, conn, user_id: str, *, is_owner: bool) -> SyncResult:
     if problems:
         return SyncResult(ok=False, problems=problems, changed=False)
 
-    profile = load_profile(conn, user_id)
-    changed = (profile.content_library_md, profile.resume_text) != (texts["library"], texts["resume"])
-    profile.content_library_md, profile.resume_text = texts["library"], texts["resume"]
-    save_profile(conn, user_id, profile)
-    if is_owner:
-        for path, text in ((config.CONTENT_LIBRARY_PATH, texts["library"]), (config.RESUME_PATH, texts["resume"])):
+    # The owner's files are written to temporary files first, so a failed write leaves everything as it was.
+    files = [(config.CONTENT_LIBRARY_PATH, texts["library"]), (config.RESUME_PATH, texts["resume"])] if is_owner else []
+    staged = []
+    try:
+        for path, text in files:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text, encoding="utf-8")
-    synced_at = _now()
-    for kind in PROFILE_DOCS:
-        state = dict(getattr(docs, kind), synced_at=synced_at, modified=metas[kind].get("modifiedTime"))
-        state["url"] = metas[kind].get("webViewLink") or state.get("url", "")
-        _save_state(conn, user_id, kind, state)
-    conn.commit()
+            tmp = path.with_name(path.name + ".tmp")
+            tmp.write_text(text, encoding="utf-8")
+            staged.append((tmp, path))
+        profile = load_profile(conn, user_id)
+        changed = (profile.content_library_md, profile.resume_text) != (texts["library"], texts["resume"])
+        profile.content_library_md, profile.resume_text = texts["library"], texts["resume"]
+        synced_at = _now()
+        for kind in PROFILE_DOCS:
+            state = dict(getattr(docs, kind), synced_at=synced_at, modified=metas[kind].get("modifiedTime"))
+            state["url"] = metas[kind].get("webViewLink") or state.get("url", "")
+            _save_state(conn, user_id, kind, state)
+        save_profile(conn, user_id, profile)  # commits the sync state with it
+    except BaseException:
+        conn.rollback()
+        for tmp, _ in staged:
+            tmp.unlink(missing_ok=True)
+        raise
+    for tmp, path in staged:
+        os.replace(tmp, path)
     return SyncResult(ok=True, problems=[], changed=changed)

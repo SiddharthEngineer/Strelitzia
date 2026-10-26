@@ -52,6 +52,7 @@ class DriveFile:
     md5: str | None
     created: bool
     folder_id: str | None = None  # the job's leaf folder (company/role/date)
+    modified: str | None = None  # Drive's modifiedTime
 
 
 def _q(value: str) -> str:
@@ -291,10 +292,7 @@ def _pdf_media(path: Path):
 
 
 def _html_media(html: str):
-    import io
-
-    from googleapiclient.http import MediaIoBaseUpload
-    return MediaIoBaseUpload(io.BytesIO(html.encode("utf-8")), mimetype="text/html", resumable=False)
+    return _text_media(html, "text/html")
 
 
 def _text_media(text: str, mime: str):
@@ -467,7 +465,7 @@ class DriveClient:
             ).execute()
             created = True
         return DriveFile(id=meta["id"], url=meta.get("webViewLink", ""), md5=meta.get("md5Checksum"), created=created,
-                         folder_id=folder_id)
+                         folder_id=folder_id, modified=meta.get("modifiedTime"))
 
     def find_doc(self, folder_id: str, name: str) -> dict | None:
         """A Google Doc named `name` in folder_id that isn't trashed, if any."""
@@ -476,10 +474,16 @@ class DriveClient:
         return found[0] if found else None
 
     def doc_meta(self, file_id: str) -> dict | None:
-        """id, name, modifiedTime, trashed and webViewLink of a file, or None if it is gone or not ours."""
-        meta = self._get(file_id)
-        if meta is None:
-            return None
+        """id, name, modifiedTime, trashed and webViewLink of a file, or None if it is gone or not ours (404).
+
+        Any other Drive error (auth, 5xx, network) is raised, so a failing Drive isn't mistaken for a deleted Doc.
+        """
+        try:
+            meta = self._service.files().get(fileId=file_id, fields=_FILE_FIELDS).execute()
+        except Exception as e:
+            if getattr(getattr(e, "resp", None), "status", None) == 404:
+                return None
+            raise
         return {k: meta.get(k) for k in ("id", "name", "modifiedTime", "trashed", "webViewLink")}
 
     def export_text(self, file_id: str, mime: str) -> str:
