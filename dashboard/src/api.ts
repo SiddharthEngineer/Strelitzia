@@ -1,16 +1,16 @@
 // Typed fetch helpers for the dashboard API (<base>/api, e.g. /strelitzia/dashboard/api). Mutating calls send `X-Strelitzia: 1` (the server's CSRF check).
 import type {
-  AddJobInput, AddJobResult, AuthMe, ClaudeSetup, Contact, ContactFields, ContactListItem, ContactWithJobs,
+  AddJobInput, AddJobResult, AuthMe, ClaudeSetup, Contact, DraftCheckOutcome, ContactFields, ContactListItem, ContactWithJobs,
   Facets, Interview, ImportResult, InterviewFields, JobDetail, JobList, JobQuery, PacketResult, PanelGradeOutcome,
-  PanelMode, PanelOverview, PanelRun, PanelWinner, PasteOutcome, Preferences, PreferencesResponse, ProfileResponse,
-  ProfileSave, ReassessPreview, ReassessScope, Relation, RescoreAllResult, RescorePreview, ResumeUploadResult,
-  SavePreferencesResult, Task, UserStatus,
+  PanelMode, PanelOverview, PanelRun, PanelWinner, Preferences, PreferencesResponse, ProfileDocsSetupOutcome,
+  ProfileResponse, ProfileSave, ProfileSyncResult, ReassessPreview, ReassessScope, Relation, RescoreAllResult,
+  RescorePreview, SavePreferencesResult, Task, UserStatus,
 } from './types';
 
 export const API_BASE = `${import.meta.env.BASE_URL}api`;
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public body: unknown = null) {
     super(message);
     this.name = 'ApiError';
   }
@@ -41,7 +41,8 @@ export function onUnauthorized(listener: UnauthorizedListener | null): void {
 
 async function failure(res: Response): Promise<ApiError> {
   if (res.status === 401) unauthorized?.();
-  return new ApiError(res.status, await errorMessage(res));
+  const body = await res.clone().json().catch(() => null);
+  return new ApiError(res.status, await errorMessage(res), body);
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -94,17 +95,16 @@ export function patchJob(key: string, patch: { submitted_at?: string; notes?: st
   return request<JobDetail>(`/jobs/${encodeURIComponent(key)}`, { method: 'PATCH', body: JSON.stringify(patch) });
 }
 
-/** Write the job's Claude packet (a Google Doc when Drive is set up) and get the prompt to paste in Claude. */
+/** Write the job's Claude packet and draft Docs to Drive and get the prompt to paste in Claude (409 without Drive). */
 export function openPacket(key: string): Promise<PacketResult> {
   return request<PacketResult>(`/jobs/${encodeURIComponent(key)}/packet`, { method: 'POST' });
 }
 
-/** Check and save a pasted Claude reply: ok with the saved draft, or not ok with the errors and a fix message. */
-export async function pasteResult(key: string, text: string): Promise<PasteOutcome> {
-  const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(key)}/result`, {
+/** Check & format the job's draft Docs: ok with the saved draft, or not ok with the errors and a fix prompt. */
+export async function checkDrafts(key: string): Promise<DraftCheckOutcome> {
+  const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(key)}/drafts/check`, {
     method: 'POST',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Strelitzia': '1' },
-    body: JSON.stringify({ text }),
+    headers: { Accept: 'application/json', 'X-Strelitzia': '1' },
   });
   if (res.status === 422) {
     const body = await res.clone().json().catch(() => null);
@@ -120,9 +120,24 @@ export function getClaudeSetup(signal?: AbortSignal): Promise<ClaudeSetup> {
   return request<ClaudeSetup>('/claude/setup', { signal });
 }
 
-/** Write (or refresh) the rules and content-library Docs in Drive. */
-export function publishClaudeDocs(): Promise<ClaudeSetup> {
-  return request<ClaudeSetup>('/claude/docs', { method: 'POST' });
+/** Create the Profile Docs in Drive. Without `overwrite`, existing Docs come back as `existing` (nothing changed). */
+export async function setupProfileDocs(overwrite: boolean): Promise<ProfileDocsSetupOutcome> {
+  try {
+    const profile = await request<ProfileResponse>('/profile/docs/setup', {
+      method: 'POST', body: JSON.stringify({ overwrite }),
+    });
+    return { ok: true, profile };
+  } catch (err) {
+    const existing = err instanceof ApiError && err.status === 409
+      ? (err.body as { existing?: unknown } | null)?.existing : undefined;
+    if (Array.isArray(existing)) return { ok: false, existing: existing.map(String) };
+    throw err;
+  }
+}
+
+/** Pull the Profile Docs now. */
+export function syncProfileDocs(): Promise<ProfileSyncResult> {
+  return request<ProfileSyncResult>('/profile/docs/sync', { method: 'POST' });
 }
 
 /** Forget the user's Google Drive token (their files stay in their Drive). */
@@ -320,17 +335,3 @@ export function saveProfile(profile: ProfileSave): Promise<ProfileResponse> {
   return request<ProfileResponse>('/profile', { method: 'PUT', body: JSON.stringify(profile) });
 }
 
-/** Upload a PDF or DOCX resume: it's stored, and the answer holds Claude's draft for the empty profile fields. */
-export async function uploadResume(file: File): Promise<ResumeUploadResult> {
-  const form = new FormData();
-  form.append('file', file);
-  const res = await fetch(`${API_BASE}/profile/resume`, {
-    method: 'POST',
-    headers: { Accept: 'application/json', 'X-Strelitzia': '1' },
-    body: form,
-  });
-  if (!res.ok) throw await failure(res);
-  return (await res.json()) as ResumeUploadResult;
-}
-
-export const RESUME_DOWNLOAD_URL = `${API_BASE}/profile/resume`;

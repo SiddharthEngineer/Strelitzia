@@ -47,6 +47,7 @@ def test_panel_summary_counts_and_due(client, conn):
     assert body["comparable"] == {"latest_vs_previous": 0, "rules_a_vs_b": 0}
     assert body["project_name"] == "Strelitzia Panel" and "not_met" in body["rubric"]["text"]
     assert body["rubric"]["url"] is None
+    assert body["rubric_markdown"] == panel.rubric_markdown() and body["rubric_url"].endswith("/api/panel/rubric.md")
     _seed(conn)
     body = client.get("/strelitzia/dashboard/api/panel").json()
     assert body["due"] == "no panel has been run yet"
@@ -121,3 +122,9 @@ def test_another_users_panel_run_is_404(client, conn, monkeypatch):
     assert page["runs"] == [] and page["comparable"] == {"latest_vs_previous": 0, "rules_a_vs_b": 0}
     assert client.post("/strelitzia/dashboard/api/panel/runs", json={"n": N}).status_code == 409
     assert panel.grades(conn, users.owner(conn).id, run["id"]) == {}
+
+
+def test_rubric_download(client):
+    r = client.get("/strelitzia/dashboard/api/panel/rubric.md")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/markdown")
+    assert "not_met" in r.text and "Strelitzia%20panel%20rubric.md" in r.headers["content-disposition"]

@@ -82,9 +82,26 @@ def claude_folder_path() -> list[str]:
     return [root_folder(), CLAUDE_FOLDER]
 
 
+PROFILE_FOLDER = "Profile"
+# The Profile Docs (profile_sync): the source of truth for the content library and the base resume.
+PROFILE_DOCS = {"library": "Strelitzia content library", "resume": "Strelitzia base resume"}
+
+
+def profile_folder_path() -> list[str]:
+    return [root_folder(), PROFILE_FOLDER]
+
+
 def packet_folder_path(job: dict) -> list[str]:
     """The job's folder for its Claude packet Doc (next to the resume)."""
     return folder_path(job, "resume")
+
+
+DRAFT_LABELS = {"resume": "Resume draft", "cover": "Cover letter draft"}
+
+
+def draft_name(job: dict, kind: str) -> str:
+    """The job's draft Doc name: "<Company> - <Role> - Resume draft" (kind "resume" or "cover")."""
+    return f"{clean_name(job_company(job), 40)} - {clean_name(job.get('title'), 60)} - {DRAFT_LABELS[kind]}"
 
 
 def file_name(job: dict, kind: str, suffix: str = "") -> str:

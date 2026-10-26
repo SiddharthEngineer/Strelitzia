@@ -64,13 +64,12 @@ def test_upsert_doc_prefers_the_known_id_and_skips_trashed(drive, client):
 
 def test_static_docs_are_written_once_and_skip_unchanged(drive, client, conn):
     urls = wb.publish_static_docs(client, conn, users.owner(conn).id, inputs())
-    assert set(urls) == {"rules", "library", "panel_rubric"} and all(urls.values())
+    assert set(urls) == {"rules", "panel_rubric"} and all(urls.values())  # the library is a Profile Doc now
     docs = {d["name"]: d for d in _docs(drive)}
-    assert set(docs) == {"Strelitzia rules", "Strelitzia content library", "Strelitzia panel rubric"}
+    assert set(docs) == {"Strelitzia rules", "Strelitzia panel rubric"}
     for d in docs.values():
         assert drive.path_of(d["id"]) == ["Strelitzia", "_Claude", d["name"]]
-    assert b"notes_for_user" in docs["Strelitzia rules"]["content"]  # the schema is in the rules Doc
-    assert b"orders-pipeline" in docs["Strelitzia content library"]["content"]
+    assert b"## Notes for me" in docs["Strelitzia rules"]["content"]  # the draft format is in the rules Doc
     assert b"not_met" in docs["Strelitzia panel rubric"]["content"]
 
     calls = dict(drive.calls)
@@ -90,21 +89,19 @@ def test_static_docs_are_per_user_and_the_old_ones_are_the_owners(drive, client,
     assert wb.published_static_docs(conn, me) == {"rules": {"id": "old", "url": "u", "hash": "h"}}
     assert wb.published_static_docs(conn, other) == {}
     wb.publish_static_docs(client, conn, other, inputs())
-    assert set(wb.published_static_docs(conn, other)) == {"rules", "library", "panel_rubric"}
+    assert set(wb.published_static_docs(conn, other)) == {"rules", "panel_rubric"}
     assert wb.published_static_docs(conn, me)["rules"]["id"] == "old"
 
 
-def test_static_docs_update_only_the_changed_one(drive, client, conn):
+def test_static_docs_dont_depend_on_the_library(drive, client, conn):
     wb.publish_static_docs(client, conn, users.owner(conn).id, inputs())
     changed = inputs()
     changed.base_resume_text += "\nCertifications: none\n"
     wb.publish_static_docs(client, conn, users.owner(conn).id, changed)
-    assert drive.calls["update"] == 1 and len(_docs(drive)) == 3
-    lib = next(d for d in _docs(drive) if d["name"] == "Strelitzia content library")
-    assert b"Certifications" in lib["content"]
+    assert drive.calls["update"] == 0 and len(_docs(drive)) == 2
 
     wb.publish_static_docs(client, conn, users.owner(conn).id, changed, force=True)
-    assert drive.calls["update"] == 4 and len(_docs(drive)) == 3
+    assert drive.calls["update"] == 2 and len(_docs(drive)) == 2
 
 
 def test_publish_packet_writes_the_job_folder_and_records_the_doc(drive, client, conn):

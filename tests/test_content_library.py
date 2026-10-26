@@ -11,6 +11,7 @@ from strelitzia.scoring.content_library import (
     _parse_dates,
     _parse_project,
     parse_content_library,
+    normalize_docs_markdown,
     parse_content_library_text,
 )
 
@@ -322,3 +323,66 @@ class TestStoredLibrary:
             assert got.fixed["education"] == [{"heading": "Example University", "dates": "2020", "bullets": []}]
         finally:
             close_connection(tmp_path / "t.db")
+
+
+# ── Google Docs markdown export (profile-docs-1-sync Task 2) ──────────────
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+class TestDocsExport:
+    def test_export_parses_like_the_markdown_file(self):
+        plain = parse_content_library(FIXTURES / "content_library_sample.md")
+        docs = parse_content_library(FIXTURES / "content_library_docs_export.md")
+        assert len(plain.roles) == 2 and sum(len(r.projects) for r in plain.roles) == 4
+        assert docs.roles == plain.roles
+        assert docs.all_angles == plain.all_angles == {"PIPELINE", "DEVOPS", "DATA-QUALITY", "ML"}
+
+    def test_normalize_leaves_the_markdown_file_alone(self):
+        text = (FIXTURES / "content_library_sample.md").read_text(encoding="utf-8")
+        assert normalize_docs_markdown(text) == text
+
+    def test_roles_one_level_deeper(self):
+        text = textwrap.dedent("""\
+            ## README
+
+            ### CURRENT ROLE — Engineer, Initech (2023–Present)
+
+            #### Billing Revamp (2023)
+
+            + **Context:** Billing\\_v2 \\#rewrite\\.
+            + **Angles:** BACKEND\\, PAYMENTS
+
+            ## Notes
+
+            ### Not a project
+            """)
+        lib = parse_content_library_text(text)
+        assert [r.title for r in lib.roles] == ["Engineer, Initech (2023–Present)"]
+        [proj] = lib.roles[0].projects
+        assert proj.name == "Billing Revamp" and proj.context == "Billing_v2 #rewrite."
+        assert proj.angles == ["BACKEND", "PAYMENTS"]
+
+    def test_headings_keep_hashes_inside_text(self):
+        assert normalize_docs_markdown("## CURRENT ROLE — C# Dev ##") == "## CURRENT ROLE — C# Dev"
+
+    def test_dunder_names_are_not_bold(self):
+        line = "- **Tools/Actions:** Python __init__ hooks, __bold text__"
+        assert normalize_docs_markdown(line) == "- **Tools/Actions:** Python __init__ hooks, **bold text**"
+        assert normalize_docs_markdown(normalize_docs_markdown(line)) == normalize_docs_markdown(line)
+
+    def test_role_at_h1_with_projects_at_h3_and_partly_bold_headings(self):
+        text = textwrap.dedent("""\
+            # **CURRENT ROLE** — Engineer, Initech (2023–Present)
+
+            ### **Billing Revamp** (2023)
+
+            #### Details
+
+            * **Context:** Billing.
+            * **Angles:** BACKEND
+            """)
+        lib = parse_content_library_text(text)
+        [proj] = lib.roles[0].projects
+        assert lib.roles[0].title == "Engineer, Initech (2023–Present)" and proj.name == "Billing Revamp"
+        assert proj.context == "Billing." and proj.angles == ["BACKEND"]

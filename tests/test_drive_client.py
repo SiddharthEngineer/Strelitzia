@@ -6,8 +6,8 @@ import sys
 import pytest
 from fake_drive import FakeDrive, fake_media
 
-from strelitzia.storage.drive import DriveClient, DriveNotConfigured, file_md5, load_credentials
-from strelitzia.storage.drive_layout import drive_target
+from strelitzia.storage.drive import DOC_MIME, DriveClient, DriveNotConfigured, file_md5, load_credentials
+from strelitzia.storage.drive_layout import PROFILE_DOCS, drive_target, profile_folder_path
 
 JOB = {"url": "https://example.com/jobs/1", "title": "Data Engineer", "site": "indeed", "company": "Acme",
        "tailored_at": "2026-09-30T12:00:00"}
@@ -283,3 +283,56 @@ def test_legacy_import_waits_for_token_key(conn, monkeypatch, tmp_path):
     from cryptography.fernet import Fernet
     monkeypatch.setenv("STRELITZIA_TOKEN_KEY", Fernet.generate_key().decode())
     assert import_legacy_token(conn) is True
+
+
+# -- Profile Docs (profile-docs-1-sync Task 1) ---------------------------------
+
+def _text_client(drive):
+    return DriveClient(drive, text_media_factory=lambda text, mime: text.encode("utf-8"))
+
+
+def test_create_doc_from_text_then_export(drive):
+    client = _text_client(drive)
+    folder = client.ensure_folder_path(profile_folder_path())
+    doc = client.create_doc_from_text(folder, PROFILE_DOCS["library"], "## CURRENT ROLE\n", "text/markdown")
+    assert doc.created and drive.store[doc.id]["mimeType"] == DOC_MIME
+    assert drive.path_of(doc.id)[-2:] == ["Profile", "Strelitzia content library"]
+    assert client.export_text(doc.id, "text/markdown") == "## CURRENT ROLE\n"
+
+
+def test_create_doc_from_text_updates_in_place(drive):
+    client = _text_client(drive)
+    folder = client.ensure_folder_path(profile_folder_path())
+    first = client.create_doc_from_text(folder, PROFILE_DOCS["resume"], "v1", "text/plain")
+    before = client.doc_meta(first.id)["modifiedTime"]
+    by_id = client.create_doc_from_text(folder, PROFILE_DOCS["resume"], "v2", "text/plain", known_id=first.id)
+    by_name = _text_client(drive).create_doc_from_text(folder, PROFILE_DOCS["resume"], "v3", "text/plain")
+    assert by_id.id == by_name.id == first.id and not by_id.created and not by_name.created
+    assert client.export_text(first.id, "text/plain") == "v3"
+    assert client.doc_meta(first.id)["modifiedTime"] > before
+    assert len([f for f in drive.store.values() if f["mimeType"] == DOC_MIME]) == 1
+
+
+def test_doc_meta_on_trashed_and_missing_files(drive):
+    client = _text_client(drive)
+    folder = client.ensure_folder_path(profile_folder_path())
+    doc = client.create_doc_from_text(folder, PROFILE_DOCS["library"], "x", "text/markdown")
+    drive.store[doc.id]["trashed"] = True
+    meta = client.doc_meta(doc.id)
+    assert meta["trashed"] is True and meta["name"] == PROFILE_DOCS["library"] and meta["modifiedTime"]
+    assert client.doc_meta("nope") is None
+    again = client.create_doc_from_text(folder, PROFILE_DOCS["library"], "y", "text/markdown", known_id=doc.id)
+    assert again.created and again.id != doc.id
+
+
+def test_doc_meta_raises_drive_errors_other_than_404(drive, monkeypatch):
+    client = _text_client(drive)
+
+    class Boom(Exception):
+        resp = type("R", (), {"status": 500})()
+
+    def get(*a, **kw):
+        raise Boom("server error")
+    monkeypatch.setattr(type(drive.files()), "get", get)
+    with pytest.raises(Boom):
+        client.doc_meta("id1")

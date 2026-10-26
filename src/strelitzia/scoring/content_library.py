@@ -223,9 +223,62 @@ def parse_content_library(path: str | Path) -> ContentLibrary:
     return parse_content_library_text(Path(path).read_text(encoding="utf-8"))
 
 
+_HEADING = re.compile(r"^(#{1,6})\s+(.*?)(?:\s+#+)?\s*$")
+_ROLE_TEXT = re.compile(r"^(CURRENT|PRIOR) ROLE\b")
+_LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
+# Backslash escapes in Drive's markdown export: \- \* \_ \# \. \( and so on.
+_ESCAPE = re.compile(r"\\([!-/:-@\[-`{-~])")
+# __bold__, but not a dunder name such as __init__ (a single word between the underscores).
+_UNDERSCORE_BOLD = re.compile(r"(?<![\\\w])__(?=\S)(?!\w+__)(.+?)(?<=\S)__(?!\w)")
+
+
+def _strip_bold(text: str) -> str:
+    return _UNDERSCORE_BOLD.sub(r"\1", text).replace("**", "").strip()
+
+
+def normalize_docs_markdown(text: str) -> str:
+    """Undo the quirks of a Google Doc's markdown export, so it parses like content_library.md.
+
+    Handles `*` or `+` bullets, `\\` escapes, `__bold__`, blank lines between list items, bold heading text,
+    `**Field**:` with the colon outside the bold, and shifted heading levels: a role heading at any level
+    becomes `##`, the first deeper level under it is projects (`###`), and headings at or above the role level are
+    sections (`##`).
+    """
+    text = text.replace("\r\n", "\n").replace("\u00a0", " ").lstrip("\ufeff")
+    lines = text.split("\n")
+    out: list[str] = []
+    role_level: int | None = None
+    project_level: int | None = None
+    for i, line in enumerate(lines):
+        if not line.strip():
+            prev = out[-1] if out else ""
+            nxt = next((x for x in lines[i + 1:] if x.strip()), "")
+            if _LIST_ITEM.match(prev) and _LIST_ITEM.match(nxt):
+                continue
+            out.append("")
+            continue
+        m = _HEADING.match(line)
+        if m:
+            level, heading = len(m.group(1)), _strip_bold(_ESCAPE.sub(r"\1", m.group(2)))
+            if _ROLE_TEXT.match(heading):
+                role_level, project_level, level = level, None, 2
+            elif role_level is not None and level <= role_level:
+                level = 2
+            elif role_level is not None:
+                project_level = project_level or level
+                level = 3 + max(level - project_level, 0)
+            out.append("#" * level + " " + heading)
+            continue
+        line = re.sub(r"^(\s*)[*+](\s+)", r"\1-\2", line)
+        line = _UNDERSCORE_BOLD.sub(r"**\1**", line)
+        line = re.sub(r"^(\s*-\s+)\*\*([^*]+?)\*\*:", r"\1**\2:**", line)
+        out.append(_ESCAPE.sub(r"\1", line))
+    return "\n".join(out)
+
+
 def parse_content_library_text(content: str) -> ContentLibrary:
-    """Parse content_library.md's text (as stored in a user's profile) into structured data."""
-    lines = content.splitlines()
+    """Parse content_library.md's text (as stored in a user's profile, or a Docs markdown export) into structured data."""
+    lines = normalize_docs_markdown(content).splitlines()
 
     # Find where role sections start (skip README section)
     first_role_idx = None

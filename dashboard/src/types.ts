@@ -157,6 +157,8 @@ export interface JobLinks {
   resume: string | null;
   cover_letter: string | null;
   packet?: string | null;
+  resume_draft?: string | null;
+  cover_draft?: string | null;
   // Local draft files served by the API (left out once the PDF has moved to Drive).
   resume_pdf?: string;
   resume_docx?: string;
@@ -177,30 +179,24 @@ export interface DraftHistoryEntry {
 }
 
 /** POST /jobs/{key}/packet */
+/** POST /jobs/{key}/packet: the packet and the two draft Docs in the job's Drive folder, and the prompt. */
 export interface PacketResult {
   prompt: string;
-  doc_url: string | null;
-  inline: boolean; // no Drive: the prompt carries the whole packet
+  doc_url: string;
   rules_version: string;
-  drive_error?: string | null;
+  resume_draft_url: string | null;
+  cover_draft_url: string | null;
 }
 
-/** POST /jobs/{key}/result on success */
+/** POST /jobs/{key}/drafts/check on success */
 export interface ImportResult {
   outcome: { draft_version: number; warnings: string[]; coverage: Coverage; unmet: string[] };
   job: JobDetail;
 }
 
-export type PasteOutcome =
+export type DraftCheckOutcome =
   | ({ ok: true } & ImportResult)
   | { ok: false; errors: string[]; warnings: string[]; fix_prompt: string };
-
-export interface ClaudeDoc {
-  kind: 'rules' | 'library';
-  name: string;
-  url: string | null;
-  changed_at: string | null;
-}
 
 /** GET /claude/setup */
 export interface ClaudeSetup {
@@ -211,9 +207,25 @@ export interface ClaudeSetup {
   /** Where Connect Google Drive goes (a full-page redirect to Google), or null when the server can't offer it. */
   connect_url: string | null;
   rules_version: string;
-  docs: ClaudeDoc[];
+  /** The rules as the .md file for the project's knowledge (first line "Rules version: <v>"). */
+  rules_markdown: string;
+  /** Where "Download rules (.md)" points. */
+  rules_url: string;
+  /** The user's Profile Docs, or null before setup. */
+  profile_docs: ProfileDocs | null;
   project_name: string;
   project_instructions: string;
+}
+
+/** One Profile Doc in Drive (Strelitzia/Profile/) and when the app last pulled it. */
+export interface ProfileDocLink {
+  url: string | null;
+  synced_at: string | null;
+}
+
+export interface ProfileDocs {
+  library: ProfileDocLink | null;
+  resume: ProfileDocLink | null;
 }
 
 export interface JobDetail {
@@ -259,6 +271,8 @@ export interface JobDetail {
   notes_for_user?: string;
   draft_history?: DraftHistoryEntry[];
   packet_doc_url?: string | null;
+  resume_draft_url?: string | null;
+  cover_draft_url?: string | null;
 }
 
 export interface Criterion<V = unknown> {
@@ -435,6 +449,9 @@ export interface PanelOverview {
   project_name: string;
   project_instructions: string;
   rubric: { name: string; url: string | null; text: string };
+  rubric_markdown: string;
+  /** Where "Download rubric (.md)" points. */
+  rubric_url: string;
 }
 
 export interface PanelSideStats {
@@ -534,14 +551,20 @@ export interface ProfileResponse {
   content_library_md: string;
   /** Why the workbench can't use the content library, or null. */
   content_library_error: string | null;
+  /** The Profile Docs (the content library and base resume live there), or null before setup. */
+  profile_docs: ProfileDocs | null;
   options: { education_level: string[] };
 }
 
-/** PUT /profile: the fields plus the content library. */
-export type ProfileSave = ProfileFields & { content_library_md: string };
+/** PUT /profile: the fields (the content library and resume are edited in the Profile Docs). */
+export type ProfileSave = ProfileFields;
 
-/** POST /profile/resume: the stored resume, and Claude's draft for the fields that were empty (not saved yet). */
-export interface ResumeUploadResult extends ProfileResponse {
-  draft: Partial<ProfileFields>;
-  parse_error: string | null;
+/** POST /profile/docs/sync: the pull's outcome (problems mean nothing was saved) and the profile. */
+export interface ProfileSyncResult extends ProfileResponse {
+  ok: boolean;
+  problems: string[];
+  changed: boolean;
 }
+
+/** POST /profile/docs/setup: done, or the names of the Docs it would overwrite. */
+export type ProfileDocsSetupOutcome = { ok: true; profile: ProfileResponse } | { ok: false; existing: string[] };

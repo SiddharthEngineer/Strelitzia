@@ -10,7 +10,7 @@ from strelitzia import tracking, users
 from strelitzia.database import init_db
 from strelitzia.scoring import pdf as pdf_mod
 from strelitzia.scoring import workbench as wb
-from workbench_helpers import add_job_row, fake_render_pdf, good_result, inputs, reply
+from workbench_helpers import add_job_row, fake_render_pdf, good_result, inputs
 
 
 @pytest.fixture
@@ -23,43 +23,19 @@ def _no_chromium(monkeypatch):
     monkeypatch.setattr(pdf_mod, "render_pdf", fake_render_pdf)
 
 
-def _import(conn, tmp_path, data_or_text, **job_overrides):
+def _import(conn, tmp_path, data, **job_overrides):
     job = add_job_row(conn, **job_overrides) if not conn.execute("SELECT 1 FROM jobs").fetchone() else \
         dict(conn.execute("SELECT * FROM jobs").fetchone())
-    text = data_or_text if isinstance(data_or_text, str) else reply(data_or_text)
-    return wb.import_result(conn, job, text, inputs=inputs(), out_dir=tmp_path / "out")
-
-
-# ── extract_result ──
-
-def test_extract_takes_the_last_json_block_with_prose_around():
-    old, new = good_result(), good_result(headline="Second version")
-    text = "First try:\n```json\n" + json.dumps(old) + "\n```\nThen I changed it.\n" + reply(new) + "\nDone!"
-    assert wb.extract_result(text)["resume"]["headline"] == "Second version"
-
-
-def test_extract_accepts_bare_json():
-    assert wb.extract_result(json.dumps(good_result()))["strelitzia"] == 1
-
-
-def test_extract_errors_are_clear():
-    with pytest.raises(ValueError, match="No ```json block"):
-        wb.extract_result("Sure, here is your resume!")
-    with pytest.raises(ValueError, match="isn't valid JSON"):
-        wb.extract_result('```json\n{"strelitzia": 1,,}\n```')
-    with pytest.raises(ValueError, match='missing "resume"'):
-        wb.extract_result('```json\n{"strelitzia": 1, "cover_letter": null}\n```')
-    with pytest.raises(ValueError, match="Nothing was pasted"):
-        wb.extract_result("  ")
+    return wb.import_data(conn, job, data, inputs=inputs(), out_dir=tmp_path / "out")
 
 
 # ── checks ──
 
-def test_invalid_json_gives_errors_and_fix_prompt(conn, tmp_path):
-    out = _import(conn, tmp_path, "```json\n{not json}\n```")
-    assert not out.ok and "isn't valid JSON" in out.errors[0]
-    assert out.fix_prompt.startswith("These problems were found:\n1. ")
-    assert out.fix_prompt.endswith("Keep everything else the same and reply with the corrected JSON.")
+def test_check_errors_give_a_fix_prompt(conn, tmp_path):
+    data = good_result()
+    data["resume"]["skills"].append({"category": "Cloud", "items": "Kubernetes"})
+    out = _import(conn, tmp_path, data)
+    assert not out.ok and out.fix_prompt.startswith("These problems were found:\n1. ")
 
 
 def test_unevidenced_skill_in_a_bullet_is_an_error(conn, tmp_path):
@@ -136,7 +112,7 @@ def test_cover_letter_may_use_numbers_from_the_posting(conn, tmp_path):
 def test_jobs_with_the_same_site_and_title_keep_separate_files(conn, tmp_path):
     a = _import(conn, tmp_path, good_result())
     b_job = add_job_row(conn, url="https://example.com/jobs/43", job_key="fed987cba654")
-    b = wb.import_result(conn, b_job, reply(good_result(headline="Data engineer for Airflow pipelines")),
+    b = wb.import_data(conn, b_job, good_result(headline="Data engineer for Airflow pipelines"),
                          inputs=inputs(), out_dir=tmp_path / "out")
     assert a.ok and b.ok
     assert a.files["resume"] != b.files["resume"] and a.files["resume_docx"] != b.files["resume_docx"]
@@ -156,7 +132,7 @@ def test_slug_role_count_wording_checks(conn, tmp_path):
     assert "at most 230" in joined
     bad_slug = good_result()
     bad_slug["resume"]["roles"][1]["bullets"][0]["project_ids"] = ["orders-pipeline"]
-    out = wb.import_result(conn, dict(conn.execute("SELECT * FROM jobs").fetchone()), reply(bad_slug),
+    out = wb.import_data(conn, dict(conn.execute("SELECT * FROM jobs").fetchone()), bad_slug,
                            inputs=inputs(), out_dir=tmp_path / "out")
     assert "does not belong to role 'data-analyst-intern-globex'" in out.errors[0]
 
@@ -190,7 +166,7 @@ def test_valid_result_writes_files_and_bumps_the_version(conn, tmp_path):
     assert wb.current_result(row)["resume"]["headline"] == sidecar["headline"]
 
     second = good_result(headline="Data engineer for Airflow pipelines")
-    out2 = wb.import_result(conn, row, reply(second), inputs=inputs(), out_dir=tmp_path / "out")
+    out2 = wb.import_data(conn, row, second, inputs=inputs(), out_dir=tmp_path / "out")
     assert out2.ok and out2.draft_version == 2
     assert conn.execute("SELECT draft_version FROM jobs").fetchone()[0] == 2
 
@@ -228,10 +204,96 @@ def test_a_draft_is_the_jobs_users_only(conn, tmp_path):
     conn.execute("INSERT INTO jobs (user_id, url, title, job_key) VALUES (?, ?, 'Theirs', 'theirs')",
                  (other, mine["url"]))
     conn.commit()
-    out = wb.import_result(conn, mine, reply(copy.deepcopy(good_result())), inputs=inputs(), out_dir=tmp_path / "out")
+    out = wb.import_data(conn, mine, copy.deepcopy(good_result()), inputs=inputs(), out_dir=tmp_path / "out")
     assert out.ok
     assert [tuple(r) for r in conn.execute("SELECT user_id, version FROM drafts").fetchall()] == [(mine["user_id"], 1)]
     theirs = dict(conn.execute("SELECT * FROM jobs WHERE user_id = ?", (other,)).fetchone())
     assert theirs["draft_version"] is None and theirs["user_status"] is None
     assert tracking.status_events(conn, other, mine["url"]) == []
     assert len(tracking.status_events(conn, mine["user_id"], mine["url"])) == 1
+
+
+# ── Rules version (profile-docs-2-api Task 3) ──
+
+def test_rules_markdown_starts_with_the_version_line():
+    text = wb.rules_markdown()
+    assert text.splitlines()[0] == f"Rules version: {wb.RULES_VERSION}"
+    assert "Rules version: <the version at the top of this file>" in text and wb.rules_text() in text
+    assert wb.rules_file_name() == f"Strelitzia rules {wb.RULES_VERSION}.md"
+
+
+@pytest.mark.parametrize("used, warned", [(wb.RULES_VERSION, None), (None, "didn't say"), ("0ld0ld00", "0ld0ld00")])
+def test_rules_version_warning(conn, tmp_path, used, warned):
+    data = good_result()
+    if used:
+        data["rules_version"] = used
+    outcome = _import(conn, tmp_path, data)
+    assert outcome.ok, outcome.errors
+    found = [w for w in outcome.warnings if "rules" in w and wb.RULES_VERSION in w]
+    if warned is None:
+        assert found == []
+    else:
+        assert len(found) == 1 and warned in found[0] and "download the current rules" in found[0]
+
+
+# ── Draft Docs (docs-drafts-1-format Task 3) ──
+
+def _draft_texts(data):
+    from strelitzia.scoring import draft_docs as dd
+    from workbench_helpers import library
+
+    return (dd.resume_draft_text(data, library(), wb.RULES_VERSION),
+            dd.cover_draft_text(data["cover_letter"], wb.RULES_VERSION))
+
+
+def test_import_drafts_accepts_a_rendered_valid_draft(conn, tmp_path):
+    job = add_job_row(conn)
+    resume_text, cover_text = _draft_texts(good_result())
+    outcome = wb.import_drafts(conn, job, resume_text, cover_text, inputs=inputs(), out_dir=tmp_path / "out")
+    assert outcome.ok, outcome.errors
+    assert outcome.draft_version == 1 and outcome.files["resume"] and outcome.files["cover_letter"]
+    assert not any("rules version" in w for w in outcome.warnings)
+
+
+def test_import_drafts_rejects_a_broken_draft_and_saves_nothing(conn, tmp_path):
+    job = add_job_row(conn)
+    resume_text, cover_text = _draft_texts(good_result())
+    outcome = wb.import_drafts(conn, job, resume_text.replace(" [orders-pipeline]", ""), cover_text,
+                               inputs=inputs(), out_dir=tmp_path / "out")
+    assert not outcome.ok and outcome.errors[0].startswith("Resume draft, line")
+    assert outcome.fix_prompt.endswith("Fix them in the two draft Docs and change nothing else.")
+    assert "JSON" not in outcome.fix_prompt
+    assert conn.execute("SELECT draft_version FROM jobs").fetchone()[0] is None
+
+
+def test_import_drafts_check_errors_ask_for_doc_fixes(conn, tmp_path):
+    job = add_job_row(conn)
+    data = good_result()
+    data["resume"]["skills"].append({"category": "Cloud", "items": "Kubernetes"})
+    outcome = wb.import_drafts(conn, job, *_draft_texts(data), inputs=inputs(), out_dir=tmp_path / "out")
+    assert not outcome.ok and any("Kubernetes" in e for e in outcome.errors)
+    assert "draft Docs" in outcome.fix_prompt
+
+
+def test_import_data_is_the_paste_path_without_extraction(conn, tmp_path):
+    job = add_job_row(conn)
+    outcome = wb.import_data(conn, job, good_result(), inputs=inputs(), out_dir=tmp_path / "out")
+    assert outcome.ok and outcome.draft_version == 1
+
+
+@pytest.mark.parametrize("version, warned", [("0ld0ld00", "Claude used rules version 0ld0ld00"),
+                                             (None, "didn't say which rules version")])
+def test_import_drafts_warns_about_the_resume_docs_rules_version(conn, tmp_path, version, warned):
+    job = add_job_row(conn)
+    resume_text, cover_text = _draft_texts(good_result())
+    resume_text = resume_text.replace(f"Rules version: {wb.RULES_VERSION}\n",
+                                      f"Rules version: {version}\n" if version else "")
+    cover_text = cover_text.replace(f"Rules version: {wb.RULES_VERSION}\n", "")
+    outcome = wb.import_drafts(conn, job, resume_text, cover_text, inputs=inputs(), out_dir=tmp_path / "out")
+    assert outcome.ok, outcome.errors
+    assert any(warned in w and wb.RULES_VERSION in w for w in outcome.warnings)
+
+
+def test_the_rules_ask_for_the_version_line_at_the_top_of_the_resume_draft():
+    text = wb.rules_text()
+    assert "The first line of the resume draft is \"Rules version: \"" in text

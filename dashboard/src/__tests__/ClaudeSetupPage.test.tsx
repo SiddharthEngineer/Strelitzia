@@ -4,23 +4,36 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../api';
 import ClaudeSetupPage from '../pages/ClaudeSetupPage';
-import type { ClaudeSetup } from '../types';
+import type { ClaudeSetup, ProfileDocs, ProfileResponse } from '../types';
 
 vi.mock('../api');
+
+const DOCS: ProfileDocs = {
+  library: { url: 'https://docs.google.com/document/d/L/edit', synced_at: '2026-10-26T09:30:00+00:00' },
+  resume: { url: 'https://docs.google.com/document/d/R/edit', synced_at: '2026-10-26T09:30:00+00:00' },
+};
 
 function setup(extra: Partial<ClaudeSetup> = {}): ClaudeSetup {
   return {
     drive: true, drive_detail: 'Connected 2026-10-16', drive_source: 'user', connect_url: '/strelitzia/dashboard/api/drive/connect',
     rules_version: 'r1234567',
-    docs: [
-      { kind: 'rules', name: 'Strelitzia rules', url: 'https://docs.google.com/document/d/R/edit', changed_at: '2026-10-15T09:30:00+00:00' },
-      { kind: 'library', name: 'Strelitzia content library', url: 'https://docs.google.com/document/d/L/edit', changed_at: '2026-10-14T08:00:00+00:00' },
-    ],
+    rules_markdown: 'Rules version: r1234567\n\n# Strelitzia rules\n',
+    rules_url: '/strelitzia/dashboard/api/claude/rules.md',
+    profile_docs: null,
     project_name: 'Strelitzia Resumes',
     project_instructions: 'You tailor my resume and cover letter for one job per chat.',
     ...extra,
   };
 }
+
+const profile = (docs: ProfileDocs | null): ProfileResponse => ({
+  profile: {
+    first_name: '', last_name: '', phone: '', email: '', linkedin_url: '', github_url: '', location: '',
+    current_job_title: '', years_experience: null, education_level: null, skills: [],
+  },
+  has_resume: true, resume_file_name: null, content_library_md: '', content_library_error: null,
+  profile_docs: docs, options: { education_level: [] },
+});
 
 const renderPage = (path = '/claude-setup') => render(
   <MemoryRouter initialEntries={[path]}><ClaudeSetupPage /></MemoryRouter>,
@@ -31,44 +44,67 @@ beforeEach(() => {
 });
 
 describe('ClaudeSetupPage', () => {
-  it('lists the steps, links both Docs, and shows when the rules changed', async () => {
+  it('lists the steps with the rules download and version', async () => {
     renderPage();
     expect(await screen.findByRole('heading', { name: 'Claude setup' })).toBeInTheDocument();
     expect(screen.getByText('Strelitzia Resumes')).toBeInTheDocument();
-    const docs = screen.getByRole('list', { name: 'Project Docs' });
-    expect(within(docs).getByRole('link', { name: /Strelitzia rules/ })).toHaveAttribute('href', 'https://docs.google.com/document/d/R/edit');
-    expect(within(docs).getByRole('link', { name: /Strelitzia content library/ })).toBeInTheDocument();
-    expect(docs).toHaveTextContent('last changed 2026-10-15 09:30');
+    expect(screen.getByRole('link', { name: 'Download rules (.md)' })).toHaveAttribute('href', '/strelitzia/dashboard/api/claude/rules.md');
     expect(screen.getByText(/Rules version r1234567/)).toBeInTheDocument();
+    expect(screen.getByText(/can only see files it created/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Write the Docs|Refresh the Docs/ })).toBeNull();
   });
 
-  it('copies the project instructions', async () => {
+  it('copies the project instructions and the rules', async () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(await screen.findByRole('button', { name: 'Copy instructions' }));
     expect(api.copyText).toHaveBeenCalledWith('You tailor my resume and cover letter for one job per chat.');
+    await user.click(screen.getByRole('button', { name: 'Copy rules' }));
+    expect(api.copyText).toHaveBeenLastCalledWith('Rules version: r1234567\n\n# Strelitzia rules\n');
     expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
   });
 
-  it('writes missing Docs to Drive', async () => {
+  it('sets up the Profile Docs and links them', async () => {
     const user = userEvent.setup();
-    vi.mocked(api.getClaudeSetup).mockResolvedValue(setup({
-      docs: setup().docs.map((d) => ({ ...d, url: null, changed_at: null })),
-    }));
-    vi.mocked(api.publishClaudeDocs).mockResolvedValue(setup());
+    vi.mocked(api.setupProfileDocs).mockResolvedValue({ ok: true, profile: profile(DOCS) });
     renderPage();
-    expect(await screen.findAllByText(/not written yet/)).toHaveLength(2);
-    await user.click(screen.getByRole('button', { name: 'Write the Docs to Drive' }));
-    expect(api.publishClaudeDocs).toHaveBeenCalled();
-    expect(await screen.findByRole('link', { name: /Strelitzia rules/ })).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Set up Profile Docs' }));
+    expect(api.setupProfileDocs).toHaveBeenCalledWith(false);
+    const docs = await screen.findByRole('list', { name: 'Profile Docs' });
+    expect(within(docs).getByRole('link', { name: /Strelitzia content library/ })).toHaveAttribute('href', DOCS.library!.url);
+    expect(within(docs).getByRole('link', { name: /Strelitzia base resume/ })).toHaveAttribute('href', DOCS.resume!.url);
   });
 
-  it('explains the clipboard fallback without Drive', async () => {
-    vi.mocked(api.getClaudeSetup).mockResolvedValue(setup({ drive: false, drive_detail: 'Connect Google Drive on /strelitzia/dashboard/claude-setup' }));
+  it('asks before overwriting existing Profile Docs, and Cancel changes nothing', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getClaudeSetup).mockResolvedValue(setup({ profile_docs: DOCS }));
+    vi.mocked(api.setupProfileDocs).mockResolvedValueOnce({
+      ok: false, existing: ['Strelitzia content library', 'Strelitzia base resume'],
+    });
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Set up Profile Docs' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('This will overwrite: Strelitzia content library, Strelitzia base resume. Continue?');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(api.setupProfileDocs).toHaveBeenCalledTimes(1);
+
+    vi.mocked(api.setupProfileDocs).mockResolvedValueOnce({
+      ok: false, existing: ['Strelitzia content library', 'Strelitzia base resume'],
+    });
+    vi.mocked(api.setupProfileDocs).mockResolvedValueOnce({ ok: true, profile: profile(DOCS) });
+    await user.click(screen.getByRole('button', { name: 'Set up Profile Docs' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Overwrite' }));
+    expect(api.setupProfileDocs).toHaveBeenLastCalledWith(true);
+    expect(await screen.findByRole('button', { name: 'Set up Profile Docs' })).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('needs Drive before the Profile Docs', async () => {
+    vi.mocked(api.getClaudeSetup).mockResolvedValue(setup({ drive: false, drive_source: null, drive_detail: 'Not connected' }));
     renderPage();
     expect(await screen.findByText(/Google Drive isn't set up/)).toBeInTheDocument();
-    expect(screen.queryByRole('list', { name: 'Project Docs' })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Docs/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Set up Profile Docs' })).toBeDisabled();
   });
 
   it('offers Connect Google Drive when Drive is not connected', async () => {
