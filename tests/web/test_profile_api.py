@@ -206,3 +206,82 @@ def test_drafted_links_the_put_would_reject_are_left_out(client):
         draft = _upload(client, make_pdf(LINES)).json()["draft"]
     assert "linkedin_url" not in draft and "email" not in draft
     assert draft["github_url"] == "https://github.com/ada"
+
+
+# --- Profile Docs endpoints (profile-docs-2-api Task 2) ---
+
+@pytest.fixture
+def drive(monkeypatch, tmp_path):
+    from fake_drive import FakeDrive
+
+    from strelitzia.storage.drive import DriveClient
+    from strelitzia.web import app as app_mod
+
+    monkeypatch.setenv("DRIVE_ROOT_FOLDER", "Strelitzia")
+    fake = FakeDrive()
+    client = DriveClient(fake, text_media_factory=lambda text, mime: text.encode("utf-8"))
+    monkeypatch.setattr(app_mod, "_drive_client", lambda request: client)
+    return fake
+
+
+def _library_text():
+    from pathlib import Path
+    return (Path(__file__).resolve().parents[1] / "fixtures" / "content_library_sample.md").read_text(encoding="utf-8")
+
+
+def _seed(conn, library=None):
+    owner = users.owner(conn).id
+    store.save_profile(conn, owner, store.UserProfile(content_library_md=library or _library_text(),
+                                                      resume_text="Test Person\nData Engineer\n"))
+    return owner
+
+
+def test_profile_docs_setup_overwrite_and_sync(client, conn, drive):
+    _seed(conn)
+    assert client.get("/strelitzia/dashboard/api/profile").json()["profile_docs"] is None
+    r = client.post("/strelitzia/dashboard/api/profile/docs/setup", json={"overwrite": False})
+    assert r.status_code == 200, r.text
+    docs = r.json()["profile_docs"]
+    assert docs["library"]["url"] and docs["library"]["synced_at"] and docs["resume"]["url"]
+
+    again = client.post("/strelitzia/dashboard/api/profile/docs/setup", json={"overwrite": False})
+    assert again.status_code == 409
+    assert again.json()["existing"] == ["Strelitzia content library", "Strelitzia base resume"]
+    retry = client.post("/strelitzia/dashboard/api/profile/docs/setup", json={"overwrite": True})
+    assert retry.status_code == 200
+    assert len([f for f in drive.store.values() if f["name"] == "Strelitzia content library"]) == 1
+
+    lib_id = next(f["id"] for f in drive.store.values() if f["name"] == "Strelitzia content library")
+    drive.edit(lib_id, _library_text().replace("Superset, SQL checks.", "Superset, SQL checks, pandas.").encode())
+    s = client.post("/strelitzia/dashboard/api/profile/docs/sync").json()
+    assert s["ok"] is True and s["changed"] is True and s["problems"] == []
+    assert "pandas" in s["content_library_md"]
+
+    drive.edit(lib_id, b"# Nothing here\n")
+    s = client.post("/strelitzia/dashboard/api/profile/docs/sync").json()
+    assert s["ok"] is False and s["problems"] and "pandas" in s["content_library_md"]
+
+
+def test_sync_before_setup_is_409(client, conn, drive):
+    assert client.post("/strelitzia/dashboard/api/profile/docs/sync").status_code == 409
+
+
+def test_setup_needs_drive(client, conn):
+    r = client.post("/strelitzia/dashboard/api/profile/docs/setup", json={})
+    assert r.status_code == 409 and "Connect Google Drive" in r.json()["detail"]
+
+
+def test_put_refuses_a_library_edit_once_docs_are_set_up(client, conn, drive):
+    _seed(conn)
+    client.post("/strelitzia/dashboard/api/profile/docs/setup", json={})
+    current = client.get("/strelitzia/dashboard/api/profile").json()["content_library_md"]
+    r = client.put("/strelitzia/dashboard/api/profile", json={"content_library_md": current + "\nmore"})
+    assert r.status_code == 409 and r.json()["detail"] == "Edit your content library in the Google Doc"
+    ok = client.put("/strelitzia/dashboard/api/profile", json={"first_name": "Ada", "content_library_md": current})
+    assert ok.status_code == 200 and ok.json()["profile"]["first_name"] == "Ada"
+
+
+def test_profile_docs_are_owner_only(client, conn, drive, monkeypatch):
+    act_as(monkeypatch, second_user(conn))
+    assert client.post("/strelitzia/dashboard/api/profile/docs/setup", json={}).status_code == 403
+    assert client.post("/strelitzia/dashboard/api/profile/docs/sync").status_code == 403

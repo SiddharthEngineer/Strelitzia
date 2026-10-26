@@ -914,8 +914,19 @@ def _content_library_error(text: str) -> str | None:
     return None
 
 
-def _profile_out(profile: profile_store.UserProfile) -> dict:
+def _profile_docs_out(conn, user_id: str) -> dict | None:
+    """{library|resume: {url, synced_at} | None} for the user's Profile Docs, or None before setup."""
+    from strelitzia import profile_sync
+
+    docs = profile_sync.profile_docs(conn, user_id)
+    out = {kind: ({"url": d.get("url"), "synced_at": d.get("synced_at")} if (d := getattr(docs, kind)) else None)
+           for kind in ("library", "resume")}
+    return out if any(out.values()) else None
+
+
+def _profile_out(profile: profile_store.UserProfile, conn=None, user_id: str | None = None) -> dict:
     return {
+        "profile_docs": _profile_docs_out(conn, user_id) if conn is not None else None,
         "profile": {name: getattr(profile, name) for name in PROFILE_FIELDS},
         "has_resume": bool(profile.resume_text.strip()),
         "resume_file_name": profile.resume_file_name,
@@ -927,7 +938,8 @@ def _profile_out(profile: profile_store.UserProfile) -> dict:
 
 @api.get("/profile")
 def get_profile(request: Request) -> dict:
-    return _profile_out(profile_store.load_profile(db_conn(request), current_user(request).id))
+    conn, user_id = db_conn(request), current_user(request).id
+    return _profile_out(profile_store.load_profile(conn, user_id), conn, user_id)
 
 
 class ProfileBody(BaseModel):
@@ -982,6 +994,9 @@ def put_profile(body: ProfileBody, request: Request) -> dict:
     conn = db_conn(request)
     user = current_user(request)
     profile = profile_store.load_profile(conn, user.id)
+    if ("content_library_md" in body.model_fields_set and body.content_library_md != profile.content_library_md
+            and _profile_docs_out(conn, user.id)):
+        raise HTTPException(status_code=409, detail="Edit your content library in the Google Doc")
     qualifications = (profile.education_level, profile.years_experience)
     for name, value in body.model_dump(exclude_unset=True).items():
         setattr(profile, name, value)
@@ -989,6 +1004,41 @@ def put_profile(body: ProfileBody, request: Request) -> dict:
     if (profile.education_level, profile.years_experience) != qualifications:
         recompute_fit(conn, user.id)  # the fit score's education and experience rules (code only, no LLM)
     return get_profile(request)
+
+
+class ProfileDocsSetup(BaseModel):
+    overwrite: bool = False
+
+
+@api.post("/profile/docs/setup")
+def setup_profile_docs(body: ProfileDocsSetup, request: Request):
+    """Create the Profile Docs in Strelitzia/Profile/ from the database copy. 409 with `existing` when the user
+    already has them and `overwrite` is false."""
+    from strelitzia import profile_sync
+
+    user = current_user(request)
+    _owner_content(user)
+    client = _require_drive(request)
+    try:
+        profile_sync.setup_profile_docs(client, db_conn(request), user.id, overwrite=body.overwrite)
+    except profile_sync.ProfileDocsExist as e:
+        raise ApiError(409, str(e), existing=e.names) from e
+    return get_profile(request)
+
+
+@api.post("/profile/docs/sync")
+def sync_profile_docs(request: Request) -> dict:
+    """Pull the Profile Docs now. Problems come back in the body (200): nothing was saved then."""
+    from strelitzia import profile_sync
+
+    conn = db_conn(request)
+    user = current_user(request)
+    _owner_content(user)
+    if not _profile_docs_out(conn, user.id):
+        raise HTTPException(status_code=409, detail="Set up your Profile Docs on the Claude setup page first")
+    client = _require_drive(request)
+    result = profile_sync.pull_profile(client, conn, user.id, is_owner=user.role == "owner")
+    return {"ok": result.ok, "problems": result.problems, "changed": result.changed, **get_profile(request)}
 
 
 def _is_empty(value) -> bool:
@@ -1046,7 +1096,7 @@ def post_profile_resume(file: UploadFile, request: Request) -> dict:
         parsed = {}
     draft = {k: v for k, v in parsed.items()
              if k in PROFILE_FIELDS and _is_empty(getattr(profile, k)) and _valid_draft_value(k, v)}
-    return {**_profile_out(profile), "draft": draft, "parse_error": parse_error}
+    return {**_profile_out(profile, conn, user.id), "draft": draft, "parse_error": parse_error}
 
 
 @api.get("/profile/resume")
