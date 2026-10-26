@@ -41,7 +41,7 @@ Doc), and the app only ever wrote database → Doc, so edits made in the Doc wer
 `upsert_doc`, with `text/markdown` or `text/plain` media). Add `modifiedTime` to `_FILE_FIELDS`. The fake stores the uploaded
 text and returns it from `export`.
 **Validate:** `pytest tests/test_drive_client.py -q` → passes, with new tests for export, doc_meta on a trashed file, and in-place update.
-**Status:** ✅ 2026-10-26 (this commit)
+**Status:** ✅ 2026-10-26 (f5d8df4)
 
 ### Task 2: Parse a Docs markdown export
 **Runs:** unattended
@@ -51,7 +51,7 @@ bullets, `__x__` → `**x**`, drop blank lines inside lists, map `#`/`###` role 
 CURRENT/PRIOR ROLE). `parse_content_library_text` calls it first. The fixture is `tests/fixtures/content_library_sample.md`
 rewritten with those quirks.
 **Validate:** `pytest tests/test_content_library.py -q` → the fixture parses to the same roles, projects, fields and angles as `content_library_sample.md`.
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (this commit)
 
 ### Task 3: Profile sync module
 **Runs:** unattended
