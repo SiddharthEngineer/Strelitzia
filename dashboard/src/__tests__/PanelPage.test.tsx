@@ -13,6 +13,7 @@ function overview(extra: Partial<PanelOverview> = {}): PanelOverview {
     due: null, needed: 5, comparable: { latest_vs_previous: 5, rules_a_vs_b: 2 }, runs: [],
     project_name: 'Strelitzia Panel', project_instructions: 'You are a strict resume screener.',
     rubric: { name: 'Strelitzia panel rubric', url: null, text: '# Strelitzia panel rubric' },
+    rubric_markdown: '# Strelitzia panel rubric', rubric_url: '/strelitzia/dashboard/api/panel/rubric.md',
     ...extra,
   };
 }
@@ -62,6 +63,16 @@ beforeEach(() => {
 });
 
 describe('PanelPage', () => {
+  it('offers the rubric as a download and as text to copy', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    expect(await screen.findByRole('link', { name: 'Download rubric (.md)' }))
+      .toHaveAttribute('href', '/strelitzia/dashboard/api/panel/rubric.md');
+    await user.click(screen.getByRole('button', { name: 'Copy rubric' }));
+    expect(api.copyText).toHaveBeenCalledWith('# Strelitzia panel rubric');
+    expect(screen.getByRole('button', { name: 'Copied rubric' })).toBeInTheDocument();
+  });
+
   it('says how many more drafts are needed', async () => {
     vi.mocked(api.getPanel).mockResolvedValue(overview({ comparable: { latest_vs_previous: 3, rules_a_vs_b: 0 } }));
     renderPage();

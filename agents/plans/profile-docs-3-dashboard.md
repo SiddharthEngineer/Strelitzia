@@ -1,5 +1,5 @@
 # Plan: Profile Docs, part 3: Claude setup, Profile and Panel pages
-**Status:** ❌ Not started
+**Status:** 🟡 Code done 2026-10-26, preprod test pending
 **Risk:** review (dashboard pages; removes the in-app library and resume editing)
 **Depends on:** profile-docs-2-api
 
@@ -32,7 +32,7 @@ offers the rubric the same way as the rules. The old endpoints that only the rem
 names and "Overwrite" / "Cancel"; when done, links to both Docs. 3. Create the Claude project: instructions plus Copy (as
 today), then "Download rules (.md)" and "Copy rules", showing the rules version. Remove the publish button and the Docs list.
 **Validate:** `cd dashboard && npm test -- ClaudeSetupPage` → passes: the overwrite confirm path, download link href, copy.
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (d192b5d)
 
 ### Task 2: Profile page
 **Runs:** unattended
@@ -41,7 +41,7 @@ today), then "Download rules (.md)" and "Copy rules", showing the rules version.
 when `profile_docs` is set, show both links with "last synced <relative time>", a Sync now button, and any problems as a
 list (role="alert"). When it isn't set, show "Set them up on the Claude setup page" with a link. The other fields and Save are unchanged.
 **Validate:** `cd dashboard && npm test -- ProfilePage` → passes: links, sync success, sync problems, not-set-up state.
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (60e30fe)
 
 ### Task 3: Panel page and removing old endpoints
 **Runs:** unattended
@@ -49,7 +49,7 @@ list (role="alert"). When it isn't set, show "Set them up on the Claude setup pa
 **What:** Panel: "Download rubric (.md)" and "Copy rubric" replace the Doc link. Server: delete `POST /claude/docs` and
 `POST /profile/resume`, drop `content_library_md` from `ProfileBody`, and drop `docs` from `/claude/setup` (update or remove their tests).
 **Validate:** `cd dashboard && npm test` and `pytest tests/web -q` → pass.
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (64ac8a0)
 
 ## Validation
 - `scripts/validate.sh --full` passes (it runs the dashboard tests and build).

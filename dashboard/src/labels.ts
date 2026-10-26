@@ -123,3 +123,18 @@ export function localDate(value: string | null | undefined): string {
 export function usd(value: number): string {
   return value < 0.01 ? 'under $0.01' : `about $${value.toFixed(2)}`;
 }
+
+/** How long ago an ISO timestamp was: "just now", "5 minutes ago", "3 hours ago", "2 days ago" (else the date). */
+export function relativeTime(value: string | null | undefined, now: Date = new Date()): string {
+  if (!value) return 'never';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  const minutes = Math.floor((now.getTime() - d.getTime()) / 60000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
+  return localDate(value);
+}

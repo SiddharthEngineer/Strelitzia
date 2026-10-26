@@ -2,15 +2,15 @@
 import type {
   AddJobInput, AddJobResult, AuthMe, ClaudeSetup, Contact, ContactFields, ContactListItem, ContactWithJobs,
   Facets, Interview, ImportResult, InterviewFields, JobDetail, JobList, JobQuery, PacketResult, PanelGradeOutcome,
-  PanelMode, PanelOverview, PanelRun, PanelWinner, PasteOutcome, Preferences, PreferencesResponse, ProfileResponse,
-  ProfileSave, ReassessPreview, ReassessScope, Relation, RescoreAllResult, RescorePreview, ResumeUploadResult,
-  SavePreferencesResult, Task, UserStatus,
+  PanelMode, PanelOverview, PanelRun, PanelWinner, PasteOutcome, Preferences, PreferencesResponse, ProfileDocsSetupOutcome,
+  ProfileResponse, ProfileSave, ProfileSyncResult, ReassessPreview, ReassessScope, Relation, RescoreAllResult,
+  RescorePreview, SavePreferencesResult, Task, UserStatus,
 } from './types';
 
 export const API_BASE = `${import.meta.env.BASE_URL}api`;
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public body: unknown = null) {
     super(message);
     this.name = 'ApiError';
   }
@@ -41,7 +41,8 @@ export function onUnauthorized(listener: UnauthorizedListener | null): void {
 
 async function failure(res: Response): Promise<ApiError> {
   if (res.status === 401) unauthorized?.();
-  return new ApiError(res.status, await errorMessage(res));
+  const body = await res.clone().json().catch(() => null);
+  return new ApiError(res.status, await errorMessage(res), body);
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -120,9 +121,24 @@ export function getClaudeSetup(signal?: AbortSignal): Promise<ClaudeSetup> {
   return request<ClaudeSetup>('/claude/setup', { signal });
 }
 
-/** Write (or refresh) the rules and content-library Docs in Drive. */
-export function publishClaudeDocs(): Promise<ClaudeSetup> {
-  return request<ClaudeSetup>('/claude/docs', { method: 'POST' });
+/** Create the Profile Docs in Drive. Without `overwrite`, existing Docs come back as `existing` (nothing changed). */
+export async function setupProfileDocs(overwrite: boolean): Promise<ProfileDocsSetupOutcome> {
+  try {
+    const profile = await request<ProfileResponse>('/profile/docs/setup', {
+      method: 'POST', body: JSON.stringify({ overwrite }),
+    });
+    return { ok: true, profile };
+  } catch (err) {
+    const existing = err instanceof ApiError && err.status === 409
+      ? (err.body as { existing?: unknown } | null)?.existing : undefined;
+    if (Array.isArray(existing)) return { ok: false, existing: existing.map(String) };
+    throw err;
+  }
+}
+
+/** Pull the Profile Docs now. */
+export function syncProfileDocs(): Promise<ProfileSyncResult> {
+  return request<ProfileSyncResult>('/profile/docs/sync', { method: 'POST' });
 }
 
 /** Forget the user's Google Drive token (their files stay in their Drive). */
@@ -315,17 +331,3 @@ export function saveProfile(profile: ProfileSave): Promise<ProfileResponse> {
   return request<ProfileResponse>('/profile', { method: 'PUT', body: JSON.stringify(profile) });
 }
 
-/** Upload a PDF or DOCX resume: it's stored, and the answer holds Claude's draft for the empty profile fields. */
-export async function uploadResume(file: File): Promise<ResumeUploadResult> {
-  const form = new FormData();
-  form.append('file', file);
-  const res = await fetch(`${API_BASE}/profile/resume`, {
-    method: 'POST',
-    headers: { Accept: 'application/json', 'X-Strelitzia': '1' },
-    body: form,
-  });
-  if (!res.ok) throw await failure(res);
-  return (await res.json()) as ResumeUploadResult;
-}
-
-export const RESUME_DOWNLOAD_URL = `${API_BASE}/profile/resume`;
