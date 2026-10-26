@@ -1,5 +1,5 @@
 # Plan: Draft Docs, part 3: "Check & format" on the job page, paste removed
-**Status:** ❌ Not started
+**Status:** 🟡 Code done 2026-10-26, preprod test pending
 **Risk:** review (job page workflow; removes the paste box and the paste endpoint)
 **Depends on:** docs-drafts-2-api
 
@@ -27,7 +27,7 @@ Drive on the Claude setup page.
 **What:** As in Goal. After Open in Claude: three links (packet, resume draft, cover letter draft) and Copy prompt.
 "Check & format" is disabled until the drafts exist (`resume_draft_url` on the job). On success, call `onSaved` as today.
 **Validate:** `cd dashboard && npm run build` → succeeds.
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (607d020)
 
 ### Task 2: Tests for the panel
 **Runs:** unattended
@@ -35,7 +35,7 @@ Drive on the Claude setup page.
 **What:** Replace the paste tests with: links shown after open; check success; check 422 lists problems and copies the fix
 prompt; 409 shows the connect-Drive message; no textarea is rendered.
 **Validate:** `cd dashboard && npm test` → passes.
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (f3ea117)
 
 ### Task 3: Remove the paste path on the server
 **Runs:** unattended
@@ -44,7 +44,7 @@ prompt; 409 shows the connect-Drive message; no textarea is rendered.
 `import_result`, `extract_result` and `job_packet`'s inline branch (`packet_for(..., inline=...)` callers updated). Move the
 tests that exercised checks through `import_result` onto `import_data`.
 **Validate:** `pytest tests -q` → passes, and `grep -rn "import_result\|/result\"" src/` → nothing.
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (65b0c88)
 
 ## Validation
 - `scripts/validate.sh --full` passes.

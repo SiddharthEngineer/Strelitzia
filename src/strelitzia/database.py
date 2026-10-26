@@ -256,7 +256,7 @@ def _ensure_tables(conn: Connection) -> None:
         "prep_notes TEXT, debrief_notes TEXT, outcome TEXT, created_at TEXT, updated_at TEXT)"
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_interviews_job ON interviews (job_url, scheduled_at)")
-    # Every accepted Claude workbench paste (strelitzia.scoring.workbench.import_result), addressable by
+    # Every accepted Claude workbench paste (strelitzia.scoring.workbench.import_data), addressable by
     # (job_url, version); the jobs row only keeps the latest. JSON columns: the resume dict, the cover letter, coverage.
     conn.execute(
         "CREATE TABLE IF NOT EXISTS drafts ("

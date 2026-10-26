@@ -1,4 +1,4 @@
-"""Claude workbench routes: the packet (inline vs Drive), pasting a result back, and the setup page."""
+"""Claude workbench routes: the packet and draft Docs, Check & format, and the setup page."""
 
 import json
 from pathlib import Path
@@ -48,18 +48,31 @@ def drive(monkeypatch):
     return fake
 
 
-def test_packet_without_drive_is_inline(client, the_job):
+def _fill_drafts(conn, drive, data):
+    """Write `data` into the job's draft Docs, as Claude would."""
+    from strelitzia.scoring import draft_docs as dd
+    from workbench_helpers import library
+
+    row = dict(conn.execute("SELECT * FROM jobs").fetchone())
+    drive.edit(row["resume_draft_doc_id"], dd.resume_draft_text(data, library(), wb.RULES_VERSION).encode())
+    drive.edit(row["cover_draft_doc_id"], dd.cover_draft_text(data["cover_letter"], wb.RULES_VERSION).encode())
+
+
+def _check(client, conn, drive, key, data):
+    """Open the job in Claude, have "Claude" fill the drafts with `data`, then Check & format."""
+    assert client.post(f"/strelitzia/dashboard/api/jobs/{key}/packet").status_code == 200
+    _fill_drafts(conn, drive, data)
+    return client.post(f"/strelitzia/dashboard/api/jobs/{key}/drafts/check")
+
+
+def test_packet_without_drive_is_409(client, the_job):
     r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet")
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert body["inline"] is True and body["doc_url"] is None and body["drive_error"] is None
-    assert "Required qualifications" in body["prompt"] and "notes_for_user" in body["prompt"]
-    assert body["rules_version"] == wb.RULES_VERSION
+    assert r.status_code == 409 and r.json()["detail"] == "Connect Google Drive on the Claude setup page"
 
 
 def test_packet_with_drive_writes_docs_and_a_short_prompt(client, conn, the_job, drive):
     body = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet").json()
-    assert body["inline"] is False and body["doc_url"]
+    assert body["doc_url"] and "inline" not in body
     assert len(body["prompt"]) <= wb.PROMPT_MAX and "Claude packet" in body["prompt"]
     names = sorted(f["name"] for f in drive.store.values() if f["mimeType"] == DOC_MIME)
     assert names == sorted([f"Initech – {job()['title']} – Claude packet",  # the rules are a download now
@@ -69,19 +82,24 @@ def test_packet_with_drive_writes_docs_and_a_short_prompt(client, conn, the_job,
     assert detail["packet_doc_url"] == body["doc_url"] == detail["links"]["packet"]
 
 
-def test_packet_falls_back_to_inline_when_drive_fails(client, the_job, monkeypatch):
+def test_packet_when_drive_fails_is_409(client, the_job, monkeypatch):
     def broken(request):
         raise RuntimeError("token expired")
 
     monkeypatch.setattr(app_mod, "_drive_client", broken)
-    body = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet").json()
-    assert body["inline"] is True and "token expired" in body["drive_error"]
+    r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet")
+    assert r.status_code == 409 and "token expired" in r.json()["detail"]
 
 
-def test_bad_result_is_422_with_a_fix_prompt(client, conn, the_job):
+def test_the_paste_endpoint_is_gone(client, the_job):
+    r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/result", json={"text": reply(good_result())})
+    assert r.status_code in (404, 405)
+
+
+def test_bad_drafts_are_422_with_a_fix_prompt(client, conn, the_job, drive):
     data = good_result()
     data["resume"]["skills"].append({"category": "Cloud", "items": "Kubernetes"})
-    r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/result", json={"text": reply(data)})
+    r = _check(client, conn, drive, the_job, data)
     assert r.status_code == 422
     body = r.json()
     assert any("Kubernetes" in e for e in body["errors"])
@@ -89,13 +107,8 @@ def test_bad_result_is_422_with_a_fix_prompt(client, conn, the_job):
     assert conn.execute("SELECT draft_version FROM jobs").fetchone()[0] is None
 
 
-def test_result_without_json_is_422(client, the_job):
-    r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/result", json={"text": "Sure, here you go!"})
-    assert r.status_code == 422 and r.json()["fix_prompt"]
-
-
-def test_good_result_saves_and_bumps_the_version(client, the_job):
-    r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/result", json={"text": reply(good_result())})
+def test_good_drafts_save_and_bump_the_version(client, conn, the_job, drive):
+    r = _check(client, conn, drive, the_job, good_result())
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["outcome"]["draft_version"] == 1
@@ -103,26 +116,18 @@ def test_good_result_saves_and_bumps_the_version(client, the_job):
     assert d["draft_version"] == 1 and d["draft_rules_version"] == wb.RULES_VERSION
     assert d["coverage"]["pct_required"] == 80.0 and d["unmet"] == ["Kubernetes", "Terraform"]
     assert [h["version"] for h in d["draft_history"]] == [1]
-    for kind in ("resume_pdf", "resume_docx", "cover_letter_pdf"):
-        link = d["links"][kind]
-        f = client.get(link)
-        assert f.status_code == 200 and f.content, kind
+    assert d["links"]["resume"] and d["links"]["cover_letter"]
+    assert "resume_pdf" not in d["links"]  # moved to Drive
+    assert client.get(d["links"]["resume_docx"]).content  # the DOCX stays local
 
-    d2 = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/result",
-                     json={"text": reply(good_result(headline="Data engineer for Airflow pipelines"))}).json()["job"]
+    _fill_drafts(conn, drive, good_result(headline="Data engineer for Airflow pipelines"))
+    d2 = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/drafts/check").json()["job"]
     assert d2["draft_version"] == 2
     assert [h["version"] for h in d2["draft_history"]] == [1, 2]
 
 
-def test_good_result_uploads_to_drive(client, the_job, drive):
-    d = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/result", json={"text": reply(good_result())}).json()["job"]
-    assert d["links"]["resume"] and d["links"]["cover_letter"]
-    assert "resume_pdf" not in d["links"]  # moved to Drive
-    assert d["links"]["resume_docx"]  # the DOCX stays local
-
-
-def test_submitting_records_the_draft_and_rules_version(client, the_job):
-    client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/result", json={"text": reply(good_result())})
+def test_submitting_records_the_draft_and_rules_version(client, conn, the_job, drive):
+    _check(client, conn, drive, the_job, good_result())
     d = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/status", json={"status": "submitted"}).json()
     assert d["submitted_draft_version"] == 1 and d["submitted_rules_version"] == wb.RULES_VERSION
 
@@ -141,22 +146,23 @@ def test_setup_without_drive(client):
     assert client.post("/strelitzia/dashboard/api/claude/docs").status_code in (404, 405)  # removed
 
 
-def test_a_saved_draft_marks_the_job_in_progress(client, the_job):
-    client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/result", json={"text": reply(good_result())})
+def test_a_saved_draft_marks_the_job_in_progress(client, conn, the_job, drive):
+    _check(client, conn, drive, the_job, good_result())
     d = client.get(f"/strelitzia/dashboard/api/jobs/{the_job}").json()
     assert d["status"] == "in_progress" and d["status_color"] == "yellow"
     assert d["events"][0]["source"] == "workbench"
 
 
-def test_a_saved_draft_keeps_a_status_the_user_set(client, the_job):
+def test_a_saved_draft_keeps_a_status_the_user_set(client, conn, the_job, drive):
     client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/status", json={"status": "submitted"})
-    client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/result", json={"text": reply(good_result())})
+    _check(client, conn, drive, the_job, good_result())
     d = client.get(f"/strelitzia/dashboard/api/jobs/{the_job}").json()
     assert d["status"] == "submitted" and len(d["events"]) == 1
 
 
-def test_a_rejected_paste_leaves_the_status_alone(client, the_job):
-    client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/result", json={"text": "no json here"})
+def test_a_rejected_check_leaves_the_status_alone(client, conn, the_job, drive):
+    client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet")
+    assert client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/drafts/check").status_code == 422  # the skeleton
     assert client.get(f"/strelitzia/dashboard/api/jobs/{the_job}").json()["status"] == "active"
 
 
@@ -196,11 +202,11 @@ def _connect(conn, user_id):
 def test_packet_uses_the_users_own_drive(client, conn, the_job, per_user_drive):
     from strelitzia import users
     owner = users.owner(conn).id
-    assert client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet").json()["inline"] is True  # not connected: clipboard
+    assert client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet").status_code == 409  # not connected
     assert per_user_drive == []
     _connect(conn, owner)
     body = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet").json()
-    assert body["inline"] is False and body["doc_url"]
+    assert body["doc_url"] and body["resume_draft_url"]
     assert per_user_drive == [owner]
 
 
@@ -216,7 +222,7 @@ def test_setup_reports_the_users_drive_and_the_connect_url(client, conn, per_use
     assert s["drive"] is True and s["drive_source"] == "user"
 
 
-def test_no_content_library_says_where_to_add_it(client, the_job, monkeypatch):
+def test_no_content_library_says_where_to_add_it(client, the_job, drive, monkeypatch):
     monkeypatch.setattr(wb.Inputs, "for_user", _REAL_FOR_USER)  # the owner's profile has no content library here
     r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet")
     assert r.status_code == 409 and r.json()["detail"] == (
@@ -337,15 +343,6 @@ def test_setup_shows_the_profile_docs(client, conn, the_job, drive, profile_docs
 
 
 # --- Draft Docs and Check & format (docs-drafts-2-api Task 2) ---
-
-def _fill_drafts(conn, drive, data):
-    from strelitzia.scoring import draft_docs as dd
-    from workbench_helpers import library
-
-    row = dict(conn.execute("SELECT * FROM jobs").fetchone())
-    drive.edit(row["resume_draft_doc_id"], dd.resume_draft_text(data, library(), wb.RULES_VERSION).encode())
-    drive.edit(row["cover_draft_doc_id"], dd.cover_draft_text(data["cover_letter"], wb.RULES_VERSION).encode())
-
 
 def test_packet_creates_the_draft_docs(client, conn, the_job, drive):
     body = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet").json()

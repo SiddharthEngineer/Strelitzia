@@ -20,7 +20,7 @@ R25-R43 are on prod and archived (R40-R43, site-wide Google sign-in and the shar
 | R50 | Profile Docs 3/3: setup on the Claude setup page (overwrite warning), Profile page links + Sync now, Panel rubric download | [profile-docs-3-dashboard](plans/profile-docs-3-dashboard.md) | review | 🟡 code done 2026-10-26, preprod test pending | R49 |
 | R51 | Draft Docs 1/3: readable resume/cover-letter draft format and parser | [docs-drafts-1-format](plans/docs-drafts-1-format.md) | low | 🟡 code done 2026-10-26, waits for R49-R50 to merge | R50 |
 | R52 | Draft Docs 2/3: draft Docs per job, Claude writes them, `drafts/check` makes the PDFs | [docs-drafts-2-api](plans/docs-drafts-2-api.md) | review | 🟡 code done 2026-10-26, preprod test pending | R51 |
-| R53 | Draft Docs 3/3: Check & format on the job page; paste box and paste endpoint removed | [docs-drafts-3-dashboard](plans/docs-drafts-3-dashboard.md) | review | ⏳ | R52 |
+| R53 | Draft Docs 3/3: Check & format on the job page; paste box and paste endpoint removed | [docs-drafts-3-dashboard](plans/docs-drafts-3-dashboard.md) | review | 🟡 code done 2026-10-26, preprod test pending | R52 |
 
 ## Manual steps (you)
 

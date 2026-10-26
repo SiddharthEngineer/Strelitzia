@@ -24,7 +24,7 @@ def _me(conn):
 
 
 def add_draft(conn, url, version, rules="r1", headline=None, at=None, text=None):
-    """A drafts row as import_result writes it (synthetic resume content)."""
+    """A drafts row as import_data writes it (synthetic resume content)."""
     headline = headline or f"Headline {url[-2:]} {version}"
     resume = {"headline": headline, "roles": [], "skills": [], "dropped_roles": []}
     draft_id = f"d-{url[-2:]}-{version}-{rules}"
@@ -52,12 +52,12 @@ def seed_jobs(conn, count: int, versions: int = 2, rules=("r1", "r2")):
 
 # ── Task 1: draft history and selection ──
 
-def test_import_result_records_every_accepted_draft(conn, tmp_path, monkeypatch):
+def test_import_data_records_every_accepted_draft(conn, tmp_path, monkeypatch):
     monkeypatch.setattr(pdf_mod, "render_pdf", fake_render_pdf)
     job = add_job_row(conn)
-    assert wb.import_result(conn, job, reply(good_result()), inputs=inputs(), out_dir=tmp_path / "out").ok
+    assert wb.import_data(conn, job, good_result(), inputs=inputs(), out_dir=tmp_path / "out").ok
     second = good_result(headline="Data engineer for Airflow pipelines")
-    assert wb.import_result(conn, job, reply(second), inputs=inputs(), out_dir=tmp_path / "out").ok
+    assert wb.import_data(conn, job, second, inputs=inputs(), out_dir=tmp_path / "out").ok
     rows = [dict(r) for r in conn.execute("SELECT * FROM drafts ORDER BY version").fetchall()]
     assert [r["version"] for r in rows] == [1, 2]
     assert all(r["job_url"] == job["url"] and r["rules_version"] == wb.RULES_VERSION for r in rows)

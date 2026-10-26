@@ -134,76 +134,98 @@ const saved = {
 };
 
 describe('JobPage Claude workbench', () => {
-  it('Open in Claude copies the short prompt and links the packet Doc', async () => {
-    const user = userEvent.setup();
-    vi.mocked(api.openPacket).mockResolvedValue({
-      prompt: "In this project, tailor my resume and cover letter for the job in the Google Doc 'Acme'.",
-      doc_url: 'https://docs.google.com/document/d/P/edit', inline: false, rules_version: 'r1234567',
-    });
-    renderJob();
-    await user.click(await screen.findByRole('button', { name: 'Open in Claude' }));
-    expect(api.openPacket).toHaveBeenCalledWith('abc123');
-    expect(api.copyText).toHaveBeenCalledWith(expect.stringContaining('In this project'));
-    const status = await screen.findByRole('status');
-    expect(status).toHaveTextContent('Copied the prompt');
-    expect(status).toHaveTextContent('rules r1234567');
-    expect(within(status).getByRole('link', { name: /Packet Doc/ })).toHaveAttribute('href', 'https://docs.google.com/document/d/P/edit');
-    expect(within(status).getByRole('link', { name: /claude.ai/ })).toBeInTheDocument();
-  });
+  const PACKET = {
+    prompt: "Tailor my resume and cover letter for the job in 'Acme'.", rules_version: 'r1234567',
+    doc_url: 'https://docs.google.com/document/d/P/edit',
+    resume_draft_url: 'https://docs.google.com/document/d/R/edit',
+    cover_draft_url: 'https://docs.google.com/document/d/C/edit',
+  };
+  const apiError = (status: number, message: string, body: unknown = null) =>
+    Object.assign(Object.create(api.ApiError.prototype), { status, message, body });
 
-  it('without Drive the full packet is copied', async () => {
+  it('Open in Claude copies the prompt and links the packet and both draft Docs; no paste box', async () => {
     const user = userEvent.setup();
-    vi.mocked(api.openPacket).mockResolvedValue({ prompt: 'FULL PACKET', doc_url: null, inline: true, rules_version: 'r1' });
+    vi.mocked(api.openPacket).mockResolvedValue(PACKET);
     renderJob();
-    await user.click(await screen.findByRole('button', { name: 'Open in Claude' }));
-    expect(api.copyText).toHaveBeenCalledWith('FULL PACKET');
-    expect(await screen.findByRole('status')).toHaveTextContent("Copied the full packet (Drive isn't set up)");
-    expect(screen.queryByRole('link', { name: /Packet Doc/ })).toBeNull();
+    expect(await screen.findByRole('button', { name: 'Check & format' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Open in Claude' }));
+    expect(api.openPacket).toHaveBeenCalledWith('abc123');
+    expect(api.copyText).toHaveBeenCalledWith(PACKET.prompt);
+    expect(await screen.findByRole('status')).toHaveTextContent('Copied the prompt');
+    expect(screen.getByRole('status')).toHaveTextContent('rules r1234567');
+    const docs = screen.getByRole('navigation', { name: 'Claude Docs' });
+    expect(within(docs).getByRole('link', { name: /Packet/ })).toHaveAttribute('href', PACKET.doc_url);
+    expect(within(docs).getByRole('link', { name: /Resume draft/ })).toHaveAttribute('href', PACKET.resume_draft_url);
+    expect(within(docs).getByRole('link', { name: /Cover letter draft/ })).toHaveAttribute('href', PACKET.cover_draft_url);
+    expect(within(docs).getByRole('link', { name: /claude.ai/ })).toBeInTheDocument();
+    await user.click(within(docs).getByRole('button', { name: 'Copied prompt' }));
+    expect(api.copyText).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: 'Check & format' })).toBeEnabled();
+    expect(within(screen.getByRole('region', { name: 'Resume & cover letter' })).queryByRole('textbox')).toBeNull();
   });
 
   it('a failed copy shows the prompt to copy by hand', async () => {
     const user = userEvent.setup();
-    vi.mocked(api.openPacket).mockResolvedValue({ prompt: 'FULL PACKET', doc_url: null, inline: true, rules_version: 'r1' });
+    vi.mocked(api.openPacket).mockResolvedValue(PACKET);
     vi.mocked(api.copyText).mockRejectedValueOnce(new Error('denied'));
     renderJob();
     await user.click(await screen.findByRole('button', { name: 'Open in Claude' }));
     expect(await screen.findByRole('status')).toHaveTextContent("Couldn't copy: select the prompt below");
-    expect(screen.getByRole('textbox', { name: 'Prompt' })).toHaveValue('FULL PACKET');
-    expect(screen.queryByRole('link', { name: /Packet Doc/ })).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Prompt' })).toHaveValue(PACKET.prompt);
   });
 
-  it('a failed paste lists the errors and copies the fix message', async () => {
+  it('without Drive it says to connect Drive on the Claude setup page, not an error', async () => {
     const user = userEvent.setup();
-    vi.mocked(api.pasteResult).mockResolvedValue({
-      ok: false, errors: ['Kubernetes is not backed by your library'], warnings: [],
-      fix_prompt: 'These problems were found:\n1. Kubernetes is not backed by your library',
+    vi.mocked(api.openPacket).mockRejectedValue(apiError(409, 'Connect Google Drive on the Claude setup page'));
+    renderJob();
+    await user.click(await screen.findByRole('button', { name: 'Open in Claude' }));
+    const note = await screen.findByRole('status');
+    expect(note).toHaveTextContent('Connect Google Drive on the Claude setup page');
+    expect(within(note).getByRole('link', { name: 'Claude setup page' })).toHaveAttribute('href', '/claude-setup');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('lists Profile Docs problems from Open in Claude', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.openPacket).mockRejectedValue(apiError(409, 'Your Profile Docs have problems',
+      { detail: 'Your Profile Docs have problems', problems: ['The Strelitzia content library Doc has no projects.'] }));
+    renderJob();
+    await user.click(await screen.findByRole('button', { name: 'Open in Claude' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Your Profile Docs have problems');
+    expect(alert).toHaveTextContent('has no projects');
+  });
+
+  it('a failed check lists the problems and copies the fix prompt', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getJob).mockResolvedValue(jobDetail({ resume_draft_url: PACKET.resume_draft_url }));
+    vi.mocked(api.checkDrafts).mockResolvedValue({
+      ok: false, errors: ['Resume draft, line 5: bullet has no [slug] tags at the end'], warnings: [],
+      fix_prompt: 'These problems were found:\n1. Resume draft, line 5: bullet has no [slug] tags at the end',
     });
     renderJob();
-    const save = await screen.findByRole('button', { name: 'Check & save' });
-    expect(save).toBeDisabled();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Paste result' }), { target: { value: '```json\n{}\n```' } });
-    await user.click(save);
-    expect(api.pasteResult).toHaveBeenCalledWith('abc123', '```json\n{}\n```');
+    await user.click(await screen.findByRole('button', { name: 'Check & format' }));
+    expect(api.checkDrafts).toHaveBeenCalledWith('abc123');
     const alert = await screen.findByRole('alert');
-    expect(within(alert).getByRole('list', { name: 'Problems' })).toHaveTextContent('Kubernetes is not backed');
-    await user.click(within(alert).getByRole('button', { name: 'Copy fix message' }));
+    expect(within(alert).getByRole('list', { name: 'Problems' })).toHaveTextContent('line 5: bullet has no [slug] tags');
+    await user.click(within(alert).getByRole('button', { name: 'Copy fix prompt' }));
     expect(api.copyText).toHaveBeenCalledWith(expect.stringContaining('These problems were found'));
-    expect(within(alert).getByRole('button', { name: 'Copied fix message' })).toBeInTheDocument();
+    expect(within(alert).getByRole('button', { name: 'Copied fix prompt' })).toBeInTheDocument();
   });
 
-  it('a saved paste shows the files, coverage and draft history', async () => {
+  it('a passing check shows the version, files, coverage and draft history', async () => {
     const user = userEvent.setup();
     const links = {
       ...jobDetail().links, resume: 'https://drive.google.com/file/d/R/view',
       resume_docx: '/strelitzia/dashboard/api/jobs/abc123/files/resume_docx', cover_letter: 'https://drive.google.com/file/d/C/view',
     };
-    vi.mocked(api.pasteResult).mockResolvedValue({
+    vi.mocked(api.getJob).mockResolvedValue(jobDetail({ resume_draft_url: PACKET.resume_draft_url }));
+    vi.mocked(api.checkDrafts).mockResolvedValue({
       ok: true, outcome: { draft_version: 1, warnings: ["Dropped to fit one page: 'x'"], coverage: saved.coverage, unmet: saved.unmet },
-      job: jobDetail({ ...saved, links }),
+      job: jobDetail({ ...saved, links, resume_draft_url: PACKET.resume_draft_url }),
     });
     renderJob();
-    fireEvent.change(await screen.findByRole('textbox', { name: 'Paste result' }), { target: { value: 'reply' } });
-    await user.click(screen.getByRole('button', { name: 'Check & save' }));
+    await user.click(await screen.findByRole('button', { name: 'Check & format' }));
     expect(await screen.findByText('Saved draft v1.')).toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Warnings' })).toHaveTextContent('Dropped to fit one page');
     const files = screen.getByRole('navigation', { name: 'Files' });
