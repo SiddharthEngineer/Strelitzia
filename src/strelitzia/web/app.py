@@ -520,6 +520,13 @@ def rescore_all_preview(request: Request) -> dict:
     return rescore_preview(db_conn(request), current_user(request).id, "active")
 
 
+@api.get("/rescore/active")
+def rescore_all_active(request: Request) -> dict:
+    """The user's Rescore all that is still queued or running ({"task": null} if none), so the Jobs page can show its
+    progress again after a reload. Changes nothing."""
+    return {"task": tasks.active_task(db_conn(request), current_user(request).id, "rescore_all")}
+
+
 @api.post("/rescore")
 def rescore_all(body: RescoreAll, request: Request) -> dict:
     """After the user confirmed the cost, queue re-assessment of every active job, current assessments included.

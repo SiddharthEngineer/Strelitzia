@@ -15,6 +15,7 @@ R25-R43 are on prod and archived (R40-R43, site-wide Google sign-in and the shar
 | R45 | Shared agent-runner: commands on the `agent-runner` CLI, delete `scripts/agent/` | [strelitzia-runner-cleanup](plans/strelitzia-runner-cleanup.md) | low | ✅ (#89) | R44, agent-runner cutover + 1 week |
 | R46 | Dashboard header: Users moves to the site profile menu (proxy mode), the narrow nav shows it scrolls, the signed-out page keeps the site header; look unchanged (it is the house style now) | [dashboard-header-polish](plans/dashboard-header-polish.md) | review | ✅ (#93) | engineerfamily E3 (queue order) |
 | R47 | Site permissions 4/4: dashboard access, admin flag and cap come from engineerfamily's Users page (nginx headers); retire the dashboard Users page | [site-perms-4-strelitzia](plans/site-perms-4-strelitzia.md) | review | 🟡 code done 2026-10-24, preprod test pending | engineerfamily E10 |
+| R48 | Jobs page: a running Rescore all shows its progress again after a reload or navigation (it looked failed on prod 2026-10-26) | [rescore-all-progress](plans/rescore-all-progress.md) | review | 🟡 code done 2026-10-26, preprod test pending | — |
 
 ## Manual steps (you)
 

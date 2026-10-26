@@ -188,6 +188,11 @@ export function rescorePreview(signal?: AbortSignal): Promise<RescorePreview> {
   return request<RescorePreview>('/rescore/preview', { signal });
 }
 
+/** The user's Rescore all that is still queued or running, or null. */
+export function activeRescoreAll(signal?: AbortSignal): Promise<{ task: Task | null }> {
+  return request<{ task: Task | null }>('/rescore/active', { signal });
+}
+
 /** Queue re-assessment of every active job after the user confirmed the cost. A 402 means the budget is used up. */
 export function rescoreAll(): Promise<RescoreAllResult> {
   return request<RescoreAllResult>('/rescore', { method: 'POST', body: JSON.stringify({ confirm: true }) });
