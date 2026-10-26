@@ -1,5 +1,5 @@
 # Plan: Draft Docs, part 1: the readable draft format and its parser
-**Status:** ❌ Not started
+**Status:** ✅ Done 2026-10-26
 **Risk:** low (new parser and a refactor of the import path; no UI or endpoint changes)
 **Depends on:** profile-docs-3-dashboard (uses `normalize_docs_markdown` from profile-docs-1-sync)
 
@@ -56,7 +56,7 @@ Known sections are role keys, `Dropped roles`, `Skills` and `Notes for me`. An u
 and the existing schema check rejects it with the valid keys listed. A missing `Headline:` is an empty headline. Placeholder
 bullets left from the skeleton are an error.
 **Validate:** `pytest tests/test_draft_docs.py -q` → render → parse round-trips the helpers' valid result; Docs-export quirks (`*` bullets, `\[`, `\-`) parse the same; each error case names its line.
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (9b20930)
 
 ### Task 2: Render and parse the cover letter draft
 **Runs:** unattended
@@ -66,7 +66,7 @@ bullets left from the skeleton are an error.
 `drafts_to_result(resume_text, cover_text) -> dict` (the full result dict, with `strelitzia: SCHEMA_VERSION`, `rules_version`
 from the resume Doc, else the cover Doc).
 **Validate:** `pytest tests/test_draft_docs.py -q` → passes, including an empty letter → `cover_letter is None`.
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (9b20930)
 
 ### Task 3: Split the import path
 **Runs:** unattended
@@ -77,7 +77,7 @@ out_dir=None, cover_dir=None) -> ImportOutcome`. `import_result` becomes extract
 `DraftFormatError` becomes `ImportOutcome(ok=False, errors=e.errors, fix_prompt=...)`. Add `fix_prompt(errors, where="docs")`,
 which says "fix them in the two draft Docs and change nothing else" instead of asking for JSON.
 **Validate:** `pytest tests/test_workbench_import.py -q` → all existing tests pass unchanged, plus `import_drafts` accepts a rendered valid draft and rejects a broken one with no draft saved.
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (6b47dc9)
 
 ## Validation
 - `scripts/validate.sh --full` passes.

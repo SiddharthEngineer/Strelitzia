@@ -495,9 +495,13 @@ class ImportOutcome:
         return asdict(self)
 
 
-def fix_prompt(errors: list[str]) -> str:
+def fix_prompt(errors: list[str], where: str = "json") -> str:
+    """What to paste back into the chat: the problems, then how to answer (the corrected JSON, or fixed draft Docs)."""
     lines = ["These problems were found:"] + [f"{i}. {e}" for i, e in enumerate(errors, 1)]
-    lines.append("Keep everything else the same and reply with the corrected JSON.")
+    if where == "docs":
+        lines.append("Fix them in the two draft Docs and change nothing else.")
+    else:
+        lines.append("Keep everything else the same and reply with the corrected JSON.")
     return "\n".join(lines)
 
 
@@ -595,10 +599,31 @@ def import_result(conn: Connection, job: dict, text: str, inputs: Inputs | None 
         data = extract_result(text)
     except ValueError as e:
         return ImportOutcome(ok=False, errors=[str(e)], fix_prompt=fix_prompt([str(e)]))
+    return import_data(conn, job, data, inputs, out_dir, cover_dir)
+
+
+def import_drafts(conn: Connection, job: dict, resume_text: str, cover_text: str, inputs: Inputs | None = None,
+                  out_dir: Path | None = None, cover_dir: Path | None = None) -> ImportOutcome:
+    """Check the two draft Docs' text (the readable format in `draft_docs`) and save them like a pasted result."""
+    from strelitzia.scoring.draft_docs import DraftFormatError, drafts_to_result
+
+    try:
+        data = drafts_to_result(resume_text, cover_text)
+    except DraftFormatError as e:
+        return ImportOutcome(ok=False, errors=e.errors, fix_prompt=fix_prompt(e.errors, where="docs"))
+    return import_data(conn, job, data, inputs, out_dir, cover_dir, where="docs")
+
+
+def import_data(conn: Connection, job: dict, data: dict, inputs: Inputs | None = None,
+                out_dir: Path | None = None, cover_dir: Path | None = None, *, where: str = "json") -> ImportOutcome:
+    """Check a parsed result; on success render the files and record a new draft version for the job's user.
+
+    On any error nothing is saved, and the outcome carries a `fix_prompt` (`where`: "json" or "docs").
+    """
     inputs = inputs or Inputs.for_user(conn, job["user_id"])
     resume, errors, warnings = check_result(data, job, inputs)
     if errors:
-        return ImportOutcome(ok=False, errors=errors, warnings=warnings, fix_prompt=fix_prompt(errors))
+        return ImportOutcome(ok=False, errors=errors, warnings=warnings, fix_prompt=fix_prompt(errors, where))
 
     if out_dir is None:
         out_dir, cover_dir = config.TAILORED_DIR, cover_dir or config.COVER_LETTER_DIR
@@ -608,7 +633,7 @@ def import_result(conn: Connection, job: dict, text: str, inputs: Inputs | None 
     try:
         files, render_warnings = render_outputs(resume, data, job, inputs, out_dir, prefix, cover_dir)
     except RenderRejected as e:
-        return ImportOutcome(ok=False, errors=e.errors, warnings=warnings, fix_prompt=fix_prompt(e.errors))
+        return ImportOutcome(ok=False, errors=e.errors, warnings=warnings, fix_prompt=fix_prompt(e.errors, where))
     warnings += render_warnings
 
     ev = job_evidence(job, inputs.library, inputs.base_resume_text)
