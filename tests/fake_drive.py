@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 import re
 from collections import Counter
 from pathlib import Path
+from types import SimpleNamespace
 
 _CLAUSES = [
     (re.compile(r"name = '((?:[^'\\]|\\.)*)'"), lambda f, v: f["name"] == v),
@@ -37,7 +38,11 @@ class _Req:
 
 
 class FakeNotFound(Exception):
-    pass
+    """Like googleapiclient's HttpError 404."""
+
+    def __init__(self, file_id):
+        super().__init__(file_id)
+        self.resp = SimpleNamespace(status=404)
 
 
 class FakeFiles:

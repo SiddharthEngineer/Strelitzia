@@ -323,3 +323,16 @@ def test_doc_meta_on_trashed_and_missing_files(drive):
     assert client.doc_meta("nope") is None
     again = client.create_doc_from_text(folder, PROFILE_DOCS["library"], "y", "text/markdown", known_id=doc.id)
     assert again.created and again.id != doc.id
+
+
+def test_doc_meta_raises_drive_errors_other_than_404(drive, monkeypatch):
+    client = _text_client(drive)
+
+    class Boom(Exception):
+        resp = type("R", (), {"status": 500})()
+
+    def get(*a, **kw):
+        raise Boom("server error")
+    monkeypatch.setattr(type(drive.files()), "get", get)
+    with pytest.raises(Boom):
+        client.doc_meta("id1")

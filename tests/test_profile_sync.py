@@ -162,3 +162,29 @@ def test_pull_before_setup(client, conn, owner):
     result = ps.pull_profile(client, conn, owner, is_owner=True)
     assert result.problems == ["The Strelitzia content library Doc isn't set up.",
                                "The Strelitzia base resume Doc isn't set up."]
+
+
+def test_a_drive_error_is_a_problem_not_a_missing_doc(drive, client, conn, owner, monkeypatch):
+    _seed_db(conn, owner)
+    ps.setup_profile_docs(client, conn, owner, overwrite=False)
+
+    def boom(*a, **kw):
+        raise RuntimeError("503")
+    monkeypatch.setattr(client, "doc_meta", boom)
+    result = ps.pull_profile(client, conn, owner, is_owner=True)
+    assert result.problems == ["The Strelitzia content library Doc couldn't be read from Drive.",
+                               "The Strelitzia base resume Doc couldn't be read from Drive."]
+    assert load_profile(conn, owner).content_library_md == SAMPLE
+
+
+def test_a_failed_local_write_saves_nothing(drive, client, conn, owner, monkeypatch):
+    _seed_db(conn, owner)
+    docs = ps.setup_profile_docs(client, conn, owner, overwrite=False)
+    drive.edit(docs.resume["id"], b"A new resume\n")
+    monkeypatch.setattr(config, "RESUME_PATH", config.RESUME_PATH.parent / "bad\0name")  # the write raises
+    with pytest.raises(ValueError):
+        ps.pull_profile(client, conn, owner, is_owner=True)
+    assert load_profile(conn, owner).resume_text == RESUME
+    assert ps.profile_docs(conn, owner) == docs
+    assert not config.CONTENT_LIBRARY_PATH.exists()
+    assert not list(config.CONTENT_LIBRARY_PATH.parent.glob("*.tmp"))
