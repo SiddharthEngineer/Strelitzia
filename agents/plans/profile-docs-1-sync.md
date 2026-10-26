@@ -41,7 +41,7 @@ Doc), and the app only ever wrote database → Doc, so edits made in the Doc wer
 `upsert_doc`, with `text/markdown` or `text/plain` media). Add `modifiedTime` to `_FILE_FIELDS`. The fake stores the uploaded
 text and returns it from `export`.
 **Validate:** `pytest tests/test_drive_client.py -q` → passes, with new tests for export, doc_meta on a trashed file, and in-place update.
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (this commit)
 
 ### Task 2: Parse a Docs markdown export
 **Runs:** unattended
