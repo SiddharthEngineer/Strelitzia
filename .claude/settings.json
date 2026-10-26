@@ -48,6 +48,8 @@
       "Bash(make down)",
       "Bash(make preprod-down)",
       "Bash(make tag-prod:*)",
+      "Bash(make prod-release:*)",
+      "Bash(agent-runner versions promote:*)",
       "Read(**/.env)",
       "Read(personal/**)"
     ]

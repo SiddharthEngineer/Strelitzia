@@ -37,6 +37,11 @@ doc_or_test = ["*.md", "agents/*", ".claude/commands/*", ".claude/agents/*", "te
 code_line_budget = 250
 tests_dir = "tests/"
 
+[release]
+# The runner tags every merged PR (vX.Y.Z) and keeps a vX.Y pre-release; a prod deploy promotes it (agent-runner A21).
+# Prod ships through engineerfamily's components.toml pin (engineerfamily E12/E13).
+tags = true
+
 [preprod]
 # The PR head is fetched and checked out in app_dir, then deploy rebuilds only the preprod dashboard service.
 app_dir = "/srv/Strelitzia-preprod"
