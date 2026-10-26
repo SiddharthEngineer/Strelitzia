@@ -1,44 +1,31 @@
-import { useEffect, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import * as api from '../api';
 import Flower from '../components/Flower';
+import ProfileDocLinks from '../components/ProfileDocLinks';
 import { Group, TagInput } from '../components/FormParts';
-import { humanize } from '../labels';
+import { humanize, relativeTime } from '../labels';
 import type { ProfileFields, ProfileResponse } from '../types';
 
 type FieldKey = keyof ProfileFields;
 type TextKey = { [K in FieldKey]: ProfileFields[K] extends string ? K : never }[FieldKey];
 
-const isEmpty = (v: unknown) => v === null || v === '' || (Array.isArray(v) && v.length === 0);
-
-/** The profile with `draft` filled into the fields that are still empty. */
-function withDraft(form: ProfileFields, draft: Partial<ProfileFields>): ProfileFields {
-  const next = { ...form };
-  for (const [key, value] of Object.entries(draft) as [FieldKey, ProfileFields[FieldKey]][]) {
-    if (value !== undefined && !isEmpty(value) && isEmpty(form[key])) (next as Record<FieldKey, unknown>)[key] = value;
-  }
-  return next;
-}
-
 export default function ProfilePage() {
   const [data, setData] = useState<ProfileResponse | null>(null);
   const [form, setForm] = useState<ProfileFields | null>(null);
-  const [library, setLibrary] = useState('');
   const [saved, setSaved] = useState('');
-  // The resume's draft (until Save or Discard); a field is highlighted while it still holds the drafted value.
-  const [draft, setDraft] = useState<Partial<ProfileFields>>({});
   const [busy, setBusy] = useState(false);
-  const [parsing, setParsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [resumeNote, setResumeNote] = useState<string | null>(null);
-  const [resumeError, setResumeError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncNote, setSyncNote] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [problems, setProblems] = useState<string[]>([]);
 
   function load(res: ProfileResponse) {
     setData(res);
     setForm(res.profile);
-    setLibrary(res.content_library_md);
-    setSaved(JSON.stringify({ ...res.profile, content_library_md: res.content_library_md }));
+    setSaved(JSON.stringify(res.profile));
   }
 
   useEffect(() => {
@@ -59,16 +46,13 @@ export default function ProfilePage() {
     );
   }
 
-  const dirty = JSON.stringify({ ...form, content_library_md: library }) !== saved;
-  const drafted = (Object.keys(draft) as FieldKey[]).filter(
-    (k) => JSON.stringify(form[k]) === JSON.stringify(draft[k]));
+  const dirty = JSON.stringify(form) !== saved;
   const set = <K extends FieldKey>(key: K, value: ProfileFields[K]) => setForm((f) => (f ? { ...f, [key]: value } : f));
 
   const row = (key: FieldKey, name: string, control: ReactNode) => (
-    <div key={key} className={`pref-row${drafted.includes(key) ? ' drafted' : ''}`}>
+    <div key={key} className="pref-row">
       <div className="pref-label">{name}</div>
       <div className="pref-value">{control}</div>
-      {drafted.includes(key) && <span className="tag tag-soon" title="From your resume; Save to keep it">From resume</span>}
     </div>
   );
   const textRow = (key: TextKey, name: string, type = 'text', placeholder?: string) => row(key, name, (
@@ -82,9 +66,7 @@ export default function ProfilePage() {
     setError(null);
     setMessage(null);
     try {
-      const res = await api.saveProfile({ ...form, content_library_md: library });
-      load(res);
-      setDraft({});
+      load(await api.saveProfile(form));
       setMessage('Saved.');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -94,35 +76,22 @@ export default function ProfilePage() {
   }
 
   function onDiscard() {
-    const old = JSON.parse(saved);
-    setLibrary(old.content_library_md);
-    delete old.content_library_md;
-    setForm(old);
-    setDraft({});
+    setForm(JSON.parse(saved));
   }
 
-  async function onUpload(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = ''; // the same file can be picked again
-    if (!file) return;
-    setParsing(true);
-    setResumeError(null);
-    setResumeNote(null);
+  async function onSync() {
+    setSyncing(true);
+    setSyncError(null);
+    setSyncNote(null);
     try {
-      const res = await api.uploadResume(file);
-      setData((d) => (d ? { ...d, has_resume: res.has_resume, resume_file_name: res.resume_file_name } : d));
-      setForm((f) => (f ? withDraft(f, res.draft) : f)); // fields typed in meanwhile stay as typed
-      setDraft((d) => ({ ...d, ...res.draft }));
-      if (res.parse_error) setResumeError(res.parse_error);
-      else if (Object.keys(res.draft).length) setResumeNote('Resume saved. The highlighted fields are from it: check them, then Save.');
-      else setResumeNote('Resume saved. Nothing new to fill in: your fields are already set.');
+      const res = await api.syncProfileDocs();
+      setData(res);  // the fields being edited stay as typed
+      setProblems(res.problems);
+      if (res.ok) setSyncNote(res.changed ? 'Synced: your changes are in.' : 'Synced: nothing changed.');
     } catch (err) {
-      setResumeError(err instanceof Error ? err.message : String(err));
-      // A 402 still stores the resume (it just isn't parsed).
-      api.getProfile().then((res) => setData((d) => (d ? { ...d, has_resume: res.has_resume,
-        resume_file_name: res.resume_file_name } : d))).catch(() => {});
+      setSyncError(err instanceof Error ? err.message : String(err));
     } finally {
-      setParsing(false);
+      setSyncing(false);
     }
   }
 
@@ -166,35 +135,30 @@ export default function ProfilePage() {
         ))}
       </Group>
 
-      <Group title="Resume" hint="A PDF or DOCX, up to 5 MB. Uploading saves it right away (scoring reads it, so your
-        jobs' assessments become stale), then Claude reads it (about $0.002) and fills in the fields above that are
-        empty. Those are kept only when you Save.">
-        <div className="pref-row">
-          <div className="pref-label">Current file</div>
-          <div className="pref-value">
-            {data.resume_file_name
-              ? <a href={api.RESUME_DOWNLOAD_URL}>{data.resume_file_name}</a>
-              : <span className="muted">{data.has_resume ? 'A resume text, no file' : 'None yet'}</span>}
-          </div>
-        </div>
-        <div className="pref-row">
-          <div className="pref-label">Upload</div>
-          <div className="pref-value">
-            <input type="file" aria-label="Upload resume" disabled={parsing}
-              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              onChange={onUpload} />
-            {parsing && <span className="muted" role="status">Parsing…</span>}
-            {resumeNote && <span className="ok-text" role="status">{resumeNote}</span>}
-            {resumeError && <span className="error" role="alert">{resumeError}</span>}
-          </div>
-        </div>
-      </Group>
-
-      <Group title="Content library" hint="Your roles and projects in markdown: each role starts with a
-        &quot;## CURRENT ROLE&quot; or &quot;## PRIOR ROLE&quot; heading. The resume workbench picks bullets from it.">
-        <textarea aria-label="Content library" className="mono-area" rows={16} value={library}
-          onChange={(e) => setLibrary(e.target.value)} />
-        {data.content_library_error && <p className="error" role="alert">{data.content_library_error}</p>}
+      <Group title="Content library and resume" hint="Both live in Google Docs in the Drive folder Strelitzia/Profile.
+        Edit them there; the app reads them again before every Claude packet and check, or when you press Sync now.">
+        {data.profile_docs ? (
+          <>
+            <ProfileDocLinks docs={data.profile_docs} label="Profile Docs" />
+            <p className="muted small">
+              Last synced {relativeTime(data.profile_docs.library?.synced_at)}.{' '}
+              <button type="button" disabled={syncing} onClick={onSync}>{syncing ? 'Syncing…' : 'Sync now'}</button>
+            </p>
+            {syncNote && <p className="ok-text" role="status">{syncNote}</p>}
+            {syncError && <p className="error" role="alert">{syncError}</p>}
+            {problems.length > 0 && (
+              <div className="notice error" role="alert">
+                <p>Nothing was synced. Fix these in the Docs, then Sync now:</p>
+                <ul>{problems.map((p) => <li key={p}>{p}</li>)}</ul>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="muted">
+            Your content library and resume aren't in Google Docs yet. Set them up on
+            the <Link to="/claude-setup">Claude setup page</Link>.
+          </p>
+        )}
       </Group>
 
       <div className="save-bar">

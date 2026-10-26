@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import * as api from '../api';
 import Flower from '../components/Flower';
-import type { ClaudeSetup, ProfileDocs } from '../types';
+import ProfileDocLinks from '../components/ProfileDocLinks';
+import type { ClaudeSetup } from '../types';
 
 // The ?drive= outcome the Drive connect callback (web/auth.py) redirects back with.
 const DRIVE_OUTCOMES: Record<string, { text: string; error: boolean }> = {
@@ -11,27 +12,6 @@ const DRIVE_OUTCOMES: Record<string, { text: string; error: boolean }> = {
   error: { text: "Couldn't connect Google Drive. Try again.", error: true },
   unavailable: { text: "This server can't connect Google Drive yet.", error: true },
 };
-
-const DOC_NAMES: Record<keyof ProfileDocs, string> = {
-  library: 'Strelitzia content library',
-  resume: 'Strelitzia base resume',
-};
-
-/** The two Profile Docs as links (a Doc without a link is shown by name). */
-export function ProfileDocLinks({ docs, label }: { docs: ProfileDocs; label: string }) {
-  return (
-    <ul aria-label={label}>
-      {(Object.keys(DOC_NAMES) as (keyof ProfileDocs)[]).map((kind) => {
-        const url = docs[kind]?.url;
-        return (
-          <li key={kind}>
-            {url ? <a href={url} target="_blank" rel="noreferrer noopener">{DOC_NAMES[kind]} ↗</a> : DOC_NAMES[kind]}
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
 
 /** One-time setup: Drive, the Profile Docs, and a Claude Project with the rules file and the instructions. */
 export default function ClaudeSetupPage() {
