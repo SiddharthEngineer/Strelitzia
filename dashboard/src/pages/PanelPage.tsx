@@ -79,7 +79,7 @@ export default function PanelPage({ onChange }: { onChange?: () => void }) {
   async function copyRubric() {
     if (!overview) return;
     try {
-      await api.copyText(overview.rubric.text);
+      await api.copyText(overview.rubric_markdown);
       setCopiedRubric(true);
     } catch (err) {
       setError(errText(err));
@@ -112,10 +112,9 @@ export default function PanelPage({ onChange }: { onChange?: () => void }) {
             <strong>{overview.project_name}</strong> (separate from your resume project).
           </li>
           <li>
-            Add the rubric to its knowledge:{' '}
-            {overview.rubric.url
-              ? <a href={overview.rubric.url} target="_blank" rel="noreferrer noopener">{overview.rubric.name} ↗</a>
-              : <span className="muted">the Doc is written with the other Claude Docs (Claude setup); or paste it as text. </span>}
+            Add the rubric to its knowledge: download the file and upload it, or copy the text and paste it as text
+            content.{' '}
+            <a className="button" href={overview.rubric_url} download>Download rubric (.md)</a>
             {' '}<button type="button" onClick={copyRubric}>{copiedRubric ? 'Copied rubric' : 'Copy rubric'}</button>
           </li>
           <li>
