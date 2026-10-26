@@ -162,6 +162,6 @@ def test_workbench_is_owner_only_with_login_on(auth_client, db_path):
     friend = users.activate(conn, users.invite(conn, "friend@example.com").email, None)
     sign_in_as(auth_client, friend)
     assert auth_client.get("/strelitzia/dashboard/api/claude/setup").status_code == 403
-    assert auth_client.post("/strelitzia/dashboard/api/claude/docs").status_code == 403
+    assert auth_client.post("/strelitzia/dashboard/api/profile/docs/setup", json={}).status_code == 403
     assert auth_client.post("/strelitzia/dashboard/api/jobs/anykey/packet").status_code == 403
     assert auth_client.post("/strelitzia/dashboard/api/jobs/anykey/result", json={"text": "x"}).status_code == 403

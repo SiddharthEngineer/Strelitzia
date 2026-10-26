@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 from urllib.parse import quote, urlparse
 
-from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field, field_validator
 from starlette.concurrency import run_in_threadpool
@@ -36,7 +36,7 @@ from strelitzia.database import Connection, backend_name, backfill_job_keys, get
 from strelitzia.llm import LLMStopRun, check_budget, month_spend, user_month_spend
 from strelitzia.scoring import panel
 from strelitzia.scoring import preferences as prefs_mod
-from strelitzia.scoring import resume_parse, workbench
+from strelitzia.scoring import workbench
 from strelitzia.scoring.assessment import current_assessment_key, recompute_fit
 from strelitzia.scoring.content_library import parse_content_library_text
 from strelitzia.web import admin, auth, queries, tasks
@@ -383,39 +383,21 @@ def post_result(key: str, body: PastedResult, request: Request):
 
 @api.get("/claude/setup")
 def claude_setup(request: Request) -> dict:
-    """What the Claude setup page shows: the Project Docs, the rules version, Drive status, the instructions."""
+    """What the Claude setup page shows: Drive status, the Profile Docs, the rules (version and .md), the instructions."""
     user = current_user(request)
     _owner_content(user)
     conn = db_conn(request)
     state, detail, source = _drive_state(conn, user)
-    docs = workbench.published_static_docs(conn, user.id)
     return {
         "drive": state == "authorized", "drive_detail": detail, "drive_source": source,
         "connect_url": f"{auth.DRIVE_PREFIX}/connect" if auth.drive_connect_available() else None,
         "rules_version": workbench.RULES_VERSION,
         "rules_markdown": workbench.rules_markdown(),
         "rules_url": f"{PREFIX}/api/claude/rules.md",
-        "docs": [{"kind": kind, "name": name, "url": (docs.get(kind) or {}).get("url"),
-                  "changed_at": (docs.get(kind) or {}).get("changed_at")}
-                 for kind, name in workbench.STATIC_DOCS.items() if kind in workbench.RESUME_DOCS],
+        "profile_docs": _profile_docs_out(conn, user.id),
         "project_name": "Strelitzia Resumes",
         "project_instructions": workbench.PROJECT_INSTRUCTIONS,
     }
-
-
-@api.post("/claude/docs")
-def publish_claude_docs(request: Request) -> dict:
-    """Write (or refresh) the rules and content-library Docs in Drive."""
-    user = current_user(request)
-    _owner_content(user)
-    try:
-        client = _drive_client(request)
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=409, detail=str(e)) from e
-    if client is None:
-        raise HTTPException(status_code=409, detail="Google Drive isn't set up. Connect Google Drive on the Claude setup page.")
-    workbench.publish_static_docs(client, db_conn(request), user.id, _workbench_inputs(request), force=True)
-    return claude_setup(request)
 
 
 def _markdown_download(text: str, name: str) -> Response:
@@ -917,7 +899,6 @@ def put_preferences(body: PrefsSave, request: Request) -> dict:
 
 # --- Profile (strelitzia.profile): who the user is, their resume and content library ---
 
-MAX_RESUME_BYTES = 5 * 1024 * 1024
 PROFILE_FIELDS = ("first_name", "last_name", "phone", "email", "linkedin_url", "github_url", "location",
                   "current_job_title", "years_experience", "education_level", "skills")
 
@@ -975,7 +956,6 @@ class ProfileBody(BaseModel):
     years_experience: float | None = Field(default=None, ge=0, le=70)
     education_level: Literal[profile_store.PROFILE_EDUCATION_LEVELS] | None = None
     skills: list[str] = Field(default_factory=list, max_length=200)
-    content_library_md: str = Field(default="", max_length=500_000)
 
     @field_validator("first_name", "last_name", "phone", "email", "linkedin_url", "github_url", "location",
                      "current_job_title", mode="before")
@@ -1010,14 +990,11 @@ class ProfileBody(BaseModel):
 
 @api.put("/profile")
 def put_profile(body: ProfileBody, request: Request) -> dict:
-    """Save the profile fields and the content library that are sent (the others stay as they are). The resume and
-    the profile's extras are never changed here."""
+    """Save the profile fields that are sent (the others stay as they are). The content library and resume come
+    from the Profile Docs, and the profile's extras are never changed here."""
     conn = db_conn(request)
     user = current_user(request)
     profile = profile_store.load_profile(conn, user.id)
-    if ("content_library_md" in body.model_fields_set and body.content_library_md != profile.content_library_md
-            and _profile_docs_out(conn, user.id)):
-        raise HTTPException(status_code=409, detail="Edit your content library in the Google Doc")
     qualifications = (profile.education_level, profile.years_experience)
     for name, value in body.model_dump(exclude_unset=True).items():
         setattr(profile, name, value)
@@ -1060,64 +1037,6 @@ def sync_profile_docs(request: Request) -> dict:
     client = _require_drive(request)
     result = profile_sync.pull_profile(client, conn, user.id, is_owner=user.role == "owner")
     return {"ok": result.ok, "problems": result.problems, "changed": result.changed, **get_profile(request)}
-
-
-def _is_empty(value) -> bool:
-    return value is None or value == "" or value == []
-
-
-def _valid_draft_value(name: str, value) -> bool:
-    """Whether PUT /profile would accept the drafted value (a bad link in the draft would block the user's Save)."""
-    try:
-        if name == "email":
-            _check_email(value)
-        elif name == "linkedin_url":
-            _check_link(value, "linkedin.com", "LinkedIn")
-        elif name == "github_url":
-            _check_link(value, "github.com", "GitHub")
-    except ValueError:
-        return False
-    return True
-
-
-@api.post("/profile/resume")
-def post_profile_resume(file: UploadFile, request: Request) -> dict:
-    """Store an uploaded PDF or DOCX resume and its text (scoring reads it; jobs assessed with the old one show as
-    stale), then return Claude's draft for the profile fields that are still empty. The draft isn't saved: the
-    user reviews it and saves the profile.
-
-    422 for a file that's too large, not a PDF or DOCX, or has no text. 402 when the user's cap (or the monthly
-    budget) is reached: the resume is stored, but not parsed. Without an API key (or on another LLM error) the
-    draft is empty and `parse_error` says why.
-    """
-    conn = db_conn(request)
-    user = current_user(request)
-    data = file.file.read(MAX_RESUME_BYTES + 1)
-    if len(data) > MAX_RESUME_BYTES:
-        raise HTTPException(status_code=422, detail="The resume is larger than 5 MB")
-    name = Path(file.filename or "resume").name
-    try:
-        text = resume_parse.extract_text(name, file.content_type, data)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from e
-    profile_store.save_resume_file(conn, user.id, name, resume_parse.file_mime(name, file.content_type), data, text)
-    profile = profile_store.load_profile(conn, user.id)
-    budget_stop(conn, user.id)
-    parse_error = None
-    try:
-        parsed = resume_parse.parse_resume(text, user.id, conn=conn)
-    except LLMStopRun as e:
-        if e.reason == "budget":
-            budget_stop(conn, user.id)  # raced past the check above: the same 402
-        parse_error = f"The resume was saved, but it couldn't be parsed: {e}"
-        parsed = {}
-    except Exception as e:  # an unusable answer or an API error: the upload itself still worked
-        log.warning("resume parse failed for user %s: %s", user.id, type(e).__name__)
-        parse_error = f"The resume was saved, but it couldn't be parsed ({type(e).__name__})."
-        parsed = {}
-    draft = {k: v for k, v in parsed.items()
-             if k in PROFILE_FIELDS and _is_empty(getattr(profile, k)) and _valid_draft_value(k, v)}
-    return {**_profile_out(profile, conn, user.id), "draft": draft, "parse_error": parse_error}
 
 
 @api.get("/profile/resume")

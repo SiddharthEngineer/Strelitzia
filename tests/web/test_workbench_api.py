@@ -133,16 +133,10 @@ def test_missing_file_is_404(client, the_job):
 def test_setup_without_drive(client):
     s = client.get("/strelitzia/dashboard/api/claude/setup").json()
     assert s["drive"] is False and s["rules_version"] == wb.RULES_VERSION
-    assert [d["name"] for d in s["docs"]] == ["Strelitzia rules"]
+    assert "docs" not in s and s["profile_docs"] is None
     assert s["rules_markdown"] == wb.rules_markdown() and s["rules_url"] == "/strelitzia/dashboard/api/claude/rules.md"
-    assert all(d["url"] is None for d in s["docs"])
     assert "Strelitzia rules" in s["project_instructions"]
-    assert client.post("/strelitzia/dashboard/api/claude/docs").status_code == 409
-
-
-def test_publish_docs_from_setup(client, drive):
-    s = client.post("/strelitzia/dashboard/api/claude/docs").json()
-    assert all(d["url"] and d["changed_at"] for d in s["docs"])
+    assert client.post("/strelitzia/dashboard/api/claude/docs").status_code in (404, 405)  # removed
 
 
 def test_a_saved_draft_marks_the_job_in_progress(client, the_job):
@@ -226,10 +220,9 @@ def test_no_content_library_says_where_to_add_it(client, the_job, monkeypatch):
         "No content library yet. Add your content library on the Profile page.")
 
 
-def test_docs_without_drive_say_where_to_connect(client):
-    r = client.post("/strelitzia/dashboard/api/claude/docs")
-    assert r.status_code == 409 and r.json()["detail"] == (
-        "Google Drive isn't set up. Connect Google Drive on the Claude setup page.")
+def test_profile_docs_setup_without_drive_says_where_to_connect(client):
+    r = client.post("/strelitzia/dashboard/api/profile/docs/setup", json={})
+    assert r.status_code == 409 and r.json()["detail"] == "Connect Google Drive on the Claude setup page"
 
 
 def test_owner_without_a_token_key_keeps_the_cli_token(client, conn, tmp_path, monkeypatch):
@@ -242,10 +235,11 @@ def test_owner_without_a_token_key_keeps_the_cli_token(client, conn, tmp_path, m
     monkeypatch.setattr(config, "GOOGLE_TOKEN_PATH", token_file)
     fake = FakeDrive()
     monkeypatch.setattr(DriveClient, "from_credentials",
-                        classmethod(lambda cls: cls(fake, html_media_factory=lambda html: html.encode("utf-8"))))
+                        classmethod(lambda cls: cls(fake, html_media_factory=lambda html: html.encode("utf-8"),
+                                                    text_media_factory=lambda text, mime: text.encode("utf-8"))))
     s = client.get("/strelitzia/dashboard/api/claude/setup").json()
     assert s["drive"] is True and s["drive_source"] == "legacy"
-    assert client.post("/strelitzia/dashboard/api/claude/docs").status_code == 200
+    assert client.post("/strelitzia/dashboard/api/profile/docs/setup", json={}).status_code == 200
 
 
 def test_owner_keeps_the_cli_token_while_the_dashboard_cant_connect(client, conn, tmp_path, monkeypatch):
@@ -332,3 +326,8 @@ def test_rules_download(client):
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/markdown")
     assert r.text.splitlines()[0] == f"Rules version: {wb.RULES_VERSION}"
     assert f"Strelitzia%20rules%20{wb.RULES_VERSION}.md" in r.headers["content-disposition"]
+
+
+def test_setup_shows_the_profile_docs(client, conn, the_job, drive, profile_docs):
+    s = client.get("/strelitzia/dashboard/api/claude/setup").json()
+    assert s["profile_docs"]["library"]["url"] and s["profile_docs"]["resume"]["synced_at"]
