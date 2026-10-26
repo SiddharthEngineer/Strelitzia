@@ -149,3 +149,10 @@ def test_a_renamed_root_setting_does_not_reuse_the_cache(conn, monkeypatch):
     default = _client(fake, conn, "u1").ensure_folder_path(("Strelitzia",))
     monkeypatch.setenv("DRIVE_ROOT_FOLDER", "Jobs")
     assert _client(fake, conn, "u1").ensure_folder_path(("Jobs",)) != default
+
+
+def test_draft_name():
+    from strelitzia.storage.drive_layout import draft_name
+
+    assert draft_name(JOB, "resume") == "Acme - Data Engineer - Resume draft"
+    assert draft_name(JOB, "cover") == "Acme - Data Engineer - Cover letter draft"

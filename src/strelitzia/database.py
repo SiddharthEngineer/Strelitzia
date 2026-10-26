@@ -549,6 +549,12 @@ _ALL_COLUMNS: dict[str, str] = {
     "submitted_rules_version": "TEXT",
     "packet_doc_id": "TEXT",
     "packet_doc_url": "TEXT",
+    # The job's draft Docs (docs-drafts): Claude writes the resume and cover letter into them
+    "resume_draft_doc_id": "TEXT",
+    "resume_draft_doc_url": "TEXT",
+    "cover_draft_doc_id": "TEXT",
+    "cover_draft_doc_url": "TEXT",
+    "drafts_written_at": "TEXT",  # Drive's modifiedTime of the app's last write to them
     # Google Drive (the PDFs are moved there; see strelitzia.storage)
     "resume_drive_id": "TEXT",
     "resume_drive_url": "TEXT",

@@ -62,7 +62,9 @@ def test_packet_with_drive_writes_docs_and_a_short_prompt(client, conn, the_job,
     assert body["inline"] is False and body["doc_url"]
     assert len(body["prompt"]) <= wb.PROMPT_MAX and "Claude packet" in body["prompt"]
     names = sorted(f["name"] for f in drive.store.values() if f["mimeType"] == DOC_MIME)
-    assert names == [f"Initech – {job()['title']} – Claude packet"]  # the rules are a download now
+    assert names == sorted([f"Initech – {job()['title']} – Claude packet",  # the rules are a download now
+                            f"Initech - {job()['title']} - Resume draft",
+                            f"Initech - {job()['title']} - Cover letter draft"])
     detail = client.get(f"/strelitzia/dashboard/api/jobs/{the_job}").json()
     assert detail["packet_doc_url"] == body["doc_url"] == detail["links"]["packet"]
 
@@ -173,7 +175,8 @@ def per_user_drive(monkeypatch):
 
     def for_user(cls, conn, user_id):
         asked.append(user_id)
-        return cls(fake, media_factory=fake_media, html_media_factory=lambda html: html.encode("utf-8"))
+        return cls(fake, media_factory=fake_media, html_media_factory=lambda html: html.encode("utf-8"),
+                   text_media_factory=lambda text, mime: text.encode("utf-8"))
 
     monkeypatch.setattr(DriveClient, "for_user", classmethod(for_user))
     return asked
@@ -331,3 +334,61 @@ def test_rules_download(client):
 def test_setup_shows_the_profile_docs(client, conn, the_job, drive, profile_docs):
     s = client.get("/strelitzia/dashboard/api/claude/setup").json()
     assert s["profile_docs"]["library"]["url"] and s["profile_docs"]["resume"]["synced_at"]
+
+
+# --- Draft Docs and Check & format (docs-drafts-2-api Task 2) ---
+
+def _fill_drafts(conn, drive, data):
+    from strelitzia.scoring import draft_docs as dd
+    from workbench_helpers import library
+
+    row = dict(conn.execute("SELECT * FROM jobs").fetchone())
+    drive.edit(row["resume_draft_doc_id"], dd.resume_draft_text(data, library(), wb.RULES_VERSION).encode())
+    drive.edit(row["cover_draft_doc_id"], dd.cover_draft_text(data["cover_letter"], wb.RULES_VERSION).encode())
+
+
+def test_packet_creates_the_draft_docs(client, conn, the_job, drive):
+    body = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet").json()
+    assert body["resume_draft_url"] and body["cover_draft_url"]
+    assert "Resume draft" in body["prompt"] and "Cover letter draft" in body["prompt"]
+    d = client.get(f"/strelitzia/dashboard/api/jobs/{the_job}").json()
+    assert d["resume_draft_url"] == body["resume_draft_url"] and d["cover_draft_url"] == body["cover_draft_url"]
+    assert d["links"]["resume_draft"] == body["resume_draft_url"]
+
+
+def test_check_valid_drafts_saves_and_uploads_the_pdfs(client, conn, the_job, drive):
+    client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet")
+    _fill_drafts(conn, drive, good_result())
+    r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/drafts/check")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["outcome"]["draft_version"] == 1
+    assert not any("rules version" in w for w in body["outcome"]["warnings"])
+    d = body["job"]
+    assert d["draft_version"] == 1 and d["links"]["resume"] and d["links"]["cover_letter"]
+    pdfs = [f["name"] for f in drive.store.values() if f["name"].endswith(".pdf")]
+    assert len(pdfs) == 2
+
+
+def test_check_a_bullet_without_tags_is_422_naming_the_line(client, conn, the_job, drive):
+    client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet")
+    _fill_drafts(conn, drive, good_result())
+    row = dict(conn.execute("SELECT * FROM jobs").fetchone())
+    doc = drive.store[row["resume_draft_doc_id"]]
+    drive.edit(doc["id"], doc["content"].replace(b" [orders-pipeline]", b"", 1))
+    r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/drafts/check")
+    assert r.status_code == 422
+    body = r.json()
+    assert body["errors"][0].startswith("Resume draft, line 5:") and "no [slug] tags" in body["errors"][0]
+    assert body["fix_prompt"].endswith("Fix them in the two draft Docs and change nothing else.")
+    assert conn.execute("SELECT draft_version FROM jobs").fetchone()[0] is None
+
+
+def test_check_before_the_drafts_exist_is_409(client, the_job, drive):
+    r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/drafts/check")
+    assert r.status_code == 409 and r.json()["detail"].startswith("Open the job in Claude first")
+
+
+def test_check_needs_drive(client, the_job):
+    r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/drafts/check")
+    assert r.status_code == 409 and r.json()["detail"] == "Connect Google Drive on the Claude setup page"

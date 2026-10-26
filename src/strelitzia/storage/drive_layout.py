@@ -96,6 +96,14 @@ def packet_folder_path(job: dict) -> list[str]:
     return folder_path(job, "resume")
 
 
+DRAFT_LABELS = {"resume": "Resume draft", "cover": "Cover letter draft"}
+
+
+def draft_name(job: dict, kind: str) -> str:
+    """The job's draft Doc name: "<Company> - <Role> - Resume draft" (kind "resume" or "cover")."""
+    return f"{clean_name(job_company(job), 40)} - {clean_name(job.get('title'), 60)} - {DRAFT_LABELS[kind]}"
+
+
 def file_name(job: dict, kind: str, suffix: str = "") -> str:
     base = f"{clean_name(job_company(job), 40)} - {clean_name(job.get('title'), 60)} - {_KIND_LABEL[kind]}"
     if suffix:

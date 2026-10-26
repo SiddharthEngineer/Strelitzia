@@ -53,7 +53,7 @@ SCHEMA_VERSION = 1
 HEADLINE_MAX = 110
 BULLET_MAX = 230
 COVER_MAX_WORDS = 250
-PROMPT_MAX = 600
+PROMPT_MAX = 700
 DESCRIPTION_MAX = 12000
 
 
@@ -211,9 +211,9 @@ def _rules() -> _Doc:
         "Cover every evidenced required qualification at least once, in a bullet that cites a backing project, "
         "under the most recent role it applies to.",
         "Never mention an unevidenced qualification, skill or tool anywhere: not in bullets, the headline, Skills or "
-        "the cover letter. List it in notes_for_user instead so I see it.",
+        "the cover letter. List it under \"## Notes for me\" in the resume draft instead so I see it.",
         "Every number in a bullet must appear in the facts of the projects that bullet cites. Never invent, round or "
-        "combine numbers. The same goes for the cover letter and the projects in its evidence_slugs (numbers about the "
+        "combine numbers. The same goes for the cover letter and the projects on its Evidence line (numbers about the "
         "company may come from the posting). The headline cites no project, so any number in it must be in my "
         "library or base resume.",
         "No keyword lists inside bullets. Each bullet describes real work.",
@@ -226,11 +226,11 @@ def _rules() -> _Doc:
         "(\"machine learning (ML)\").",
         "Bullets: strong verb, what was built or done, tools, outcome. Write fresh from the facts; vary the verbs.",
         f"One page. Each bullet at most {BULLET_MAX} characters. Keep each role within the bullet range the packet gives.",
-        "Cite every project a bullet draws on in project_ids, using slugs from that bullet's own role. Never leave "
-        "project_ids empty.",
+        "Cite every project a bullet draws on in the [slug] tags at the end of the bullet, using slugs from that "
+        "bullet's own role. Never leave a bullet without tags.",
         "Skills: keep my base resume's categories (you may reorder them) and put the posting's evidenced must-haves "
         "first. Add nothing that isn't evidenced.",
-        f"Headline: one truthful line under my name, at most {HEADLINE_MAX} characters (an empty string for none).",
+        f"Headline: one truthful line under my name, at most {HEADLINE_MAX} characters (leave it empty for none).",
         "No em dashes or en dashes; use commas, periods or hyphens.",
         "Banned words and phrases: " + ", ".join(BANNED_WORDS) + ".",
     ])
@@ -241,22 +241,54 @@ def _rules() -> _Doc:
         "Paragraph 1: a specific thing I built that solves their problem. Paragraph 2: two achievements from the "
         "resume's cited projects, with numbers. Paragraph 3: one specific thing about the company from the posting, "
         "then a short close.",
-        "List every project the letter draws on in evidence_slugs. Direct and plain; no narration about yourself.",
-        "Set cover_letter to null only when I ask for the resume alone.",
+        "List every project the letter draws on in its Evidence line. Direct and plain; no narration about yourself.",
+        "Leave the cover letter draft empty only when I ask for the resume alone.",
     ])
     d.h("Output format")
     d.ul([
-        "End every reply with exactly one ```json block matching the schema below: the full resume and cover letter, "
-        "not a diff. Put any explanation before the block.",
-        "When I ask for a change, reply with the complete updated JSON again.",
-        "When I paste \"These problems were found\", fix exactly those and change nothing else.",
-        "Copy the value of the \"Rules version:\" line at the top of this rules file into rules_version.",
+        "Write the resume into the job's \"Resume draft\" Google Doc and the cover letter into its \"Cover letter "
+        "draft\" Doc (both in the job's Drive folder, named in the prompt) with the Google Docs connector. Replace "
+        "each Doc's whole text, in the formats below: the full resume and letter, not a diff.",
+        "Edit only those two Docs, and never create a new Doc: Strelitzia can only read Docs it created.",
+        "The first line of the resume draft is \"Rules version: \" followed by the value of the \"Rules version:\" "
+        "line at the top of this rules file.",
+        "When I ask for a change, write the complete updated resume and letter into the Docs again.",
+        "When I paste \"These problems were found\", fix exactly those in the Docs and change nothing else.",
+        "In the chat, say briefly what you wrote or changed; the Docs hold the result.",
     ])
-    d.p("Schema:")
-    d.pre(json.dumps(RESULT_SCHEMA, indent=2))
-    d.p("Example (shape only):")
-    d.pre(json.dumps(EXAMPLE_RESULT, indent=2))
+    d.p("Resume draft (one \"## <role key>\" section per role you keep, keys from the packet; each bullet ends with "
+        "the [slugs] of the projects it cites; roles you leave out go under \"## Dropped roles\"; skills as "
+        "\"- Category: items\"; anything for me, such as qualifications I can't claim, under \"## Notes for me\"):")
+    d.pre(RESUME_DRAFT_EXAMPLE)
+    d.p("Cover letter draft (the three paragraphs separated by blank lines, then the Evidence line):")
+    d.pre(COVER_DRAFT_EXAMPLE)
     return d
+
+
+RESUME_DRAFT_EXAMPLE = """Rules version: <the version at the top of this file>
+Headline: Data engineer building Airflow and Spark pipelines for finance analytics
+
+## <role key>
+- Migrated the nightly orders pipeline from cron to Airflow, cutting runtime from 6 hours to 45 minutes [<project slug>]
+- <another bullet> [<project slug>, <other project slug>]
+
+## Dropped roles
+- <role key>
+
+## Skills
+- Languages: Python, SQL
+- Tools: Airflow, Spark
+
+## Notes for me
+Kubernetes isn't in your library, so I left it out."""
+
+COVER_DRAFT_EXAMPLE = """<paragraph 1>
+
+<paragraph 2>
+
+<paragraph 3>
+
+Evidence: <project slug>, <other project slug>"""
 
 
 def rules_doc() -> str:
@@ -391,7 +423,7 @@ def job_packet(job: dict, library: ContentLibrary, base_resume_text: str, curren
     unmet = [e.target.text for e in ev.unevidenced()]
     d.h("Not claimable (unevidenced)")
     if unmet:
-        d.p("Leave these out of the resume and letter; mention them in notes_for_user if useful.")
+        d.p("Leave these out of the resume and letter; mention them under Notes for me if useful.")
         d.ul(unmet)
     else:
         d.p("None: every listed qualification is backed by the library or the base resume.")
@@ -410,23 +442,34 @@ def job_packet(job: dict, library: ContentLibrary, base_resume_text: str, curren
         d.p("Skill categories (from the base resume): " + "; ".join(f"{k}: {v}" for k, v in base.skills.items()))
     d.h("Job description")
     d.pre((job.get("full_description") or job.get("description") or "")[:DESCRIPTION_MAX].strip() or "(none)")
-    if current:
+    if current and inline:
         d.h("Current draft")
         d.p("Start from this draft; keep what already works.")
         d.pre(json.dumps(current, indent=2, ensure_ascii=False))
+    elif current:
+        d.h("Current draft")
+        d.p("The current draft is in the job's resume and cover letter draft Docs: start from it and keep what "
+            "already works.")
 
     text = d.text()
     if inline:
+        # Without Drive the reply is pasted back as JSON (this path goes away with the paste box).
         prompt = ("Tailor my resume and cover letter for this job. Follow the rules, use only the content library "
-                  "facts, and end your reply with the JSON block.\n\n"
-                  + text + "\n" + rules_text() + "\n" + library_text(library, base_resume_text))
+                  "facts, and instead of writing Docs, end your reply with exactly one ```json block matching this "
+                  "schema (copy the rules version into rules_version):\n"
+                  + json.dumps(RESULT_SCHEMA) + "\n\n"
+                  + text + "\n" + rules_markdown() + "\n" + library_text(library, base_resume_text))
     else:
-        title = name if len(name) <= 160 else name[:157] + "..."
-        prompt = (f"In this project, tailor my resume and cover letter for the job in the Google Doc '{title}'. "
-                  "Follow the Strelitzia rules, use only facts from my Profile Docs and the packet, "
-                  "and leave out everything the packet marks unevidenced. "
-                  + ("Start from the current draft in the packet. " if current else "")
-                  + "End your reply with the JSON block.")
+        from strelitzia.storage.drive_layout import draft_name
+
+        def short(n: str) -> str:
+            return n if len(n) <= 120 else n[:117] + "..."
+
+        prompt = (f"Tailor my resume and cover letter for the job in '{short(name)}'. Write the resume into the "
+                  f"Google Doc '{short(draft_name(job, 'resume'))}' and the cover letter into "
+                  f"'{short(draft_name(job, 'cover'))}' (both in the job's folder) with the Google Docs connector. "
+                  "Replace each Doc's whole text, in the format in the rules, and edit only those two Docs."
+                  + (" Start from the current draft in them." if current else ""))
     return Packet(name=name, html=d.html(), text=text, prompt=prompt, evidence=ev)
 
 
@@ -765,8 +808,8 @@ PROJECT_INSTRUCTIONS = (
     "\"Strelitzia content library\" and \"Strelitzia base resume\" in the Google Drive folder Strelitzia/Profile "
     "with the Google Docs connector, and use only their facts and the job's Claude packet; never claim a "
     "qualification the packet marks unevidenced, and never invent numbers. Edit those two Docs only when I ask. "
-    "When I ask for changes, keep everything else the same. End every reply with exactly one ```json block "
-    "that matches the schema in the rules, even when I only ask a question."
+    "Write the resume and cover letter into the job's two draft Docs (named in each prompt) in the rules' "
+    "format, and when I ask for changes, keep everything else the same."
 )
 
 # The panel rubric belongs in a separate "Strelitzia Panel" project (strelitzia.scoring.panel).
@@ -841,3 +884,62 @@ def publish_packet(client, conn: Connection, job: dict, inputs: Inputs | None = 
                  (f.id, f.url, job["user_id"], job["url"]))
     conn.commit()
     return f.id, f.url
+
+
+DRAFT_KINDS = ("resume", "cover")
+
+
+def _after(a: str | None, b: str | None) -> bool:
+    """Whether ISO timestamp a is later than b (False when either is missing or unreadable)."""
+    try:
+        return datetime.fromisoformat(a) > datetime.fromisoformat(b)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return False
+
+
+def draft_texts(job: dict, inputs: Inputs) -> dict[str, str]:
+    """{kind: text} to seed the job's draft Docs: the current draft, else a skeleton and a placeholder."""
+    from strelitzia.scoring.draft_docs import cover_draft_text, resume_draft_text
+
+    current = current_result(job)
+    return {"resume": resume_draft_text(current, inputs.library, RULES_VERSION),
+            "cover": cover_draft_text((current or {}).get("cover_letter"), RULES_VERSION)}
+
+
+def publish_drafts(client, conn: Connection, job: dict, inputs: Inputs | None = None) -> dict[str, str]:
+    """Create (or reuse) the job's resume and cover letter draft Docs in its Drive folder. Returns {kind: url}.
+
+    A Doc is (re)written only when it doesn't exist, or when nobody edited it since the app last wrote it and a
+    newer draft was accepted since; so reopening a packet never wipes Claude's or the user's edits.
+    """
+    from strelitzia.storage.drive_layout import draft_name, packet_folder_path
+
+    inputs = inputs or Inputs.for_user(conn, job["user_id"])
+    written_at = job.get("drafts_written_at")
+    newer_draft = bool(current_result(job)) and _after(job.get("tailored_at"), written_at)
+    urls: dict[str, str] = {}
+    texts: dict[str, str] | None = None
+    folder_id = None
+    last_write = written_at
+    for kind in DRAFT_KINDS:
+        doc_id = job.get(f"{kind}_draft_doc_id")
+        meta = client.doc_meta(doc_id) if doc_id else None
+        if meta and not meta.get("trashed"):
+            edited = not written_at or _after(meta.get("modifiedTime"), written_at)
+            if edited or not newer_draft:
+                urls[kind] = meta.get("webViewLink") or job.get(f"{kind}_draft_doc_url") or ""
+                continue
+        texts = texts or draft_texts(job, inputs)
+        folder_id = folder_id or client.ensure_folder_path(packet_folder_path(job))
+        known = doc_id if meta and not meta.get("trashed") else None
+        f = client.create_doc_from_text(folder_id, draft_name(job, kind), texts[kind], "text/markdown", known_id=known)
+        conn.execute(f"UPDATE jobs SET {kind}_draft_doc_id = ?, {kind}_draft_doc_url = ? WHERE user_id = ? AND url = ?",
+                     (f.id, f.url, job["user_id"], job["url"]))
+        urls[kind] = f.url
+        if f.modified and (not last_write or _after(f.modified, last_write)):
+            last_write = f.modified
+    if last_write != written_at:
+        conn.execute("UPDATE jobs SET drafts_written_at = ? WHERE user_id = ? AND url = ?",
+                     (last_write, job["user_id"], job["url"]))
+    conn.commit()
+    return urls
