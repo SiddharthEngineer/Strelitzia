@@ -1,11 +1,13 @@
 """Claude workbench: resumes and cover letters are written in a Claude Pro chat, not through the API.
 
 The app prepares the inputs and checks the output:
-- `rules_doc()` and `library_doc()` are the fixed inputs (Google Docs attached to a Claude Project once).
-- `job_packet()` is the per-job input: the posting, its required/preferred targets marked evidenced or not,
-  the allowed role keys and project slugs, and the current draft.
-- Claude ends every reply with a ```json block matching RESULT_SCHEMA. The user pastes that reply back and
-  `import_result()` runs the deterministic checks, then renders and records the draft.
+- `rules_markdown()` is the fixed input (a file in the Claude Project's knowledge); the content library and base
+  resume are the user's Profile Docs (`profile_sync`).
+- `job_packet()` is the per-job input (a Doc in the job's Drive folder): the posting, its required/preferred
+  targets marked evidenced or not, the allowed role keys and project slugs.
+- Claude writes the resume and cover letter into the job's two draft Docs (`publish_drafts`, format in
+  `draft_docs`). "Check & format" reads them back and `import_drafts()` runs the deterministic checks, then
+  renders and records the draft.
 """
 
 from __future__ import annotations
@@ -394,11 +396,10 @@ def _evidence_line(e) -> str:
 
 
 def job_packet(job: dict, library: ContentLibrary, base_resume_text: str, current: dict | None = None,
-               *, inline: bool = True, fixed_roles: dict | None = None) -> Packet:
+               *, fixed_roles: dict | None = None) -> Packet:
     """The per-job packet and the prompt to paste into the chat.
 
-    inline=False (Drive): the packet is a Doc in the project, so the prompt is a short pointer to it.
-    inline=True (no Drive): the prompt carries the packet, the rules and the content library.
+    The packet is a Doc in the job's Drive folder, so the prompt is a short pointer to it and the draft Docs.
     """
     from strelitzia.scoring.tailor import _role_slots
 
@@ -442,34 +443,22 @@ def job_packet(job: dict, library: ContentLibrary, base_resume_text: str, curren
         d.p("Skill categories (from the base resume): " + "; ".join(f"{k}: {v}" for k, v in base.skills.items()))
     d.h("Job description")
     d.pre((job.get("full_description") or job.get("description") or "")[:DESCRIPTION_MAX].strip() or "(none)")
-    if current and inline:
-        d.h("Current draft")
-        d.p("Start from this draft; keep what already works.")
-        d.pre(json.dumps(current, indent=2, ensure_ascii=False))
-    elif current:
+    if current:
         d.h("Current draft")
         d.p("The current draft is in the job's resume and cover letter draft Docs: start from it and keep what "
             "already works.")
 
+    from strelitzia.storage.drive_layout import draft_name
+
+    def short(n: str) -> str:
+        return n if len(n) <= 120 else n[:117] + "..."
+
+    prompt = (f"Tailor my resume and cover letter for the job in '{short(name)}'. Write the resume into the "
+              f"Google Doc '{short(draft_name(job, 'resume'))}' and the cover letter into "
+              f"'{short(draft_name(job, 'cover'))}' (both in the job's folder) with the Google Docs connector. "
+              "Replace each Doc's whole text, in the format in the rules, and edit only those two Docs."
+              + (" Start from the current draft in them." if current else ""))
     text = d.text()
-    if inline:
-        # Without Drive the reply is pasted back as JSON (this path goes away with the paste box).
-        prompt = ("Tailor my resume and cover letter for this job. Follow the rules, use only the content library "
-                  "facts, and instead of writing Docs, end your reply with exactly one ```json block matching this "
-                  "schema (copy the rules version into rules_version):\n"
-                  + json.dumps(RESULT_SCHEMA) + "\n\n"
-                  + text + "\n" + rules_markdown() + "\n" + library_text(library, base_resume_text))
-    else:
-        from strelitzia.storage.drive_layout import draft_name
-
-        def short(n: str) -> str:
-            return n if len(n) <= 120 else n[:117] + "..."
-
-        prompt = (f"Tailor my resume and cover letter for the job in '{short(name)}'. Write the resume into the "
-                  f"Google Doc '{short(draft_name(job, 'resume'))}' and the cover letter into "
-                  f"'{short(draft_name(job, 'cover'))}' (both in the job's folder) with the Google Docs connector. "
-                  "Replace each Doc's whole text, in the format in the rules, and edit only those two Docs."
-                  + (" Start from the current draft in them." if current else ""))
     return Packet(name=name, html=d.html(), text=text, prompt=prompt, evidence=ev)
 
 
@@ -500,19 +489,6 @@ def extract_json(text: str) -> tuple[object, str]:
     except json.JSONDecodeError as e:
         raise ValueError(f"{where} isn't valid JSON ({e.msg} at line {e.lineno}, column {e.colno}).") from e
     return data, where
-
-
-def extract_result(text: str) -> dict:
-    """The result object from a pasted reply: the last ```json block, or the whole text if it is JSON.
-
-    Raises:
-        ValueError: no JSON block, invalid JSON, or JSON that doesn't match RESULT_SCHEMA.
-    """
-    data, where = extract_json(text)
-    errors = schema_errors(data, RESULT_SCHEMA)
-    if errors:
-        raise ValueError(f"{where} doesn't match the Strelitzia format: " + "; ".join(errors[:8]))
-    return data
 
 
 class RenderRejected(ValueError):
@@ -630,19 +606,6 @@ def _coverage_warnings(resume: TailoredResume, ev: EvidenceMap) -> list[str]:
     text = " ".join(t for _, t in resume_parts(resume))
     return [f"Evidenced required qualification not on the resume: {e.target.text}"
             for e in ev.evidenced() if e.target.kind == "required" and not matches(e.target, text, ev.pairs)]
-
-
-def import_result(conn: Connection, job: dict, text: str, inputs: Inputs | None = None,
-                  out_dir: Path | None = None, cover_dir: Path | None = None) -> ImportOutcome:
-    """Check a pasted reply; on success render the files and record a new draft version for the job's user.
-
-    On any error nothing is saved, and the outcome carries a `fix_prompt` to paste back into the chat.
-    """
-    try:
-        data = extract_result(text)
-    except ValueError as e:
-        return ImportOutcome(ok=False, errors=[str(e)], fix_prompt=fix_prompt([str(e)]))
-    return import_data(conn, job, data, inputs, out_dir, cover_dir)
 
 
 def import_drafts(conn: Connection, job: dict, resume_text: str, cover_text: str, inputs: Inputs | None = None,
@@ -866,9 +829,9 @@ def publish_static_docs(client, conn: Connection, user_id: str, inputs: Inputs |
     return urls
 
 
-def packet_for(job: dict, inputs: Inputs, inline: bool) -> Packet:
+def packet_for(job: dict, inputs: Inputs) -> Packet:
     """The job's packet from the loaded inputs: the current draft, and role facts from resume_fixed.yaml."""
-    return job_packet(job, inputs.library, inputs.base_resume_text, current_result(job), inline=inline,
+    return job_packet(job, inputs.library, inputs.base_resume_text, current_result(job),
                       fixed_roles=inputs.fixed.get("roles") or None)
 
 
@@ -877,7 +840,7 @@ def publish_packet(client, conn: Connection, job: dict, inputs: Inputs | None = 
     from strelitzia.storage.drive_layout import clean_name, packet_folder_path
 
     inputs = inputs or Inputs.for_user(conn, job["user_id"])
-    packet = packet_for(job, inputs, inline=False)
+    packet = packet_for(job, inputs)
     folder_id = client.ensure_folder_path(packet_folder_path(job))
     f = client.upsert_doc(folder_id, clean_name(packet.name, 160), packet.html, known_id=job.get("packet_doc_id"))
     conn.execute("UPDATE jobs SET packet_doc_id = ?, packet_doc_url = ? WHERE user_id = ? AND url = ?",

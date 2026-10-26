@@ -75,29 +75,21 @@ def test_packet_lists_targets_and_unmet():
 
 
 def test_drive_prompt_is_short_and_names_the_docs():
-    p = wb.job_packet(job(), library(), BASE_RESUME, inline=False)
+    p = wb.job_packet(job(), library(), BASE_RESUME)
     assert len(p.prompt) <= wb.PROMPT_MAX
     assert "'Initech – Senior Data Engineer – Claude packet'" in p.prompt
     assert "'Initech - Senior Data Engineer - Resume draft'" in p.prompt
     assert "'Initech - Senior Data Engineer - Cover letter draft'" in p.prompt
     assert "edit only those two Docs" in p.prompt and "JSON" not in p.prompt
-    long = wb.job_packet(job(title="Very long title " * 30), library(), BASE_RESUME, current=good_result(),
-                         inline=False)
+    long = wb.job_packet(job(title="Very long title " * 30), library(), BASE_RESUME, current=good_result())
     assert len(long.prompt) <= wb.PROMPT_MAX and "current draft" in long.prompt
     assert "## Current draft" in long.text and json.dumps(good_result()["resume"]["headline"]) not in long.text
 
 
-def test_inline_prompt_carries_packet_rules_and_library():
-    p = wb.job_packet(job(), library(), BASE_RESUME)
-    assert p.text in p.prompt
-    assert "Strelitzia rules" in p.prompt and "Project slug: churn-model" in p.prompt
-
-
-def test_packet_includes_current_draft():
-    current = good_result()
-    p = wb.job_packet(job(), library(), BASE_RESUME, current=copy.deepcopy(current))
-    assert "## Current draft" in p.text
-    assert json.dumps(current["resume"]["headline"]) in p.text
+def test_packet_points_at_the_current_draft():
+    p = wb.job_packet(job(), library(), BASE_RESUME, current=copy.deepcopy(good_result()))
+    assert "## Current draft" in p.text and "draft Docs" in p.text
+    assert "Start from the current draft in them." in p.prompt
 
 
 def test_packet_without_posting_details():
@@ -109,7 +101,7 @@ def test_packet_for_uses_resume_fixed_role_facts():
     ins = inputs()
     ins.fixed = {**ins.fixed, "roles": {"data-engineer-acme": {"title": "Senior Data Engineer", "company": "Acme Corp",
                                                                 "dates": "2021 – 2024"}}}
-    p = wb.packet_for(job(), ins, inline=True)
+    p = wb.packet_for(job(), ins)
     assert "data-engineer-acme: Senior Data Engineer at Acme Corp (2021 – 2024)" in p.text
 
 

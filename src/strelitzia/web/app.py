@@ -333,42 +333,26 @@ def _drive_client(request: Request):
 
 @api.post("/jobs/{key}/packet")
 def post_packet(key: str, request: Request) -> dict:
-    """Write the job's Claude packet (a Drive Doc when Drive is set up) and return the prompt to paste in Claude."""
+    """Write the job's Claude packet and draft Docs to Drive and return the prompt to paste in Claude.
+
+    409 when Drive isn't connected (the workbench works only through Drive) or can't be written.
+    """
     conn = db_conn(request)
     user = current_user(request)
     _owner_content(user)
     job = job_by_key(conn, user.id, key)
+    client = _require_drive(request)
     inputs = _workbench_inputs(request)
-    drive_error = None
     try:
-        client = _drive_client(request)
-        if client is not None:
-            _, url = workbench.publish_packet(client, conn, job, inputs)
-            drafts = workbench.publish_drafts(client, conn, job_by_key(conn, user.id, key), inputs)
-            packet = workbench.packet_for(job, inputs, inline=False)
-            return {"prompt": packet.prompt, "doc_url": url, "inline": False, "rules_version": workbench.RULES_VERSION,
-                    "resume_draft_url": drafts.get("resume"), "cover_draft_url": drafts.get("cover")}
-    except Exception as e:  # noqa: BLE001 -- Drive trouble shouldn't block the clipboard flow
+        _, url = workbench.publish_packet(client, conn, job, inputs)
+        drafts = workbench.publish_drafts(client, conn, job_by_key(conn, user.id, key), inputs)
+    except Exception as e:  # noqa: BLE001 -- e.g. an expired token or a Drive outage
         log.warning("Drive packet failed for %s: %s", key, e)
-        drive_error = f"Couldn't write the packet to Drive ({e}); the full packet was copied instead."
-    packet = workbench.packet_for(job, inputs, inline=True)
-    return {"prompt": packet.prompt, "doc_url": None, "inline": True, "rules_version": workbench.RULES_VERSION,
-            "drive_error": drive_error, "resume_draft_url": None, "cover_draft_url": None}
-
-
-class PastedResult(BaseModel):
-    text: str = Field(max_length=200_000)
-
-
-@api.post("/jobs/{key}/result")
-def post_result(key: str, body: PastedResult, request: Request):
-    """Check a pasted Claude reply. 422 with errors and a fix message, or 200 with the saved draft and the job."""
-    conn = db_conn(request)
-    user = current_user(request)
-    _owner_content(user)
-    job = job_by_key(conn, user.id, key)
-    outcome = workbench.import_result(conn, job, body.text, _workbench_inputs(request))
-    return _import_response(request, key, outcome)
+        raise HTTPException(status_code=409, detail=f"Couldn't write the packet to Google Drive ({e}). "
+                            "Reconnect Google Drive on the Claude setup page.") from e
+    packet = workbench.packet_for(job, inputs)
+    return {"prompt": packet.prompt, "doc_url": url, "rules_version": workbench.RULES_VERSION,
+            "resume_draft_url": drafts.get("resume"), "cover_draft_url": drafts.get("cover")}
 
 
 def _import_response(request: Request, key: str, outcome: workbench.ImportOutcome, client=None):
