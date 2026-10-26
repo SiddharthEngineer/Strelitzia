@@ -235,3 +235,26 @@ def test_a_draft_is_the_jobs_users_only(conn, tmp_path):
     assert theirs["draft_version"] is None and theirs["user_status"] is None
     assert tracking.status_events(conn, other, mine["url"]) == []
     assert len(tracking.status_events(conn, mine["user_id"], mine["url"])) == 1
+
+
+# ── Rules version (profile-docs-2-api Task 3) ──
+
+def test_rules_markdown_starts_with_the_version_line():
+    text = wb.rules_markdown()
+    assert text.splitlines()[0] == f"Rules version: {wb.RULES_VERSION}"
+    assert "rules_version" in text and wb.rules_text() in text
+    assert wb.rules_file_name() == f"Strelitzia rules {wb.RULES_VERSION}.md"
+
+
+@pytest.mark.parametrize("used, warned", [(wb.RULES_VERSION, None), (None, "didn't say"), ("0ld0ld00", "0ld0ld00")])
+def test_rules_version_warning(conn, tmp_path, used, warned):
+    data = good_result()
+    if used:
+        data["rules_version"] = used
+    outcome = _import(conn, tmp_path, data)
+    assert outcome.ok, outcome.errors
+    found = [w for w in outcome.warnings if "rules" in w and wb.RULES_VERSION in w]
+    if warned is None:
+        assert found == []
+    else:
+        assert len(found) == 1 and warned in found[0] and "download the current rules" in found[0]

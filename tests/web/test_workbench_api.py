@@ -133,7 +133,8 @@ def test_missing_file_is_404(client, the_job):
 def test_setup_without_drive(client):
     s = client.get("/strelitzia/dashboard/api/claude/setup").json()
     assert s["drive"] is False and s["rules_version"] == wb.RULES_VERSION
-    assert [d["name"] for d in s["docs"]] == ["Strelitzia rules", "Strelitzia content library"]
+    assert [d["name"] for d in s["docs"]] == ["Strelitzia rules"]
+    assert s["rules_markdown"] == wb.rules_markdown() and s["rules_url"] == "/strelitzia/dashboard/api/claude/rules.md"
     assert all(d["url"] is None for d in s["docs"])
     assert "Strelitzia rules" in s["project_instructions"]
     assert client.post("/strelitzia/dashboard/api/claude/docs").status_code == 409
@@ -324,3 +325,10 @@ def test_without_profile_docs_the_database_copy_is_used(client, conn, the_job, d
     packet = next(f for f in drive.store.values() if f["name"].endswith("Claude packet"))
     assert b"Kubernetes: evidenced" in packet["content"]
     assert drive.calls["export"] == 0
+
+
+def test_rules_download(client):
+    r = client.get("/strelitzia/dashboard/api/claude/rules.md")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/markdown")
+    assert r.text.splitlines()[0] == f"Rules version: {wb.RULES_VERSION}"
+    assert f"Strelitzia%20rules%20{wb.RULES_VERSION}.md" in r.headers["content-disposition"]

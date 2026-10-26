@@ -393,6 +393,8 @@ def claude_setup(request: Request) -> dict:
         "drive": state == "authorized", "drive_detail": detail, "drive_source": source,
         "connect_url": f"{auth.DRIVE_PREFIX}/connect" if auth.drive_connect_available() else None,
         "rules_version": workbench.RULES_VERSION,
+        "rules_markdown": workbench.rules_markdown(),
+        "rules_url": f"{PREFIX}/api/claude/rules.md",
         "docs": [{"kind": kind, "name": name, "url": (docs.get(kind) or {}).get("url"),
                   "changed_at": (docs.get(kind) or {}).get("changed_at")}
                  for kind, name in workbench.STATIC_DOCS.items() if kind in workbench.RESUME_DOCS],
@@ -416,6 +418,17 @@ def publish_claude_docs(request: Request) -> dict:
     return claude_setup(request)
 
 
+def _markdown_download(text: str, name: str) -> Response:
+    return Response(text, media_type="text/markdown; charset=utf-8",
+                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
+
+
+@api.get("/claude/rules.md")
+def get_rules_markdown() -> Response:
+    """The rules for the Strelitzia Resumes project's knowledge, with the version line first."""
+    return _markdown_download(workbench.rules_markdown(), workbench.rules_file_name())
+
+
 # --- Resume panel (strelitzia.scoring.panel) ---
 
 @api.get("/panel")
@@ -433,7 +446,15 @@ def get_panel(request: Request) -> dict:
         "project_instructions": panel.PROJECT_INSTRUCTIONS,
         "rubric": {"name": workbench.STATIC_DOCS["panel_rubric"], "url": rubric.get("url"),
                    "text": panel.rubric_text()},
+        "rubric_markdown": panel.rubric_markdown(),
+        "rubric_url": f"{PREFIX}/api/panel/rubric.md",
     }
+
+
+@api.get("/panel/rubric.md")
+def get_rubric_markdown() -> Response:
+    """The panel rubric for the Strelitzia Panel project's knowledge."""
+    return _markdown_download(panel.rubric_markdown(), panel.RUBRIC_FILE_NAME)
 
 
 class PanelRunCreate(BaseModel):
