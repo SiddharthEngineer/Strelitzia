@@ -1,5 +1,5 @@
 # Plan: Draft Docs, part 2: draft Docs per job and "Check & format"
-**Status:** ❌ Not started
+**Status:** 🟡 Code done 2026-10-26, preprod test pending
 **Risk:** review (new job columns, packet flow and endpoint; touches `web/` and `database.py`)
 **Depends on:** docs-drafts-1-format
 
@@ -36,7 +36,7 @@ letter for the job in '<packet>'. Write the resume into the Google Doc '<resume 
 draft>' (both in the job's folder) with the Google Docs connector. Replace each Doc's whole text, in the format in the rules,
 and edit only those two Docs." `_rules()` Output format: the Doc format, with JSON removed.
 **Validate:** `pytest tests/test_workbench_packet.py tests/test_drive_layout.py -q` → passes: first open creates seeded Docs; reopen after an outside edit leaves them alone; prompt names both Docs.
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (e9961ae)
 
 ### Task 2: The check endpoint
 **Runs:** unattended
@@ -47,7 +47,7 @@ Profile Docs), exports both drafts as `text/markdown`, and calls `import_drafts`
 `{detail, errors, warnings, fix_prompt}`. On success it runs `sync_job` and returns `{outcome, job}`, the same shape as
 `post_result`. The job detail adds both draft URLs.
 **Validate:** `pytest tests/web/test_workbench_api.py -q` → passes with the fake Drive: valid drafts → 200 and PDFs uploaded; a bullet without tags → 422 naming the line; a missing draft Doc → 409 "Open the job in Claude first".
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (05943c0)
 
 ### Task 3: Rules version and old paste path
 **Runs:** unattended
@@ -55,7 +55,7 @@ Profile Docs), exports both drafts as `text/markdown`, and calls `import_drafts`
 **What:** The rules tell Claude to put the `Rules version:` line at the top of the resume Doc. The warning from profile-docs-2
 now reads it from there. The JSON paste path (`import_result`, `POST /jobs/{key}/result`) keeps working until part 3 removes it.
 **Validate:** `pytest tests/test_workbench_import.py -q` → passes, including the version warning from a draft Doc.
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (4823656)
 
 ## Validation
 - `scripts/validate.sh --full` passes.
