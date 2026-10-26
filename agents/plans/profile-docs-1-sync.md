@@ -51,7 +51,7 @@ bullets, `__x__` → `**x**`, drop blank lines inside lists, map `#`/`###` role 
 CURRENT/PRIOR ROLE). `parse_content_library_text` calls it first. The fixture is `tests/fixtures/content_library_sample.md`
 rewritten with those quirks.
 **Validate:** `pytest tests/test_content_library.py -q` → the fixture parses to the same roles, projects, fields and angles as `content_library_sample.md`.
-**Status:** ✅ 2026-10-26 (this commit)
+**Status:** ✅ 2026-10-26 (f2d25aa)
 
 ### Task 3: Profile sync module
 **Runs:** unattended
@@ -75,7 +75,7 @@ def pull_profile(client, conn, user_id, *, is_owner: bool) -> SyncResult
 class ProfileDocsExist(Exception): names: list[str]
 ```
 **Validate:** `pytest tests/test_profile_sync.py -q` → passes: seed from database, seed from templates, refuse without overwrite, overwrite updates in place, pull saves database + local files (owner only, in tmp APP_DIR), parse error saves nothing, trashed Doc reported.
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (this commit)
 
 ## Validation
 - `scripts/validate.sh --full` passes.
