@@ -258,3 +258,48 @@ def test_rules_version_warning(conn, tmp_path, used, warned):
         assert found == []
     else:
         assert len(found) == 1 and warned in found[0] and "download the current rules" in found[0]
+
+
+# ── Draft Docs (docs-drafts-1-format Task 3) ──
+
+def _draft_texts(data):
+    from strelitzia.scoring import draft_docs as dd
+    from workbench_helpers import library
+
+    return (dd.resume_draft_text(data, library(), wb.RULES_VERSION),
+            dd.cover_draft_text(data["cover_letter"], wb.RULES_VERSION))
+
+
+def test_import_drafts_accepts_a_rendered_valid_draft(conn, tmp_path):
+    job = add_job_row(conn)
+    resume_text, cover_text = _draft_texts(good_result())
+    outcome = wb.import_drafts(conn, job, resume_text, cover_text, inputs=inputs(), out_dir=tmp_path / "out")
+    assert outcome.ok, outcome.errors
+    assert outcome.draft_version == 1 and outcome.files["resume"] and outcome.files["cover_letter"]
+    assert not any("rules version" in w for w in outcome.warnings)
+
+
+def test_import_drafts_rejects_a_broken_draft_and_saves_nothing(conn, tmp_path):
+    job = add_job_row(conn)
+    resume_text, cover_text = _draft_texts(good_result())
+    outcome = wb.import_drafts(conn, job, resume_text.replace(" [orders-pipeline]", ""), cover_text,
+                               inputs=inputs(), out_dir=tmp_path / "out")
+    assert not outcome.ok and outcome.errors[0].startswith("Resume draft, line")
+    assert outcome.fix_prompt.endswith("Fix them in the two draft Docs and change nothing else.")
+    assert "JSON" not in outcome.fix_prompt
+    assert conn.execute("SELECT draft_version FROM jobs").fetchone()[0] is None
+
+
+def test_import_drafts_check_errors_ask_for_doc_fixes(conn, tmp_path):
+    job = add_job_row(conn)
+    data = good_result()
+    data["resume"]["skills"].append({"category": "Cloud", "items": "Kubernetes"})
+    outcome = wb.import_drafts(conn, job, *_draft_texts(data), inputs=inputs(), out_dir=tmp_path / "out")
+    assert not outcome.ok and any("Kubernetes" in e for e in outcome.errors)
+    assert "draft Docs" in outcome.fix_prompt
+
+
+def test_import_data_is_the_paste_path_without_extraction(conn, tmp_path):
+    job = add_job_row(conn)
+    outcome = wb.import_data(conn, job, good_result(), inputs=inputs(), out_dir=tmp_path / "out")
+    assert outcome.ok and outcome.draft_version == 1
