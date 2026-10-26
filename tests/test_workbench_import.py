@@ -242,7 +242,7 @@ def test_a_draft_is_the_jobs_users_only(conn, tmp_path):
 def test_rules_markdown_starts_with_the_version_line():
     text = wb.rules_markdown()
     assert text.splitlines()[0] == f"Rules version: {wb.RULES_VERSION}"
-    assert "rules_version" in text and wb.rules_text() in text
+    assert "Rules version: <the version at the top of this file>" in text and wb.rules_text() in text
     assert wb.rules_file_name() == f"Strelitzia rules {wb.RULES_VERSION}.md"
 
 

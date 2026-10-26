@@ -3,8 +3,13 @@
 import copy
 import json
 
+import pytest
+from fake_drive import FakeDrive
+
+from strelitzia.database import init_db
 from strelitzia.scoring import workbench as wb
-from workbench_helpers import BASE_RESUME, good_result, inputs, job, library
+from strelitzia.storage.drive import DOC_MIME, DriveClient
+from workbench_helpers import BASE_RESUME, add_job_row, good_result, inputs, job, library
 
 
 def test_schema_accepts_a_sample_result():
@@ -38,11 +43,13 @@ def test_schema_rejects_wrong_version_and_bool_as_int():
     assert wb.schema_errors(data, wb.RESULT_SCHEMA)
 
 
-def test_rules_doc_covers_the_rules_and_schema():
+def test_rules_doc_covers_the_rules_and_the_draft_format():
     html = wb.rules_doc()
+    assert "```json" not in html and "project_ids" not in html
     for phrase in ("every evidenced required qualification", "most recent role", "exact term",
                    "Never mention an unevidenced", "No keyword lists", "No hidden text", "230 characters",
-                   "3 paragraphs", "250 words", "```json", "spearheaded", "&quot;strelitzia&quot;"):
+                   "3 paragraphs", "250 words", "spearheaded", "## Dropped roles", "## Notes for me",
+                   "Evidence: ", "never create a new Doc", "Resume draft"):
         assert phrase in html, phrase
     assert len(wb.RULES_VERSION) == 8 and wb.RULES_VERSION in wb.job_packet(job(), library(), BASE_RESUME).text
 
@@ -67,13 +74,17 @@ def test_packet_lists_targets_and_unmet():
     assert "<h2>Required qualifications</h2>" in p.html
 
 
-def test_drive_prompt_is_short_and_names_the_doc():
+def test_drive_prompt_is_short_and_names_the_docs():
     p = wb.job_packet(job(), library(), BASE_RESUME, inline=False)
     assert len(p.prompt) <= wb.PROMPT_MAX
     assert "'Initech – Senior Data Engineer – Claude packet'" in p.prompt
+    assert "'Initech - Senior Data Engineer - Resume draft'" in p.prompt
+    assert "'Initech - Senior Data Engineer - Cover letter draft'" in p.prompt
+    assert "edit only those two Docs" in p.prompt and "JSON" not in p.prompt
     long = wb.job_packet(job(title="Very long title " * 30), library(), BASE_RESUME, current=good_result(),
                          inline=False)
     assert len(long.prompt) <= wb.PROMPT_MAX and "current draft" in long.prompt
+    assert "## Current draft" in long.text and json.dumps(good_result()["resume"]["headline"]) not in long.text
 
 
 def test_inline_prompt_carries_packet_rules_and_library():
@@ -100,3 +111,96 @@ def test_packet_for_uses_resume_fixed_role_facts():
                                                                 "dates": "2021 – 2024"}}}
     p = wb.packet_for(job(), ins, inline=True)
     assert "data-engineer-acme: Senior Data Engineer at Acme Corp (2021 – 2024)" in p.text
+
+
+# ── Draft Docs with the packet (docs-drafts-2-api Task 1) ──
+
+@pytest.fixture
+def drive(monkeypatch):
+    monkeypatch.setenv("DRIVE_ROOT_FOLDER", "Strelitzia")
+    return FakeDrive()
+
+
+@pytest.fixture
+def client(drive):
+    return DriveClient(drive, text_media_factory=lambda text, mime: text.encode("utf-8"))
+
+
+@pytest.fixture
+def conn(tmp_path):
+    return init_db(tmp_path / "wb.db")
+
+
+def _row(conn):
+    return dict(conn.execute("SELECT * FROM jobs").fetchone())
+
+
+def _draft_docs(drive):
+    return {f["name"]: f for f in drive.store.values()
+            if f["mimeType"] == DOC_MIME and "draft" in f["name"] and not f["trashed"]}
+
+
+def test_first_open_creates_seeded_drafts(drive, client, conn):
+    job = add_job_row(conn)
+    urls = wb.publish_drafts(client, conn, job, inputs())
+    assert set(urls) == {"resume", "cover"} and all(urls.values())
+    docs = _draft_docs(drive)
+    resume = docs["Initech - Senior Data Engineer - Resume draft"]
+    cover = docs["Initech - Senior Data Engineer - Cover letter draft"]
+    assert drive.path_of(resume["id"])[:3] == ["Strelitzia", "Initech", "Senior Data Engineer"]
+    assert resume["content"].decode().startswith(f"Rules version: {wb.RULES_VERSION}\nHeadline: \n")
+    assert b"## data-engineer-acme" in resume["content"] and b"Write the cover letter here" in cover["content"]
+    row = _row(conn)
+    assert row["resume_draft_doc_id"] == resume["id"] and row["cover_draft_doc_url"] == urls["cover"]
+    assert row["drafts_written_at"] == max(resume["modifiedTime"], cover["modifiedTime"])
+
+
+def test_drafts_seed_from_the_current_draft(drive, client, conn, tmp_path, monkeypatch):
+    from strelitzia.scoring import pdf as pdf_mod
+    from workbench_helpers import fake_render_pdf
+
+    monkeypatch.setattr(pdf_mod, "render_pdf", fake_render_pdf)
+    job = add_job_row(conn)
+    assert wb.import_data(conn, job, good_result(), inputs=inputs(), out_dir=tmp_path / "out").ok
+    wb.publish_drafts(client, conn, _row(conn), inputs())
+    resume = next(f for n, f in _draft_docs(drive).items() if n.endswith("Resume draft"))
+    assert b"Headline: Data engineer building Airflow and Spark pipelines" in resume["content"]
+    assert b"[orders-pipeline]" in resume["content"]
+
+
+def test_reopen_after_an_outside_edit_leaves_the_drafts_alone(drive, client, conn, tmp_path, monkeypatch):
+    from strelitzia.scoring import pdf as pdf_mod
+    from workbench_helpers import fake_render_pdf
+
+    monkeypatch.setattr(pdf_mod, "render_pdf", fake_render_pdf)
+    job = add_job_row(conn)
+    wb.publish_drafts(client, conn, job, inputs())
+    resume_id = _row(conn)["resume_draft_doc_id"]
+    drive.edit(resume_id, b"Claude's draft")
+    # Even with a newer accepted draft, an edited Doc is kept.
+    assert wb.import_data(conn, _row(conn), good_result(), inputs=inputs(), out_dir=tmp_path / "out").ok
+    calls = dict(drive.calls)
+    wb.publish_drafts(client, conn, _row(conn), inputs())
+    assert drive.store[resume_id]["content"] == b"Claude's draft"
+    assert len(_draft_docs(drive)) == 2
+    # The unedited cover letter Doc is reseeded with the newer draft.
+    cover = drive.store[_row(conn)["cover_draft_doc_id"]]
+    assert b"Evidence: orders-pipeline, quality-dashboard" in cover["content"]
+    assert drive.calls["update"] == calls.get("update", 0) + 1 and drive.calls["create"] == calls["create"]
+
+
+def test_reopen_without_changes_writes_nothing(drive, client, conn):
+    job = add_job_row(conn)
+    wb.publish_drafts(client, conn, job, inputs())
+    calls = dict(drive.calls)
+    wb.publish_drafts(client, conn, _row(conn), inputs())
+    assert drive.calls["create"] == calls["create"] and drive.calls.get("update", 0) == calls.get("update", 0)
+
+
+def test_a_deleted_draft_is_created_again(drive, client, conn):
+    job = add_job_row(conn)
+    wb.publish_drafts(client, conn, job, inputs())
+    old = _row(conn)["resume_draft_doc_id"]
+    drive.store[old]["trashed"] = True
+    wb.publish_drafts(client, conn, _row(conn), inputs())
+    assert _row(conn)["resume_draft_doc_id"] != old and len(_draft_docs(drive)) == 2
