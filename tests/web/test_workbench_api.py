@@ -1,6 +1,7 @@
 """Claude workbench routes: the packet (inline vs Drive), pasting a result back, and the setup page."""
 
 import json
+from pathlib import Path
 
 import pytest
 from fake_drive import FakeDrive, fake_media
@@ -41,7 +42,8 @@ def the_job(conn):
 @pytest.fixture
 def drive(monkeypatch):
     fake = FakeDrive()
-    client = DriveClient(fake, media_factory=fake_media, html_media_factory=lambda html: html.encode("utf-8"))
+    client = DriveClient(fake, media_factory=fake_media, html_media_factory=lambda html: html.encode("utf-8"),
+                         text_media_factory=lambda text, mime: text.encode("utf-8"))
     monkeypatch.setattr(app_mod, "_drive_client", lambda request: client)
     return fake
 
@@ -60,13 +62,9 @@ def test_packet_with_drive_writes_docs_and_a_short_prompt(client, conn, the_job,
     assert body["inline"] is False and body["doc_url"]
     assert len(body["prompt"]) <= wb.PROMPT_MAX and "Claude packet" in body["prompt"]
     names = sorted(f["name"] for f in drive.store.values() if f["mimeType"] == DOC_MIME)
-    assert names == sorted(["Strelitzia rules", "Strelitzia content library", "Strelitzia panel rubric",
-                            f"Initech – {job()['title']} – Claude packet"])
+    assert names == [f"Initech – {job()['title']} – Claude packet"]  # the rules are a download now
     detail = client.get(f"/strelitzia/dashboard/api/jobs/{the_job}").json()
     assert detail["packet_doc_url"] == body["doc_url"] == detail["links"]["packet"]
-
-    setup = client.get("/strelitzia/dashboard/api/claude/setup").json()
-    assert {d["kind"]: bool(d["url"]) for d in setup["docs"]} == {"rules": True, "library": True}
 
 
 def test_packet_falls_back_to_inline_when_drive_fails(client, the_job, monkeypatch):
@@ -261,3 +259,68 @@ def test_owner_keeps_the_cli_token_while_the_dashboard_cant_connect(client, conn
     monkeypatch.setattr(config, "GOOGLE_TOKEN_PATH", token_file)
     s = client.get("/strelitzia/dashboard/api/claude/setup").json()
     assert s["drive"] is True and s["drive_source"] == "legacy" and s["connect_url"] is None
+
+
+# --- Profile Docs: pulled before every use (profile-docs-2-api Task 1) ---
+
+SAMPLE_LIBRARY = (Path(__file__).resolve().parents[1] / "fixtures" / "content_library_sample.md").read_text(encoding="utf-8")
+
+
+@pytest.fixture
+def profile_docs(conn, drive, monkeypatch, tmp_path):
+    """The owner's Profile Docs set up on the fake Drive (the real Inputs.for_user reads the pulled copy)."""
+    from strelitzia import profile_sync, users
+    from strelitzia.profile import load_profile, save_profile
+
+    monkeypatch.setattr(wb.Inputs, "for_user", _REAL_FOR_USER)
+    monkeypatch.setattr(config, "CONTENT_LIBRARY_PATH", tmp_path / "app" / "content_library.md")
+    monkeypatch.setattr(config, "RESUME_PATH", tmp_path / "app" / "resume.txt")
+    owner = users.owner(conn).id
+    p = load_profile(conn, owner)
+    p.content_library_md, p.resume_text = SAMPLE_LIBRARY, "Test Person\nData Engineer, Acme\n"
+    save_profile(conn, owner, p)
+    client = app_mod._drive_client(None)
+    docs = profile_sync.setup_profile_docs(client, conn, owner, overwrite=False)
+    return {"owner": owner, "library": docs.library["id"], "resume": docs.resume["id"]}
+
+
+def test_a_doc_edit_shows_up_in_the_next_packet(client, conn, the_job, drive, profile_docs):
+    edited = SAMPLE_LIBRARY.replace("Airflow, Spark, dbt;", "Airflow, Spark, dbt, Kubernetes;")
+    drive.edit(profile_docs["library"], edited.encode("utf-8"))
+    r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet")
+    assert r.status_code == 200, r.text
+    packet = next(f for f in drive.store.values() if f["name"].endswith("Claude packet"))
+    assert b"Kubernetes: evidenced" in packet["content"]
+    assert "Kubernetes" in client.get("/strelitzia/dashboard/api/profile").json()["content_library_md"]
+
+
+def test_a_doc_problem_stops_the_packet(client, conn, the_job, drive, profile_docs):
+    broken = SAMPLE_LIBRARY.replace("## CURRENT ROLE", "CURRENT ROLE").replace("## PRIOR ROLE", "PRIOR ROLE")
+    drive.edit(profile_docs["library"], broken.encode("utf-8"))
+    r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet")
+    assert r.status_code == 409
+    body = r.json()
+    assert body["detail"] == "Your Profile Docs have problems" and body["problems"]
+    assert not any(f["name"].endswith("Claude packet") for f in drive.store.values())
+    assert client.get("/strelitzia/dashboard/api/profile").json()["content_library_md"] == SAMPLE_LIBRARY
+
+
+def test_profile_docs_need_drive(client, conn, the_job, drive, profile_docs, monkeypatch):
+    monkeypatch.setattr(app_mod, "_drive_client", lambda request: None)
+    r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet")
+    assert r.status_code == 409 and r.json()["detail"] == "Connect Google Drive on the Claude setup page"
+
+
+def test_without_profile_docs_the_database_copy_is_used(client, conn, the_job, drive, monkeypatch):
+    from strelitzia import users
+    from strelitzia.profile import load_profile, save_profile
+
+    monkeypatch.setattr(wb.Inputs, "for_user", _REAL_FOR_USER)
+    owner = users.owner(conn).id
+    p = load_profile(conn, owner)
+    p.content_library_md = SAMPLE_LIBRARY.replace("Airflow, Spark, dbt;", "Airflow, Spark, dbt, Kubernetes;")
+    save_profile(conn, owner, p)
+    assert client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet").status_code == 200
+    packet = next(f for f in drive.store.values() if f["name"].endswith("Claude packet"))
+    assert b"Kubernetes: evidenced" in packet["content"]
+    assert drive.calls["export"] == 0

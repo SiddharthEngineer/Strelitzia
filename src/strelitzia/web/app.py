@@ -252,7 +252,46 @@ def _owner_content(user: users.User) -> None:
         raise HTTPException(status_code=403, detail="The resume workbench isn't available for your account yet.")
 
 
+class ApiError(Exception):
+    """An error response with extra fields next to `detail` (e.g. the Profile Docs' problems)."""
+
+    def __init__(self, status_code: int, detail: str, **extra):
+        super().__init__(detail)
+        self.status_code, self.body = status_code, {"detail": detail, **extra}
+
+
+def _fresh_profile(request: Request) -> None:
+    """Pull the user's Profile Docs into the database when they have them set up (a no-op otherwise).
+
+    409 when Drive isn't connected or a Doc has problems; nothing is saved then, so an old copy is never used.
+    """
+    from strelitzia import profile_sync
+
+    conn = db_conn(request)
+    user = current_user(request)
+    docs = profile_sync.profile_docs(conn, user.id)
+    if not any((getattr(docs, kind) or {}).get("id") for kind in ("library", "resume")):
+        return
+    client = _require_drive(request)
+    result = profile_sync.pull_profile(client, conn, user.id, is_owner=user.role == "owner")
+    if not result.ok:
+        raise ApiError(409, "Your Profile Docs have problems", problems=result.problems)
+
+
+def _require_drive(request: Request):
+    """The user's Drive client, or 409 saying where to connect it."""
+    try:
+        client = _drive_client(request)
+    except Exception as e:  # noqa: BLE001 -- e.g. an expired token
+        raise HTTPException(status_code=409, detail=f"Google Drive couldn't be reached ({e}). "
+                            "Connect Google Drive on the Claude setup page.") from e
+    if client is None:
+        raise HTTPException(status_code=409, detail="Connect Google Drive on the Claude setup page")
+    return client
+
+
 def _workbench_inputs(request: Request) -> workbench.Inputs:
+    _fresh_profile(request)
     try:
         return workbench.Inputs.for_user(db_conn(request), current_user(request).id)
     except workbench.NoContentLibrary as e:
@@ -300,7 +339,6 @@ def post_packet(key: str, request: Request) -> dict:
     try:
         client = _drive_client(request)
         if client is not None:
-            workbench.publish_static_docs(client, conn, user.id, inputs)
             _, url = workbench.publish_packet(client, conn, job, inputs)
             packet = workbench.packet_for(job, inputs, inline=False)
             return {"prompt": packet.prompt, "doc_url": url, "inline": False, "rules_version": workbench.RULES_VERSION}
@@ -1094,6 +1132,10 @@ def create_app(static_dir: Path | str | None = None, db: Path | str | None = Non
                   docs_url=f"{PREFIX}/api/docs", openapi_url=f"{PREFIX}/api/openapi.json", redoc_url=None)
     app.state.db = db
     app.state.runner = runner
+
+    @app.exception_handler(ApiError)
+    async def api_error(request: Request, exc: ApiError):
+        return JSONResponse(exc.body, status_code=exc.status_code)
     _import_legacy_drive_token(init_db(db))
 
     @app.middleware("http")
