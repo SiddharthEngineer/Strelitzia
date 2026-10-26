@@ -252,7 +252,46 @@ def _owner_content(user: users.User) -> None:
         raise HTTPException(status_code=403, detail="The resume workbench isn't available for your account yet.")
 
 
+class ApiError(Exception):
+    """An error response with extra fields next to `detail` (e.g. the Profile Docs' problems)."""
+
+    def __init__(self, status_code: int, detail: str, **extra):
+        super().__init__(detail)
+        self.status_code, self.body = status_code, {"detail": detail, **extra}
+
+
+def _fresh_profile(request: Request) -> None:
+    """Pull the user's Profile Docs into the database when they have them set up (a no-op otherwise).
+
+    409 when Drive isn't connected or a Doc has problems; nothing is saved then, so an old copy is never used.
+    """
+    from strelitzia import profile_sync
+
+    conn = db_conn(request)
+    user = current_user(request)
+    docs = profile_sync.profile_docs(conn, user.id)
+    if not any((getattr(docs, kind) or {}).get("id") for kind in ("library", "resume")):
+        return
+    client = _require_drive(request)
+    result = profile_sync.pull_profile(client, conn, user.id, is_owner=user.role == "owner")
+    if not result.ok:
+        raise ApiError(409, "Your Profile Docs have problems", problems=result.problems)
+
+
+def _require_drive(request: Request):
+    """The user's Drive client, or 409 saying where to connect it."""
+    try:
+        client = _drive_client(request)
+    except Exception as e:  # noqa: BLE001 -- e.g. an expired token
+        raise HTTPException(status_code=409, detail=f"Google Drive couldn't be reached ({e}). "
+                            "Connect Google Drive on the Claude setup page.") from e
+    if client is None:
+        raise HTTPException(status_code=409, detail="Connect Google Drive on the Claude setup page")
+    return client
+
+
 def _workbench_inputs(request: Request) -> workbench.Inputs:
+    _fresh_profile(request)
     try:
         return workbench.Inputs.for_user(db_conn(request), current_user(request).id)
     except workbench.NoContentLibrary as e:
@@ -300,7 +339,6 @@ def post_packet(key: str, request: Request) -> dict:
     try:
         client = _drive_client(request)
         if client is not None:
-            workbench.publish_static_docs(client, conn, user.id, inputs)
             _, url = workbench.publish_packet(client, conn, job, inputs)
             packet = workbench.packet_for(job, inputs, inline=False)
             return {"prompt": packet.prompt, "doc_url": url, "inline": False, "rules_version": workbench.RULES_VERSION}
@@ -355,6 +393,8 @@ def claude_setup(request: Request) -> dict:
         "drive": state == "authorized", "drive_detail": detail, "drive_source": source,
         "connect_url": f"{auth.DRIVE_PREFIX}/connect" if auth.drive_connect_available() else None,
         "rules_version": workbench.RULES_VERSION,
+        "rules_markdown": workbench.rules_markdown(),
+        "rules_url": f"{PREFIX}/api/claude/rules.md",
         "docs": [{"kind": kind, "name": name, "url": (docs.get(kind) or {}).get("url"),
                   "changed_at": (docs.get(kind) or {}).get("changed_at")}
                  for kind, name in workbench.STATIC_DOCS.items() if kind in workbench.RESUME_DOCS],
@@ -378,6 +418,17 @@ def publish_claude_docs(request: Request) -> dict:
     return claude_setup(request)
 
 
+def _markdown_download(text: str, name: str) -> Response:
+    return Response(text, media_type="text/markdown; charset=utf-8",
+                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
+
+
+@api.get("/claude/rules.md")
+def get_rules_markdown() -> Response:
+    """The rules for the Strelitzia Resumes project's knowledge, with the version line first."""
+    return _markdown_download(workbench.rules_markdown(), workbench.rules_file_name())
+
+
 # --- Resume panel (strelitzia.scoring.panel) ---
 
 @api.get("/panel")
@@ -395,7 +446,15 @@ def get_panel(request: Request) -> dict:
         "project_instructions": panel.PROJECT_INSTRUCTIONS,
         "rubric": {"name": workbench.STATIC_DOCS["panel_rubric"], "url": rubric.get("url"),
                    "text": panel.rubric_text()},
+        "rubric_markdown": panel.rubric_markdown(),
+        "rubric_url": f"{PREFIX}/api/panel/rubric.md",
     }
+
+
+@api.get("/panel/rubric.md")
+def get_rubric_markdown() -> Response:
+    """The panel rubric for the Strelitzia Panel project's knowledge."""
+    return _markdown_download(panel.rubric_markdown(), panel.RUBRIC_FILE_NAME)
 
 
 class PanelRunCreate(BaseModel):
@@ -876,8 +935,19 @@ def _content_library_error(text: str) -> str | None:
     return None
 
 
-def _profile_out(profile: profile_store.UserProfile) -> dict:
+def _profile_docs_out(conn, user_id: str) -> dict | None:
+    """{library|resume: {url, synced_at} | None} for the user's Profile Docs, or None before setup."""
+    from strelitzia import profile_sync
+
+    docs = profile_sync.profile_docs(conn, user_id)
+    out = {kind: ({"url": d.get("url"), "synced_at": d.get("synced_at")} if (d := getattr(docs, kind)) else None)
+           for kind in ("library", "resume")}
+    return out if any(out.values()) else None
+
+
+def _profile_out(profile: profile_store.UserProfile, conn=None, user_id: str | None = None) -> dict:
     return {
+        "profile_docs": _profile_docs_out(conn, user_id) if conn is not None else None,
         "profile": {name: getattr(profile, name) for name in PROFILE_FIELDS},
         "has_resume": bool(profile.resume_text.strip()),
         "resume_file_name": profile.resume_file_name,
@@ -889,7 +959,8 @@ def _profile_out(profile: profile_store.UserProfile) -> dict:
 
 @api.get("/profile")
 def get_profile(request: Request) -> dict:
-    return _profile_out(profile_store.load_profile(db_conn(request), current_user(request).id))
+    conn, user_id = db_conn(request), current_user(request).id
+    return _profile_out(profile_store.load_profile(conn, user_id), conn, user_id)
 
 
 class ProfileBody(BaseModel):
@@ -944,6 +1015,9 @@ def put_profile(body: ProfileBody, request: Request) -> dict:
     conn = db_conn(request)
     user = current_user(request)
     profile = profile_store.load_profile(conn, user.id)
+    if ("content_library_md" in body.model_fields_set and body.content_library_md != profile.content_library_md
+            and _profile_docs_out(conn, user.id)):
+        raise HTTPException(status_code=409, detail="Edit your content library in the Google Doc")
     qualifications = (profile.education_level, profile.years_experience)
     for name, value in body.model_dump(exclude_unset=True).items():
         setattr(profile, name, value)
@@ -951,6 +1025,41 @@ def put_profile(body: ProfileBody, request: Request) -> dict:
     if (profile.education_level, profile.years_experience) != qualifications:
         recompute_fit(conn, user.id)  # the fit score's education and experience rules (code only, no LLM)
     return get_profile(request)
+
+
+class ProfileDocsSetup(BaseModel):
+    overwrite: bool = False
+
+
+@api.post("/profile/docs/setup")
+def setup_profile_docs(body: ProfileDocsSetup, request: Request):
+    """Create the Profile Docs in Strelitzia/Profile/ from the database copy. 409 with `existing` when the user
+    already has them and `overwrite` is false."""
+    from strelitzia import profile_sync
+
+    user = current_user(request)
+    _owner_content(user)
+    client = _require_drive(request)
+    try:
+        profile_sync.setup_profile_docs(client, db_conn(request), user.id, overwrite=body.overwrite)
+    except profile_sync.ProfileDocsExist as e:
+        raise ApiError(409, str(e), existing=e.names) from e
+    return get_profile(request)
+
+
+@api.post("/profile/docs/sync")
+def sync_profile_docs(request: Request) -> dict:
+    """Pull the Profile Docs now. Problems come back in the body (200): nothing was saved then."""
+    from strelitzia import profile_sync
+
+    conn = db_conn(request)
+    user = current_user(request)
+    _owner_content(user)
+    if not _profile_docs_out(conn, user.id):
+        raise HTTPException(status_code=409, detail="Set up your Profile Docs on the Claude setup page first")
+    client = _require_drive(request)
+    result = profile_sync.pull_profile(client, conn, user.id, is_owner=user.role == "owner")
+    return {"ok": result.ok, "problems": result.problems, "changed": result.changed, **get_profile(request)}
 
 
 def _is_empty(value) -> bool:
@@ -1008,7 +1117,7 @@ def post_profile_resume(file: UploadFile, request: Request) -> dict:
         parsed = {}
     draft = {k: v for k, v in parsed.items()
              if k in PROFILE_FIELDS and _is_empty(getattr(profile, k)) and _valid_draft_value(k, v)}
-    return {**_profile_out(profile), "draft": draft, "parse_error": parse_error}
+    return {**_profile_out(profile, conn, user.id), "draft": draft, "parse_error": parse_error}
 
 
 @api.get("/profile/resume")
@@ -1094,6 +1203,10 @@ def create_app(static_dir: Path | str | None = None, db: Path | str | None = Non
                   docs_url=f"{PREFIX}/api/docs", openapi_url=f"{PREFIX}/api/openapi.json", redoc_url=None)
     app.state.db = db
     app.state.runner = runner
+
+    @app.exception_handler(ApiError)
+    async def api_error(request: Request, exc: ApiError):
+        return JSONResponse(exc.body, status_code=exc.status_code)
     _import_legacy_drive_token(init_db(db))
 
     @app.middleware("http")

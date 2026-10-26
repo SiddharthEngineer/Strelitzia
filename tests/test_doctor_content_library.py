@@ -219,3 +219,46 @@ class TestDoctorClaude:
         assert "Drive connect OK" in out and "Public URL" not in out
         for secret in ("client-secret-value", "session-secret-value", "token-key-value"):
             assert secret not in out
+
+
+class TestDoctorProfileDocs:
+    """profile-docs-2-api Task 4: the library row says when the Profile Docs were last pulled."""
+
+    def _invoke(self, lib):
+        from typer.testing import CliRunner
+
+        from strelitzia.cli import app
+
+        with patch("strelitzia.config.CONTENT_LIBRARY_PATH", lib):
+            return CliRunner().invoke(app, ["doctor"], terminal_width=400)
+
+    def test_with_profile_docs(self, valid_content_library: Path, tmp_path: Path, monkeypatch) -> None:
+        import json
+
+        from strelitzia import config, database, users
+        from strelitzia.database import close_connection, init_db, set_state
+
+        db = tmp_path / "doctor.db"
+        monkeypatch.setattr(config, "DB_PATH", db)
+        monkeypatch.setattr(database, "DB_PATH", db)
+        conn = init_db(db)
+        owner = users.owner(conn).id
+        set_state(conn, f"{owner}:profile_doc:library",
+                  json.dumps({"id": "d1", "url": "u", "synced_at": "2026-10-26T12:00:00+00:00"}))
+        conn.commit()
+        close_connection(db)
+        result = self._invoke(valid_content_library)
+        assert result.exit_code == 0
+        assert "last synced 2026-10-26T12:00:00+00:00" in " ".join(result.output.split())
+        from strelitzia.cli import _doctor_library_row
+        with patch("strelitzia.config.CONTENT_LIBRARY_PATH", valid_content_library):
+            note = _doctor_library_row("OK", "WARN")[2]
+        assert note.endswith("; from Google Drive Strelitzia/Profile, last synced 2026-10-26T12:00:00+00:00")
+
+    def test_without_profile_docs(self, valid_content_library: Path, tmp_path: Path, monkeypatch) -> None:
+        from strelitzia import config, database
+
+        monkeypatch.setattr(config, "DB_PATH", tmp_path / "missing.db")
+        monkeypatch.setattr(database, "DB_PATH", tmp_path / "missing.db")
+        result = self._invoke(valid_content_library)
+        assert result.exit_code == 0 and "parsed:" in result.output and "Strelitzia/Profile" not in result.output

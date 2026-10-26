@@ -1,5 +1,5 @@
 # Plan: Profile Docs, part 2: the API reads Strelitzia/Profile/ before every use
-**Status:** ❌ Not started
+**Status:** 🟡 Code done 2026-10-26, preprod test pending
 **Risk:** review (changes where the workbench gets the content library; touches `web/`)
 **Depends on:** profile-docs-1-sync
 
@@ -37,7 +37,7 @@ has ids), it gets `_drive_client`, which is required (409 "Connect Google Drive 
 then runs `pull_profile`, and any problems give 409 `{"detail": "Your Profile Docs have problems", "problems": [...]}`.
 Without Profile Docs, nothing changes. `post_packet` stops calling `publish_static_docs`.
 **Validate:** `pytest tests/web/test_workbench_api.py -q` → new tests: a Doc edit shows up in the next packet; a parse problem gives 409 with problems and no packet; no Profile Docs uses the database copy.
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (b8d7f6a)
 
 ### Task 2: Setup and sync endpoints
 **Runs:** unattended
@@ -47,7 +47,7 @@ Without Profile Docs, nothing changes. `post_packet` stops calling `publish_stat
 `profile_docs: {library|resume: {url, synced_at} | null}`. `PUT /profile` refuses a changed `content_library_md` as in Context.
 Owner only (`_owner_content`), like the workbench.
 **Validate:** `pytest tests/web/test_profile_api.py -q` → passes: setup, the overwrite 409 and retry, sync, the PUT refusal.
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (f9b99ff)
 
 ### Task 3: Rules and rubric as downloads, with a version check
 **Runs:** unattended
@@ -62,7 +62,7 @@ different. `PROJECT_INSTRUCTIONS` becomes: the rules come from project knowledge
 "Strelitzia content library" and "Strelitzia base resume" in Google Drive folder Strelitzia/Profile with the Google Docs
 connector and uses only their facts. It may edit those two Docs only when I ask.
 **Validate:** `pytest tests/test_workbench_import.py tests/web/test_panel_api.py -q` → passes, with a test for the version warning (matching, missing, old).
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (3eb6d43)
 
 ### Task 4: Doctor reports the Profile Docs
 **Runs:** unattended
@@ -70,7 +70,7 @@ connector and uses only their facts. It may edit those two Docs only when I ask.
 **What:** When the owner has Profile Docs, `_doctor_library_row` adds "from Google Drive Strelitzia/Profile, last synced <time>".
 Otherwise it keeps today's text.
 **Validate:** `pytest tests/test_doctor_content_library.py -q` → passes.
-**Status:** ❌
+**Status:** ✅ 2026-10-26 (230b23d)
 
 ## Validation
 - `scripts/validate.sh --full` passes.

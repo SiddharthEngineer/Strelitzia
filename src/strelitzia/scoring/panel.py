@@ -206,9 +206,9 @@ def _json(text: str | None, default=None):
 PROJECT_NAME = "Strelitzia Panel"
 PROJECT_INSTRUCTIONS = (
     "You are a strict resume screener. Each chat brings a blind panel packet: several jobs, each with two versions "
-    "of a resume called First and Second. Grade them with the \"Strelitzia panel rubric\" document, which is "
-    "binding. Quote evidence verbatim from the resume, never infer experience that isn't written down, and end "
-    "every reply with exactly one ```json block in the rubric's format."
+    "of a resume called First and Second. Grade them with the Strelitzia panel rubric file in this project's "
+    "knowledge, which is binding. Quote evidence verbatim from the resume, never infer experience that isn't "
+    "written down, and end every reply with exactly one ```json block in the rubric's format."
 )
 
 _QUAL = _obj({"text": {"type": "string"}, "kind": {"type": "string", "enum": ["required", "preferred"]},
@@ -280,6 +280,14 @@ def rubric_doc() -> str:
 
 def rubric_text() -> str:
     return _rubric().text()
+
+
+RUBRIC_FILE_NAME = "Strelitzia panel rubric.md"
+
+
+def rubric_markdown() -> str:
+    """The rubric as the .md file for the Strelitzia Panel project's knowledge."""
+    return rubric_text()
 
 
 # ── Packets ───────────────────────────────────────────────────────────────

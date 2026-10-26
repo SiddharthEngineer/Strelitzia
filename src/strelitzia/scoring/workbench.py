@@ -87,6 +87,7 @@ def result_schema(library: ContentLibrary | None = None) -> dict:
         "resume": resume,
         "cover_letter": cover,
         "notes_for_user": {"type": "string"},
+        "rules_version": {"type": "string"},
     }, required=["strelitzia", "resume", "cover_letter"])
 
 
@@ -139,6 +140,7 @@ EXAMPLE_RESULT = {
     "cover_letter": {"paragraphs": ["<paragraph 1>", "<paragraph 2>", "<paragraph 3>"],
                      "evidence_slugs": ["<project slug>"]},
     "notes_for_user": "Optional: anything you want me to know, e.g. qualifications I can't claim.",
+    "rules_version": "<the value of the Rules version line at the top of the rules file>",
 }
 
 
@@ -198,8 +200,9 @@ class _Doc:
 def _rules() -> _Doc:
     d = _Doc("Strelitzia rules")
     d.p("You write my one-page resume and a short cover letter for one job at a time. Each job comes as a "
-        "\"Claude packet\" (a Google Doc in this project, or pasted text). My real experience is in the "
-        "\"Strelitzia content library\" doc: projects with stable slugs, grouped under role keys, plus my base resume. "
+        "\"Claude packet\" (a Google Doc in the job's Drive folder, or pasted text). My real experience is in the "
+        "\"Strelitzia content library\" Google Doc (projects with stable slugs, grouped under role keys) and the "
+        "\"Strelitzia base resume\" Google Doc, both in the Drive folder Strelitzia/Profile. "
         "Strelitzia checks every reply mechanically, so follow these rules exactly.")
     d.h("Honesty")
     d.ul([
@@ -247,6 +250,7 @@ def _rules() -> _Doc:
         "not a diff. Put any explanation before the block.",
         "When I ask for a change, reply with the complete updated JSON again.",
         "When I paste \"These problems were found\", fix exactly those and change nothing else.",
+        "Copy the value of the \"Rules version:\" line at the top of this rules file into rules_version.",
     ])
     d.p("Schema:")
     d.pre(json.dumps(RESULT_SCHEMA, indent=2))
@@ -265,6 +269,25 @@ def rules_text() -> str:
 
 
 RULES_VERSION = hashlib.sha256(rules_doc().encode("utf-8")).hexdigest()[:8]
+
+
+def rules_markdown() -> str:
+    """The rules as the .md file for the Claude project's knowledge. The version line sits outside the hashed text."""
+    return f"Rules version: {RULES_VERSION}\n\n" + rules_text()
+
+
+def rules_file_name() -> str:
+    return f"Strelitzia rules {RULES_VERSION}.md"
+
+
+def rules_version_warning(used: str | None) -> str | None:
+    """A warning when Claude's reply names no rules version or an old one (an old copy in the project)."""
+    if used == RULES_VERSION:
+        return None
+    if not used:
+        return (f"Claude didn't say which rules version it used; download the current rules ({RULES_VERSION}) "
+                "into the project")
+    return f"Claude used rules version {used}; download the current rules ({RULES_VERSION}) into the project"
 
 
 def _library(library: ContentLibrary, base_resume_text: str = "") -> _Doc:
@@ -400,7 +423,7 @@ def job_packet(job: dict, library: ContentLibrary, base_resume_text: str, curren
     else:
         title = name if len(name) <= 160 else name[:157] + "..."
         prompt = (f"In this project, tailor my resume and cover letter for the job in the Google Doc '{title}'. "
-                  "Follow the Strelitzia rules doc, use only facts from the content library doc and the packet, "
+                  "Follow the Strelitzia rules, use only facts from my Profile Docs and the packet, "
                   "and leave out everything the packet marks unevidenced. "
                   + ("Start from the current draft in the packet. " if current else "")
                   + "End your reply with the JSON block.")
@@ -551,6 +574,8 @@ def check_result(data: dict, job: dict, inputs: Inputs) -> tuple[TailoredResume 
                                   max_words=COVER_MAX_WORDS,
                                   posting_text=job.get("full_description") or job.get("description") or "")
     warnings = _coverage_warnings(resume, ev)
+    if version_warning := rules_version_warning(data.get("rules_version")):
+        warnings.append(version_warning)
     return resume, list(dict.fromkeys(errors)), warnings
 
 
@@ -710,17 +735,18 @@ def current_result(job: dict) -> dict | None:
 # ── Drive Docs (Claude Project inputs and job packets) ─────────────────────
 
 PROJECT_INSTRUCTIONS = (
-    "You tailor my resume and cover letter for one job per chat. The \"Strelitzia rules\" document is binding: "
-    "follow every rule in it. Use only facts from the \"Strelitzia content library\" document and the job's "
-    "Claude packet; never claim a qualification the packet marks unevidenced, and never invent numbers. "
+    "You tailor my resume and cover letter for one job per chat. The Strelitzia rules file in this project's "
+    "knowledge is binding: follow every rule in it. At the start of each chat, open the Google Docs "
+    "\"Strelitzia content library\" and \"Strelitzia base resume\" in the Google Drive folder Strelitzia/Profile "
+    "with the Google Docs connector, and use only their facts and the job's Claude packet; never claim a "
+    "qualification the packet marks unevidenced, and never invent numbers. Edit those two Docs only when I ask. "
     "When I ask for changes, keep everything else the same. End every reply with exactly one ```json block "
-    "that matches the schema in the rules document, even when I only ask a question."
+    "that matches the schema in the rules, even when I only ask a question."
 )
 
 # The panel rubric belongs in a separate "Strelitzia Panel" project (strelitzia.scoring.panel).
-STATIC_DOCS = {"rules": "Strelitzia rules", "library": "Strelitzia content library",
-               "panel_rubric": "Strelitzia panel rubric"}
-RESUME_DOCS = ("rules", "library")  # the ones the Strelitzia Resumes project holds
+STATIC_DOCS = {"rules": "Strelitzia rules", "panel_rubric": "Strelitzia panel rubric"}
+RESUME_DOCS = ("rules",)  # the ones the Strelitzia Resumes project holds (the library is a Profile Doc now)
 _STATE_KEY = "{}:claude_doc:{}"  # user id, kind
 
 
@@ -729,7 +755,7 @@ def static_doc_html(kind: str, inputs: Inputs) -> str:
         from strelitzia.scoring.panel import rubric_doc
 
         return rubric_doc()
-    return rules_doc() if kind == "rules" else library_doc(inputs.library, inputs.base_resume_text)
+    return rules_doc()
 
 
 def published_static_docs(conn: Connection, user_id: str) -> dict[str, dict]:
@@ -746,7 +772,7 @@ def published_static_docs(conn: Connection, user_id: str) -> dict[str, dict]:
 
 def publish_static_docs(client, conn: Connection, user_id: str, inputs: Inputs | None = None,
                         force: bool = False) -> dict[str, str]:
-    """Write the rules, content-library and panel-rubric Docs into Strelitzia/_Claude/ when their content changed.
+    """Write the rules and panel-rubric Docs into Strelitzia/_Claude/ when their content changed.
 
     Returns {kind: doc URL}. `force` rewrites them even when the stored hash matches (e.g. a Doc was deleted).
     """
