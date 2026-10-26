@@ -303,3 +303,22 @@ def test_import_data_is_the_paste_path_without_extraction(conn, tmp_path):
     job = add_job_row(conn)
     outcome = wb.import_data(conn, job, good_result(), inputs=inputs(), out_dir=tmp_path / "out")
     assert outcome.ok and outcome.draft_version == 1
+
+
+@pytest.mark.parametrize("version, warned", [("0ld0ld00", "Claude used rules version 0ld0ld00"),
+                                             (None, "didn't say which rules version")])
+def test_import_drafts_warns_about_the_resume_docs_rules_version(conn, tmp_path, version, warned):
+    job = add_job_row(conn)
+    resume_text, cover_text = _draft_texts(good_result())
+    resume_text = resume_text.replace(f"Rules version: {wb.RULES_VERSION}\n",
+                                      f"Rules version: {version}\n" if version else "")
+    cover_text = cover_text.replace(f"Rules version: {wb.RULES_VERSION}\n", "")
+    outcome = wb.import_drafts(conn, job, resume_text, cover_text, inputs=inputs(), out_dir=tmp_path / "out")
+    assert outcome.ok, outcome.errors
+    assert any(warned in w and wb.RULES_VERSION in w for w in outcome.warnings)
+
+
+def test_the_rules_ask_for_the_version_line_at_the_top_of_the_resume_draft():
+    text = wb.rules_text()
+    assert "The first line of the resume draft is \"Rules version: \"" in text
+    assert wb.extract_result(reply(good_result()))["resume"]  # the JSON paste path still works
