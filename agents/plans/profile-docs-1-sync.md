@@ -1,5 +1,5 @@
 # Plan: Profile Docs, part 1: Drive read and the Profile sync module
-**Status:** ❌ Not started
+**Status:** ✅ Done 2026-10-26
 **Risk:** low (new module and Drive helpers; nothing calls them yet)
 **Depends on:** none
 
@@ -75,7 +75,7 @@ def pull_profile(client, conn, user_id, *, is_owner: bool) -> SyncResult
 class ProfileDocsExist(Exception): names: list[str]
 ```
 **Validate:** `pytest tests/test_profile_sync.py -q` → passes: seed from database, seed from templates, refuse without overwrite, overwrite updates in place, pull saves database + local files (owner only, in tmp APP_DIR), parse error saves nothing, trashed Doc reported.
-**Status:** ✅ 2026-10-26 (this commit)
+**Status:** ✅ 2026-10-26 (8020d84; review fixes e907a22)
 
 ## Validation
 - `scripts/validate.sh --full` passes.
