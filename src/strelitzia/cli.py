@@ -348,8 +348,33 @@ def _doctor_library_row(ok_mark: str, warn_mark: str) -> tuple[str, str, str]:
     except Exception as exc:
         return ("content_library.md", "[red]ERROR[/red]", f"File exists but cannot be parsed: {exc}")
     n_projects = sum(len(r.projects) for r in lib.roles)
-    return ("content_library.md", ok_mark, f"{CONTENT_LIBRARY_PATH} — parsed: {len(lib.roles)} roles, "
+    note = (f"{CONTENT_LIBRARY_PATH} — parsed: {len(lib.roles)} roles, "
             f"{n_projects} projects, {len(lib.all_angles)} angle tags")
+    synced_at = _owner_profile_docs_synced_at()
+    if synced_at:
+        note += f"; from Google Drive Strelitzia/Profile, last synced {synced_at}"
+    return ("content_library.md", ok_mark, note)
+
+
+def _owner_profile_docs_synced_at() -> str | None:
+    """When the owner's content library Profile Doc was last pulled, or None (no Profile Docs, or no database)."""
+    from strelitzia.config import DB_PATH, database_url
+
+    if not database_url() and not DB_PATH.exists():
+        return None
+    try:
+        from strelitzia import users
+        from strelitzia.database import get_connection
+        from strelitzia.profile_sync import profile_docs
+
+        conn = get_connection()
+        row = users._owner_row(conn)
+        if not row:
+            return None
+        library = profile_docs(conn, users.User(*tuple(row)).id).library or {}
+    except Exception:  # noqa: BLE001 -- the database row reports database trouble
+        return None
+    return library.get("synced_at") if library.get("id") else None
 
 
 def _doctor_auth_rows(ok_mark: str, fail_mark: str, warn_mark: str) -> list[tuple[str, str, str]]:
