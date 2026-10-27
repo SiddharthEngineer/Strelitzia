@@ -137,7 +137,8 @@ EXAMPLE_RESULT = {
     "resume": {
         "headline": "Data engineer building Airflow and Spark pipelines for finance analytics",
         "roles": [{"role_key": "<role key>", "bullets": [
-            {"text": "Migrated the nightly orders pipeline from cron to Airflow, cutting runtime from 6 hours to 45 minutes",
+            {"text": "Owned ingestion orchestration for 12 vendor feeds in Airflow, adding retries and late-data alerts "
+                     "that cut missed morning loads from weekly to rare",
              "project_ids": ["<project slug>"]}]}],
         "skills": [{"category": "Languages", "items": "Python, SQL"}],
         "dropped_roles": [],
@@ -228,8 +229,8 @@ def _rules() -> _Doc:
         "Never claim a tool or skill the packet lists as not in my material: not in bullets, the headline, Skills or "
         "the cover letter. List it under \"## Notes for me\" instead so I see it.",
         "Facts like work authorisation come from About me, never the resume; without that Doc, ask me.",
-        "Cover every required qualification you rate claimable at least once, in a bullet that cites a backing "
-        "project, under the most recent role it applies to.",
+        "Show each required qualification you rate claimable through the responsibilities in my bullets (under the "
+        "most recent role it applies to) or, for a tool, in Skills. Never write a bullet just to cover a tool.",
         "Every number in a bullet must appear in the facts of the projects that bullet cites. Never invent, round or "
         "combine numbers. The same goes for the cover letter and the projects on its Evidence line (numbers about the "
         "company may come from the posting). The headline cites no project, so any number in it must be in my "
@@ -244,6 +245,11 @@ def _rules() -> _Doc:
         "each with your suggested answer so I can just say yes.",
         "Ask before deciding a qualification you'd rate partly or are unsure about (for example: have you worked "
         "with X beyond project Y?).",
+        "Before drafting, show me your plan: for each role, which projects you'll feature and why, in one line "
+        "each, and ask if I want changes.",
+        "When a featured project has no outcome or number, ask me for one (what changed, for whom, how often, how "
+        "big). If I give one, offer to add it to the project in my Content Library.",
+        "When you are unsure whether a Summary helps, ask me.",
         "When an answer is reusable, offer to add it to my Content Library or About me (if I have that Doc; never "
         "create one), and write it there only if I agree, keeping the Doc's format (its headings, slugs and field "
         "lines) exactly.",
@@ -252,7 +258,28 @@ def _rules() -> _Doc:
     d.ul([
         "Use the posting's exact term for each qualification. The first time, add the acronym or the expansion "
         "(\"machine learning (ML)\").",
-        "Bullets: strong verb, what was built or done, tools, outcome. Write fresh from the facts; vary the verbs.",
+        "Every bullet is a meaningful responsibility or accomplishment (scope, outcome, stakes), never a tool or a "
+        "small task. Before writing each bullet, check it earns its place (all must be yes): "
+        "1. Responsibility: with every tool name deleted, does a meaningful responsibility or result remain? "
+        "2. Beneficiary: does it say or imply who relied on it or what got better? "
+        "3. Evidence: at least one concrete measure: a number, scale, cadence or criticality. "
+        "4. Ownership: is the verb about owning or delivering, not about how the code works (\"reads X in chunks, "
+        "writes Y\")? "
+        "5. Tool justification: is each tool in the posting or needed for context, at most 3? "
+        "6. Distinctness: a different responsibility from every other bullet in the role?",
+        "Start from my base resume's bullet for that work and adapt it to the posting; vary the verbs.",
+        "Fold small technical work into the responsibility it served (\"..., including the MySQL-to-Parquet "
+        "export\"). Give it its own bullet only if it has its own user, stakes or measurable effect; if its only "
+        "value is the tool, leave it out (the tool goes in Skills).",
+        "Name 1-3 tools per bullet when they are in the posting or needed for context. Skills holds the full "
+        "inventory, so a posting's required tools are covered there.",
+        "Order bullets in each role by relevance to the posting's core responsibilities.",
+        "Before: \"Wrote the export in Python: reads MySQL in chunks with Pandas, writes each chunk to Parquet with "
+        "PyArrow.\" After: \"Built the nightly MySQL-to-Parquet export that feeds the analytics lake, so analysts "
+        "no longer query production; moves ~40M rows per run in Python.\"",
+        "Before: \"Created Airflow DAGs with sensors and retries for ingestion jobs.\" After: \"Owned ingestion "
+        "orchestration for 12 vendor feeds in Airflow, adding retries and late-data alerts that cut missed morning "
+        "loads from weekly to rare.\"",
         f"One page. Each bullet at most {BULLET_MAX} characters. Keep each role within the bullet range the packet gives.",
         "Cite every project a bullet draws on in the [slug] tags at the end of the bullet, using slugs from that "
         "bullet's own role. Never leave a bullet without tags.",
@@ -300,8 +327,8 @@ Instructions version: <the version on the first line of your project instruction
 Headline: Data engineer building Airflow and Spark pipelines for finance analytics
 
 ## <role key>
-- Migrated the nightly orders pipeline from cron to Airflow, cutting runtime from 6 hours to 45 minutes [<project slug>]
-- <another bullet> [<project slug>, <other project slug>]
+- Owned ingestion orchestration for 12 vendor feeds in Airflow, adding retries and late-data alerts that cut missed morning loads from weekly to rare [<project slug>]
+- Built the nightly MySQL-to-Parquet export that feeds the analytics lake, so analysts no longer query production; moves ~40M rows per run in Python [<project slug>, <other project slug>]
 
 ## Dropped roles
 - <role key>

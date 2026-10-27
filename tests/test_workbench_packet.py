@@ -46,11 +46,12 @@ def test_schema_rejects_wrong_version_and_bool_as_int():
 def test_rules_cover_the_rules_and_the_draft_format():
     html = wb.rules_text()
     assert "```json" not in html and "project_ids" not in html
-    for phrase in ("every required qualification you rate claimable", "most recent role", "exact term",
+    for phrase in ("required qualification you rate claimable", "most recent role", "exact term",
                    "Never claim a tool or skill the packet lists as not in my material", "Working with me", "No keyword lists", "No hidden text", "230 characters",
                    "3 paragraphs", "250 words", "spearheaded", "## Dropped roles", "## Notes for me",
                    "Evidence: ", "never create a new Doc", "Resume draft", "Instructions version: "):
         assert phrase in html, phrase
+    assert "Cover every" not in html and "Write fresh from the facts" not in html
     assert len(wb.RULES_VERSION) == 8 and wb.RULES_VERSION in wb.job_packet(job(), library(), BASE_RESUME).text
 
 
@@ -227,3 +228,18 @@ def test_a_deleted_draft_is_created_again(drive, client, conn):
     drive.store[old]["trashed"] = True
     wb.publish_drafts(client, conn, _row(conn), inputs())
     assert _row(conn)["resume_draft_doc_id"] != old and len(_draft_docs(drive)) == 2
+
+
+def test_rules_shape_bullets_around_responsibilities():
+    rules = wb.rules_text()
+    for check in ("1. Responsibility:", "2. Beneficiary:", "3. Evidence:", "4. Ownership:", "5. Tool justification:",
+                  "6. Distinctness:"):
+        assert check in rules, check
+    for phrase in ("Start from my base resume's bullet", "Fold small technical work", "Name 1-3 tools per bullet",
+                   "Skills holds the full inventory", "Order bullets in each role by relevance",
+                   "Before: \"Wrote the export in Python", "After: \"Owned ingestion orchestration"):
+        assert phrase in rules, phrase
+    working = rules.split("## Working with me", 1)[1].split("## Wording", 1)[0]
+    for phrase in ("Before drafting, show me your plan", "no outcome or number, ask me for one",
+                   "unsure whether a Summary helps, ask me"):
+        assert phrase in working, phrase
