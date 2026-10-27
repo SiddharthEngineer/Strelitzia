@@ -147,12 +147,12 @@ def test_profile_docs_setup_overwrite_and_sync(client, conn, drive):
 
     again = client.post("/strelitzia/dashboard/api/profile/docs/setup", json={"overwrite": False})
     assert again.status_code == 409
-    assert again.json()["existing"] == ["Strelitzia content library", "Strelitzia base resume"]
+    assert again.json()["existing"] == ["Content Library", "Base Resume"]
     retry = client.post("/strelitzia/dashboard/api/profile/docs/setup", json={"overwrite": True})
     assert retry.status_code == 200
-    assert len([f for f in drive.store.values() if f["name"] == "Strelitzia content library"]) == 1
+    assert len([f for f in drive.store.values() if f["name"] == "Content Library"]) == 1
 
-    lib_id = next(f["id"] for f in drive.store.values() if f["name"] == "Strelitzia content library")
+    lib_id = next(f["id"] for f in drive.store.values() if f["name"] == "Content Library")
     drive.edit(lib_id, _library_text().replace("Superset, SQL checks.", "Superset, SQL checks, pandas.").encode())
     s = client.post("/strelitzia/dashboard/api/profile/docs/sync").json()
     assert s["ok"] is True and s["changed"] is True and s["problems"] == []

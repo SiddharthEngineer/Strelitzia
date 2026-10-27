@@ -8,7 +8,7 @@ Lay the groundwork for `Strelitzia/Profile/` in Google Drive becoming the source
 base resume. This part adds the code to create the two Profile Docs and to pull them back into the database and local
 files. Nothing in the web app or CLI calls it yet; part 2 wires it in, and part 3 adds the dashboard.
 
-Why: the content library was edited in two places (the Profile tab, i.e. the database, and the "Strelitzia content library"
+Why: the content library was edited in two places (the Profile tab, i.e. the database, and the "Content Library"
 Doc), and the app only ever wrote database → Doc, so edits made in the Doc were overwritten and never reached the checks.
 
 ## Context
@@ -35,7 +35,7 @@ Doc), and the app only ever wrote database → Doc, so edits made in the Doc wer
 **Runs:** unattended
 **Files:** src/strelitzia/storage/drive.py (modify), src/strelitzia/storage/drive_layout.py (modify), tests/fake_drive.py (modify), tests/test_drive_client.py (modify)
 **What:** `drive_layout`: `PROFILE_FOLDER = "Profile"`, `profile_folder_path() -> list[str]`, `PROFILE_DOCS = {"library":
-"Strelitzia content library", "resume": "Strelitzia base resume"}`. `DriveClient`: `export_text(file_id, mime) -> str`
+"Content Library", "resume": "Base Resume"}`. `DriveClient`: `export_text(file_id, mime) -> str`
 (`files().export`), `doc_meta(file_id) -> dict | None` (id, name, modifiedTime, trashed, webViewLink; None if gone), and
 `create_doc_from_text(folder_id, name, text, source_mime, known_id=None) -> DriveFile` (same in-place update logic as
 `upsert_doc`, with `text/markdown` or `text/plain` media). Add `modifiedTime` to `_FILE_FIELDS`. The fake stores the uploaded

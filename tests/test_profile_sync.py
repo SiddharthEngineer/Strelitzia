@@ -62,12 +62,12 @@ def test_setup_seeds_from_the_database(drive, client, conn, owner):
     _seed_db(conn, owner)
     docs = ps.setup_profile_docs(client, conn, owner, overwrite=False)
     found = _docs(drive)
-    assert set(found) == {"Strelitzia content library", "Strelitzia base resume"}
-    assert found["Strelitzia content library"]["content"] == SAMPLE.encode()
-    assert found["Strelitzia base resume"]["content"] == RESUME.encode()
+    assert set(found) == {"Content Library", "Base Resume"}
+    assert found["Content Library"]["content"] == SAMPLE.encode()
+    assert found["Base Resume"]["content"] == RESUME.encode()
     for f in found.values():
         assert drive.path_of(f["id"])[:2] == ["Strelitzia", "Profile"]
-    assert docs.library["id"] == found["Strelitzia content library"]["id"] and docs.library["url"]
+    assert docs.library["id"] == found["Content Library"]["id"] and docs.library["url"]
     assert docs.library["synced_at"] and docs.library["modified"]
     assert ps.profile_docs(conn, owner) == docs
 
@@ -76,8 +76,8 @@ def test_setup_seeds_from_templates_when_the_database_is_empty(drive, client, co
     alice = users.invite(conn, "alice@example.com").id
     ps.setup_profile_docs(client, conn, alice, overwrite=False)
     found = _docs(drive)
-    assert found["Strelitzia content library"]["content"] == ps.TEMPLATE_LIBRARY.encode()
-    assert found["Strelitzia base resume"]["content"] == ps.TEMPLATE_RESUME.encode()
+    assert found["Content Library"]["content"] == ps.TEMPLATE_LIBRARY.encode()
+    assert found["Base Resume"]["content"] == ps.TEMPLATE_RESUME.encode()
     # The template is a valid library, so pulling it straight back works.
     assert ps.pull_profile(client, conn, alice, is_owner=False).ok
 
@@ -86,7 +86,7 @@ def test_setup_refuses_without_overwrite(drive, client, conn, owner):
     ps.setup_profile_docs(client, conn, owner, overwrite=False)
     with pytest.raises(ps.ProfileDocsExist) as e:
         ps.setup_profile_docs(client, conn, owner, overwrite=False)
-    assert set(e.value.names) == {"Strelitzia content library", "Strelitzia base resume"}
+    assert set(e.value.names) == {"Content Library", "Base Resume"}
     # Another machine (no stored ids) still finds them by name in Profile/.
     for kind in ("library", "resume"):
         conn.execute("DELETE FROM app_state WHERE key = ?", (f"{owner}:profile_doc:{kind}",))
@@ -130,7 +130,7 @@ def test_pull_for_a_non_owner_leaves_local_files_alone(drive, client, conn):
 
 @pytest.mark.parametrize("library, expected", [
     ("Just some notes, no roles.", "has no projects"),
-    (SAMPLE.replace("- **Angles:** ML.\n", ""), "“Churn Model” in the Strelitzia content library Doc has no Angles"),
+    (SAMPLE.replace("- **Angles:** ML.\n", ""), "“Churn Model” in the Content Library Doc has no Angles"),
 ])
 def test_a_library_problem_saves_nothing(drive, client, conn, owner, library, expected):
     _seed_db(conn, owner)
@@ -150,18 +150,18 @@ def test_a_trashed_or_missing_doc_is_reported(drive, client, conn, owner):
     docs = ps.setup_profile_docs(client, conn, owner, overwrite=False)
     drive.store[docs.resume["id"]]["trashed"] = True
     result = ps.pull_profile(client, conn, owner, is_owner=True)
-    assert not result.ok and result.problems == ["The Strelitzia base resume Doc is in the trash."]
+    assert not result.ok and result.problems == ["The Base Resume Doc is in the trash."]
     del drive.store[docs.library["id"]]
     result = ps.pull_profile(client, conn, owner, is_owner=True)
-    assert result.problems == ["The Strelitzia content library Doc is missing.",
-                               "The Strelitzia base resume Doc is in the trash."]
+    assert result.problems == ["The Content Library Doc is missing.",
+                               "The Base Resume Doc is in the trash."]
     assert load_profile(conn, owner).content_library_md == SAMPLE
 
 
 def test_pull_before_setup(client, conn, owner):
     result = ps.pull_profile(client, conn, owner, is_owner=True)
-    assert result.problems == ["The Strelitzia content library Doc isn't set up.",
-                               "The Strelitzia base resume Doc isn't set up."]
+    assert result.problems == ["The Content Library Doc isn't set up.",
+                               "The Base Resume Doc isn't set up."]
 
 
 def test_a_drive_error_is_a_problem_not_a_missing_doc(drive, client, conn, owner, monkeypatch):
@@ -172,8 +172,8 @@ def test_a_drive_error_is_a_problem_not_a_missing_doc(drive, client, conn, owner
         raise RuntimeError("503")
     monkeypatch.setattr(client, "doc_meta", boom)
     result = ps.pull_profile(client, conn, owner, is_owner=True)
-    assert result.problems == ["The Strelitzia content library Doc couldn't be read from Drive.",
-                               "The Strelitzia base resume Doc couldn't be read from Drive."]
+    assert result.problems == ["The Content Library Doc couldn't be read from Drive.",
+                               "The Base Resume Doc couldn't be read from Drive."]
     assert load_profile(conn, owner).content_library_md == SAMPLE
 
 

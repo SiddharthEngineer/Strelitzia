@@ -1,8 +1,8 @@
 import type { ProfileDocs } from '../types';
 
 const DOC_NAMES: Record<keyof ProfileDocs, string> = {
-  library: 'Strelitzia content library',
-  resume: 'Strelitzia base resume',
+  library: 'Content Library',
+  resume: 'Base Resume',
 };
 
 /** The two Profile Docs as links (a Doc without a link is shown by name). */

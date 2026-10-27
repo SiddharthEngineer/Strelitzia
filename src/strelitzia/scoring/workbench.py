@@ -203,8 +203,8 @@ def _rules() -> _Doc:
     d = _Doc("Strelitzia rules")
     d.p("You write my one-page resume and a short cover letter for one job at a time. Each job comes as a "
         "\"Claude packet\" (a Google Doc in the job's Drive folder, or pasted text). My real experience is in the "
-        "\"Strelitzia content library\" Google Doc (projects with stable slugs, grouped under role keys) and the "
-        "\"Strelitzia base resume\" Google Doc, both in the Drive folder Strelitzia/Profile. "
+        "\"Content Library\" Google Doc (projects with stable slugs, grouped under role keys) and the "
+        "\"Base Resume\" Google Doc, both in the Drive folder Strelitzia/Profile. "
         "Strelitzia checks every reply mechanically, so follow these rules exactly.")
     d.h("Honesty")
     d.ul([
@@ -326,7 +326,7 @@ def rules_version_warning(used: str | None) -> str | None:
 
 def _library(library: ContentLibrary, base_resume_text: str = "") -> _Doc:
     library.ensure_keys()
-    d = _Doc("Strelitzia content library")
+    d = _Doc("Content Library")
     d.p("Everything here is true and may be claimed. Cite projects by slug and roles by key; numbers must come "
         "from the cited project's facts.")
     for role in library.roles:
@@ -348,7 +348,7 @@ def _library(library: ContentLibrary, base_resume_text: str = "") -> _Doc:
 
 
 def library_doc(library: ContentLibrary, base_resume_text: str = "") -> str:
-    """The "Strelitzia content library" Google Doc (HTML), slugs visible."""
+    """The "Content Library" Google Doc (HTML), slugs visible."""
     return _library(library, base_resume_text).html()
 
 
@@ -768,7 +768,7 @@ def current_result(job: dict) -> dict | None:
 PROJECT_INSTRUCTIONS = (
     "You tailor my resume and cover letter for one job per chat. The Strelitzia rules file in this project's "
     "knowledge is binding: follow every rule in it. At the start of each chat, open the Google Docs "
-    "\"Strelitzia content library\" and \"Strelitzia base resume\" in the Google Drive folder Strelitzia/Profile "
+    "\"Content Library\" and \"Base Resume\" in the Google Drive folder Strelitzia/Profile "
     "with the Google Docs connector, and use only their facts and the job's Claude packet; never claim a "
     "qualification the packet marks unevidenced, and never invent numbers. Edit those two Docs only when I ask. "
     "Write the resume and cover letter into the job's two draft Docs (named in each prompt) in the rules' "

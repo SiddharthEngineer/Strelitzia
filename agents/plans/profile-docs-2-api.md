@@ -59,7 +59,7 @@ Owner only (`_owner_content`), like the workbench.
 Schema: an optional `rules_version` string. The rules' Output format section says to copy the version line.
 `check_result` warns "Claude used rules version X; download the current rules (Y) into the project" when it's missing or
 different. `PROJECT_INSTRUCTIONS` becomes: the rules come from project knowledge, and at the start of each chat Claude opens
-"Strelitzia content library" and "Strelitzia base resume" in Google Drive folder Strelitzia/Profile with the Google Docs
+"Content Library" and "Base Resume" in Google Drive folder Strelitzia/Profile with the Google Docs
 connector and uses only their facts. It may edit those two Docs only when I ask.
 **Validate:** `pytest tests/test_workbench_import.py tests/web/test_panel_api.py -q` → passes, with a test for the version warning (matching, missing, old).
 **Status:** ✅ 2026-10-26 (3eb6d43)
@@ -79,7 +79,7 @@ Otherwise it keeps today's text.
 ## Human test steps (preprod)
 Use the owner account. The dashboard pages change in part 3, so this uses the API from the browser console or curl.
 1. `POST /strelitzia/dashboard/api/profile/docs/setup` with `{"overwrite": false}` → Drive now has `Strelitzia/Profile/`
-   with "Strelitzia content library" and "Strelitzia base resume", filled with your current content.
+   with "Content Library" and "Base Resume", filled with your current content.
 2. Run it again → 409 listing both Docs.
 3. In the content library Doc, add a skill to a project (e.g. pandas) → open a job's Claude packet on the job page → the
    packet's evidence reflects it, and `GET /api/profile` shows the new text.

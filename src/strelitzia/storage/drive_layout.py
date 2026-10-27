@@ -84,7 +84,7 @@ def claude_folder_path() -> list[str]:
 
 PROFILE_FOLDER = "Profile"
 # The Profile Docs (profile_sync): the source of truth for the content library and the base resume.
-PROFILE_DOCS = {"library": "Strelitzia content library", "resume": "Strelitzia base resume"}
+PROFILE_DOCS = {"library": "Content Library", "resume": "Base Resume"}
 
 
 def profile_folder_path() -> list[str]:
