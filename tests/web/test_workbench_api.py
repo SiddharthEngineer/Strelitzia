@@ -295,7 +295,7 @@ def test_a_doc_edit_shows_up_in_the_next_packet(client, conn, the_job, drive, pr
     r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet")
     assert r.status_code == 200, r.text
     packet = next(f for f in drive.store.values() if f["name"].endswith("Claude packet"))
-    assert b"Kubernetes: evidenced" in packet["content"]
+    assert b"Kubernetes: in your material" in packet["content"]
     assert "Kubernetes" in client.get("/strelitzia/dashboard/api/profile").json()["content_library_md"]
 
 
@@ -327,7 +327,7 @@ def test_without_profile_docs_the_database_copy_is_used(client, conn, the_job, d
     save_profile(conn, owner, p)
     assert client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet").status_code == 200
     packet = next(f for f in drive.store.values() if f["name"].endswith("Claude packet"))
-    assert b"Kubernetes: evidenced" in packet["content"]
+    assert b"Kubernetes: in your material" in packet["content"]
     assert drive.calls["export"] == 0
 
 

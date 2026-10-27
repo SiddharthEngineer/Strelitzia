@@ -386,15 +386,23 @@ def job_evidence(job: dict, library: ContentLibrary | None, base_resume_text: st
                         description=job.get("full_description") or job.get("description") or "")
 
 
-def _evidence_line(e) -> str:
-    if not e.evidenced:
-        return f"{e.target.text}: UNEVIDENCED, do not claim"
+def _where(e) -> str:
     where = []
     if e.slugs:
         where.append("projects " + ", ".join(e.slugs))
     if e.base_roles:
         where.append("base resume " + ", ".join(e.base_roles))
-    return f"{e.target.text}: evidenced ({'; '.join(where)})"
+    return "; ".join(where)
+
+
+def _term_line(e) -> str:
+    if not e.evidenced:
+        return f"{e.target.text}: not in your material: leave out of Skills and bullets"
+    return f"{e.target.text}: in your material ({_where(e)})"
+
+
+def _qualification_line(e) -> str:
+    return f"{e.target.text} (possible evidence: {_where(e) or 'none found by word match'})"
 
 
 def job_packet(job: dict, library: ContentLibrary, base_resume_text: str, current: dict | None = None,
@@ -417,20 +425,22 @@ def job_packet(job: dict, library: ContentLibrary, base_resume_text: str, curren
     d.ul([f"Role: {job.get('title') or ''}", f"Company: {job_company(job)}",
           f"Location: {job.get('location') or 'N/A'}", f"Posting: {job.get('url') or ''}",
           f"Rules version: {RULES_VERSION} (the Rules section at the end of this packet is binding)"])
-    for kind, label in (("required", "Required qualifications"), ("preferred", "Preferred qualifications")):
-        d.h(label)
-        lines = [_evidence_line(e) for e in ev.items if e.target.kind == kind]
-        if lines:
-            d.ul(lines)
+    for kind, label in (("required", "Required"), ("preferred", "Preferred")):
+        terms = [_term_line(e) for e in ev.terms() if e.target.kind == kind]
+        quals = [_qualification_line(e) for e in ev.items if e.target.kind == kind and not e.target.is_term]
+        d.h(f"{label} tools and skills")
+        if terms:
+            d.ul(terms)
         else:
             d.p("None listed in the posting.")
-    unmet = [e.target.text for e in ev.unevidenced()]
-    d.h("Not claimable (unevidenced)")
-    if unmet:
-        d.p("Leave these out of the resume and letter; mention them under Notes for me if useful.")
-        d.ul(unmet)
-    else:
-        d.p("None: every listed qualification is backed by the library or the base resume.")
+        d.h(f"{label} qualifications")
+        if quals:
+            d.p("Assess each against the Content Library, Base Resume and About me; write your verdict in Notes for "
+                "me as claimable / partly / not, with the projects behind it. The possible evidence is only a "
+                "word-match hint.")
+            d.ul(quals)
+        else:
+            d.p("None listed in the posting.")
     d.h("Roles, bullet ranges and allowed project slugs")
     role_lines = []
     for role in library.roles:
@@ -610,8 +620,9 @@ def check_result(data: dict, job: dict, inputs: Inputs) -> tuple[TailoredResume 
 
 def _coverage_warnings(resume: TailoredResume, ev: EvidenceMap) -> list[str]:
     text = " ".join(t for _, t in resume_parts(resume))
-    return [f"Evidenced required qualification not on the resume: {e.target.text}"
-            for e in ev.evidenced() if e.target.kind == "required" and not matches(e.target, text, ev.pairs)]
+    return [f"Required skill from your material not on the resume: {e.target.text}"
+            for e in ev.terms() if e.evidenced and e.target.kind == "required"
+            and not matches(e.target, text, ev.pairs)]
 
 
 def import_drafts(conn: Connection, job: dict, resume_text: str, cover_text: str, inputs: Inputs | None = None,
@@ -650,7 +661,7 @@ def import_data(conn: Connection, job: dict, data: dict, inputs: Inputs | None =
 
     ev = job_evidence(job, inputs.library, inputs.base_resume_text)
     cov = coverage(resume_to_text(resume, inputs.profile, inputs.fixed), ev.targets(), ev.pairs)
-    unmet = [e.target.text for e in ev.unevidenced()]
+    unmet = [e.target.text for e in ev.absent_terms()]
     user_id = job["user_id"]
     row = conn.execute("SELECT draft_version FROM jobs WHERE user_id = ? AND url = ?", (user_id, job["url"])).fetchone()
     version = ((row[0] if row else None) or 0) + 1
