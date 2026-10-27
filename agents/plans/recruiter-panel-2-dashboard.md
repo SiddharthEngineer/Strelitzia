@@ -1,7 +1,7 @@
 # Plan: Recruiter panel 2/2: review on the job page, scorecards and grader comparison
 **Status:** ❌ Not started (planned with the user 2026-10-27)
 **Risk:** review
-**Depends on:** recruiter-panel-1-review (same PR, see its decision 3)
+**Depends on:** recruiter-panel-1-review
 
 ## Goal
 From a job with a draft, the user starts a recruiter review, copies the prompt into any chat app, pastes the reply
@@ -44,6 +44,19 @@ src/strelitzia/web/app.py (modify: `GET /reviews/graders`); tests
 section, from reviews with 2+ graders: per grader the mean grade per criterion, how often its verdict matched the
 others, and its spread (is it harsh, lenient, or all B's). Keep the page name "Panel" (decision 1).
 **Validate:** `pytest tests/test_web_review.py -q -k graders` and `npm test -- PanelPage`.
+**Status:** ❌
+
+### Task 4: Remove the A/B panel
+**Runs:** unattended
+**Files:** src/strelitzia/scoring/panel.py (delete), src/strelitzia/web/app.py, src/strelitzia/database.py,
+src/strelitzia/pipeline.py, src/strelitzia/wizard/init.py, src/strelitzia/storage/drive_layout.py (modify),
+tests/test_panel*.py and dashboard/src/__tests__/PanelPage.test.tsx (delete/replace)
+**What:** Remove the `/panel*` endpoints, `panel.py`, the "panel due" badge and every mention. Stop creating
+`panel_runs`, `panel_items`, `panel_grades` and drop `panel_runs` from `USER_TABLES`, but don't drop the tables:
+add a ROADMAP manual step for the user (back up, then `DROP TABLE panel_grades, panel_items, panel_runs` on preprod
+and prod).
+**Validate:** `grep -rn "panel_runs\|scoring.panel\|/panel/" src dashboard/src` → none outside the manual step;
+`scripts/validate.sh --full` passes.
 **Status:** ❌
 
 ## Validation

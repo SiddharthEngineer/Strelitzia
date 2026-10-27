@@ -65,27 +65,26 @@ Plus an **overall** grade per document and a **verdict**: phone screen yes / may
 for each grader; wrong grade strings, missing criteria and wrong prompt_version give clear errors/warnings.
 **Status:** ❌
 
-### Task 3: API, and the A/B panel removed
+### Task 3: Review API (next to the old panel)
 **Runs:** unattended
-**Files:** src/strelitzia/web/app.py (modify), src/strelitzia/scoring/panel.py (delete), src/strelitzia/database.py
-(modify), tests/test_panel*.py (delete/replace), tests/test_web_review.py (new)
+**Files:** src/strelitzia/web/app.py (modify), tests/test_web_review.py (new)
 **What:** `POST /jobs/{key}/reviews` (latest draft; 409 when none), `GET /jobs/{key}/reviews`,
 `GET /reviews/{id}` (prompt + replies), `POST /reviews/{id}/replies` (422 with errors, else warnings + review),
-`GET /reviews` (the user's reviews, newest first, with overall grades per grader). Remove `/panel*` endpoints,
-`panel.py` and its `pipeline`/`wizard`/`drive_layout` mentions. Migration: `pg_dump`-style backup reminder in the PR,
-then `DROP TABLE panel_grades, panel_items, panel_runs` (decision 2).
+`GET /reviews` (the user's reviews, newest first, with overall grades per grader). Leave the `/panel*` endpoints and
+`panel.py` in place: the old Panel page still uses them until 2/2 replaces it (decision 3).
 **Validate:** `pytest tests/test_web_review.py -q` → full flow for two graders; another user's review → 404.
 **Status:** ❌
 
 ## Validation
-- `scripts/validate.sh --full` passes (the dashboard still builds: its Panel page is replaced in 2/2, so ship 1/2 and
-  2/2 in one PR, or keep the old page behind the removed endpoints for one release; decision 3).
+- `scripts/validate.sh --full` passes; the old Panel page still works.
 
 ## Human test steps (preprod)
-Covered in 2/2 (needs the page).
+Covered in 2/2 (needs the page). On preprod for this PR, only check that the Panel page still loads.
 
 ## Decisions
 1. (Proposed) The six criteria above, graded per document, plus overall and verdict. Confirm or edit in Task 1.
-2. (Proposed) Old A/B panel data is dropped (M23 never ran, so there's little or none). Back up first.
-3. (Proposed) 1/2 and 2/2 ship as one PR so the dashboard never points at removed endpoints.
+2. (Proposed) Old A/B panel data is left in its tables, unused, after 2/2; the user drops the tables by hand after a
+   backup (manual step), since agents never drop data.
+3. 1/2 and 2/2 are separate runner builds, so 1/2 only adds; 2/2 swaps the page and removes the A/B code
+   (changed 2026-10-27 from "one PR").
 4. (User, 2026-10-27) Replace A/B entirely; graders include ChatGPT and Gemini via copy-paste; no API calls.
