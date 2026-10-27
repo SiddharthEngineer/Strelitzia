@@ -223,10 +223,11 @@ def _rules() -> _Doc:
         "word-match hints only.",
         "Assess each qualification yourself against the Content Library, the Base Resume and About me (when I have "
         "that Doc), and write a verdict for each under \"## Notes for me\": claimable, partly or not, with the "
-        "projects behind it. Claim a qualification only when your assessment finds real backing.",
+        "projects behind it, one plain line each (no headings inside Notes for me). Claim a qualification only "
+        "when your assessment finds real backing.",
         "Never claim a tool or skill the packet lists as not in my material: not in bullets, the headline, Skills or "
         "the cover letter. List it under \"## Notes for me\" instead so I see it.",
-        "Facts like work authorisation come from About me, never the resume.",
+        "Facts like work authorisation come from About me, never the resume; without that Doc, ask me.",
         "Cover every required qualification you rate claimable at least once, in a bullet that cites a backing "
         "project, under the most recent role it applies to.",
         "Every number in a bullet must appear in the facts of the projects that bullet cites. Never invent, round or "
@@ -243,8 +244,9 @@ def _rules() -> _Doc:
         "each with your suggested answer so I can just say yes.",
         "Ask before deciding a qualification you'd rate partly or are unsure about (for example: have you worked "
         "with X beyond project Y?).",
-        "When an answer is reusable, offer to add it to my Content Library or About me, and write it there only if I "
-        "agree, keeping the Doc's format (its headings, slugs and field lines) exactly.",
+        "When an answer is reusable, offer to add it to my Content Library or About me (if I have that Doc; never "
+        "create one), and write it there only if I agree, keeping the Doc's format (its headings, slugs and field "
+        "lines) exactly.",
     ])
     d.h("Wording")
     d.ul([
@@ -411,7 +413,7 @@ def _where(e) -> str:
 
 def _term_line(e) -> str:
     if not e.evidenced:
-        return f"{e.target.text}: not in your material: leave out of Skills and bullets"
+        return f"{e.target.text}: not in your material: leave out of Skills and bullets, the headline and the letter"
     return f"{e.target.text}: in your material ({_where(e)})"
 
 
@@ -449,9 +451,9 @@ def job_packet(job: dict, library: ContentLibrary, base_resume_text: str, curren
             d.p("None listed in the posting.")
         d.h(f"{label} qualifications")
         if quals:
-            d.p("Assess each against the Content Library, Base Resume and About me; write your verdict in Notes for "
-                "me as claimable / partly / not, with the projects behind it. The possible evidence is only a "
-                "word-match hint.")
+            d.p("Assess each against the Content Library, Base Resume and About me (if I have it); write your "
+                "verdict in Notes for me as claimable / partly / not, with the projects behind it. The possible "
+                "evidence is only a word-match hint.")
             d.ul(quals)
         else:
             d.p("None listed in the posting.")

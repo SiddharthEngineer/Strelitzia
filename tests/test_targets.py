@@ -1,6 +1,6 @@
 """Posting targets, the evidence map (what is honestly claimable) and coverage."""
 
-from strelitzia.scoring.targets import Target, acronym_pairs, coverage, evidence_map, matches, targets, term_variants
+from strelitzia.scoring.targets import Target, acronym_pairs, coverage, evidence_map, matches, stem, targets, term_variants
 from workbench_helpers import BASE_RESUME, DESCRIPTION, POSTING, library
 
 
@@ -47,6 +47,8 @@ def test_sentences_match_across_word_forms():
     assert matches("Experience building and maintaining production data pipelines",
                    "Built and maintain the production data pipeline for orders")
     assert matches("Ran scheduled jobs and wrote tests", "Running schedules for job runners, writing test suites")
+    assert matches("Experience using SQL across technologies", "Used SQL with each technology")
+    assert stem("string") == "string" and stem("speed") == "speed" and stem("staffing") == stem("staff")
     # The term gate is still a whole-phrase match: no stemming.
     assert not matches("Airflows", "Built DAGs in Airflow")
 
