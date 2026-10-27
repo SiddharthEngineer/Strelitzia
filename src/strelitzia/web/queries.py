@@ -21,7 +21,10 @@ SORT_COLUMNS = {
     "fit_score": "fit_score",
     "next_interview": "next_interview",  # the computed column in list_jobs' SELECT
 }
-SORT_PATTERN = r"^-?(" + "|".join(SORT_COLUMNS) + r")$"
+# The default sort: live work first, closed last (by the status the dashboard shows), then best fit.
+STATUS_SORT_ORDER = ("heard_back", "in_progress", "submitted", "active", "inactive", "rejected")
+DEFAULT_SORT = "status"
+SORT_PATTERN = r"^-?(" + "|".join((*SORT_COLUMNS, "status")) + r")$"
 STATUS_FILTERS = (*STATUSES, "no_response", "all")
 StatusFilter = Literal["active", "inactive", "in_progress", "submitted", "rejected", "heard_back", "no_response", "all"]
 MAX_PAGE_SIZE = 200
@@ -117,13 +120,25 @@ def where_clause(f: JobFilters, today: date, user_id: str) -> tuple[str, list]:
     return " AND ".join(conds), params
 
 
-def order_clause(sort: str) -> str:
-    """ORDER BY for a whitelisted sort key (`-` prefix = descending). NULLs always sort last."""
+def status_rank_sql(today: date) -> str:
+    """A SQL CASE giving each row's effective status its place in STATUS_SORT_ORDER (0 first)."""
+    whens = " ".join(f"WHEN '{s}' THEN {i}" for i, s in enumerate(STATUS_SORT_ORDER))
+    return f"(CASE {status_sql(today.isoformat())} {whens} END)"
+
+
+def order_clause(sort: str, today: date) -> str:
+    """ORDER BY for a whitelisted sort key (`-` prefix = descending). NULLs always sort last.
+
+    `status` orders by status (see STATUS_SORT_ORDER), then fit score, best first.
+    """
     desc = sort.startswith("-")
     name = sort.lstrip("-")
+    direction = "DESC" if desc else "ASC"
+    if name == "status":
+        return f"{status_rank_sql(today)} {direction}, fit_score DESC NULLS LAST, url ASC"
     if name not in SORT_COLUMNS:
         raise ValueError(f"Unknown sort {sort!r}")
-    return f"{SORT_COLUMNS[name]} {'DESC' if desc else 'ASC'} NULLS LAST, url ASC"
+    return f"{SORT_COLUMNS[name]} {direction} NULLS LAST, url ASC"
 
 
 def _json(text: str | None, default):
@@ -171,13 +186,13 @@ def list_item(row: dict, today: date, current_key: str | None = None) -> dict:
     }
 
 
-def list_jobs(conn: Connection, user_id: str, filters: JobFilters, *, sort: str = "-discovered_at", page: int = 1,
+def list_jobs(conn: Connection, user_id: str, filters: JobFilters, *, sort: str = DEFAULT_SORT, page: int = 1,
               page_size: int = 50, today: date, current_key: str | None = None) -> dict:
     where, params = where_clause(filters, today, user_id)
     total = conn.execute(f"SELECT COUNT(*) FROM jobs WHERE {where}", params).fetchone()[0]
     page_size = max(1, min(page_size, MAX_PAGE_SIZE))
     rows = conn.execute(
-        f"SELECT {', '.join(_LIST_COLUMNS)}, {next_interview_sql()} AS next_interview FROM jobs WHERE {where} ORDER BY {order_clause(sort)} LIMIT ? OFFSET ?",
+        f"SELECT {', '.join(_LIST_COLUMNS)}, {next_interview_sql()} AS next_interview FROM jobs WHERE {where} ORDER BY {order_clause(sort, today)} LIMIT ? OFFSET ?",
         [*params, page_size, (max(page, 1) - 1) * page_size],
     ).fetchall()
     return {"total": total, "page": page, "page_size": page_size,

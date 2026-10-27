@@ -121,8 +121,10 @@ describe('Filters', () => {
 
 describe('query parsing', () => {
   it('drops invalid values and defaults', () => {
-    const q = parseQuery(new URLSearchParams('status=bogus&score_min=101&score_max=x&hide_flagged=true&found_from=yesterday&sort=-discovered_at&page=1'));
+    const q = parseQuery(new URLSearchParams('status=bogus&score_min=101&score_max=x&hide_flagged=true&found_from=yesterday&sort=status&page=1'));
     expect(q).toEqual({});
-    expect(toSearchParams({ sort: '-discovered_at', page: 1, q: '' }).toString()).toBe('');
+    expect(toSearchParams({ sort: 'status', page: 1, q: '' }).toString()).toBe('');
+    // The old default is now an ordinary sort the URL keeps.
+    expect(parseQuery(new URLSearchParams('sort=-discovered_at'))).toEqual({ sort: '-discovered_at' });
   });
 });

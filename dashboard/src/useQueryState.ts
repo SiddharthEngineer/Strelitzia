@@ -4,10 +4,10 @@ import { useSearchParams } from 'react-router-dom';
 import { STATUS_FILTERS } from './labels';
 import type { JobQuery, Sort, StatusFilter } from './types';
 
-export const DEFAULT_SORT: Sort = '-discovered_at';
+export const DEFAULT_SORT: Sort = 'status';
 export const PAGE_SIZE = 50;
 
-const SORT_RE = /^-?(discovered_at|deadline|fit_score|next_interview)$/;
+const SORT_RE = /^-?(status|discovered_at|deadline|fit_score|next_interview)$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_KEYS = ['found_from', 'found_to', 'due_from', 'due_to'] as const;
 

@@ -29,7 +29,8 @@ function SortHeader({ label, column, sort, onSort, ascFirst = false }: {
 }) {
   const active = sort.replace(/^-/, '') === column;
   const desc = sort.startsWith('-');
-  // First click on a column sorts descending (newest / highest first), or ascending with ascFirst (soonest first);
+  // First click on a column sorts descending (newest / highest first), or ascending with ascFirst (soonest first, or
+  // live work first for Status);
   // clicking again flips it.
   const next: Sort = ascFirst ? (active && !desc ? `-${column}` : column) : (active && desc ? column : `-${column}`);
   return (
@@ -49,7 +50,7 @@ export default function JobsTable({ items, sort, onSort }: Props) {
       <table className="jobs-table">
         <thead>
           <tr>
-            <th>Status</th>
+            <SortHeader label="Status" column="status" sort={sort} onSort={onSort} ascFirst />
             <th>Title</th>
             <th>Company</th>
             <th>Role</th>

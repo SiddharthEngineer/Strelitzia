@@ -82,6 +82,17 @@ describe('JobsTable', () => {
     );
     expect(screen.getByRole('columnheader', { name: /Fit/ })).toHaveAttribute('aria-sort', 'ascending');
     expect(screen.getByRole('columnheader', { name: /Found/ })).toHaveAttribute('aria-sort', 'none');
+    expect(screen.getByRole('columnheader', { name: /Status/ })).toHaveAttribute('aria-sort', 'none');
+  });
+
+  it('marks Status as the sort column for the default status sort', () => {
+    render(
+      <MemoryRouter>
+        <JobsTable items={[]} sort="status" onSort={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('columnheader', { name: /Status/ })).toHaveAttribute('aria-sort', 'ascending');
+    expect(screen.getByRole('columnheader', { name: /Fit/ })).toHaveAttribute('aria-sort', 'none');
   });
 });
 
@@ -92,7 +103,7 @@ describe('JobsPage', () => {
     vi.mocked(api.activeRescoreAll).mockResolvedValue({ task: null });
   });
 
-  it('shows the total and loads page 1 sorted by found date', async () => {
+  it('shows the total and loads page 1 with the default (status, then fit) sort', async () => {
     renderPage();
     expect(screen.getByText('Loading jobs…').querySelector('.flower-loader')).not.toBeNull();
     expect(await screen.findByTestId('total')).toHaveTextContent('1–50 of 120');
@@ -110,6 +121,12 @@ describe('JobsPage', () => {
     );
     await user.click(screen.getByRole('button', { name: /Fit/ }));
     expect(screen.getByTestId('location')).toHaveTextContent('/?sort=fit_score');
+    // The Status header goes back to the default sort (live work first), then flips it.
+    await user.click(screen.getByRole('button', { name: /Status/ }));
+    expect(screen.getByTestId('location')).toHaveTextContent(/^\/$/);
+    await waitFor(() => expect(api.listJobs).toHaveBeenLastCalledWith({ page_size: 50 }, expect.any(AbortSignal)));
+    await user.click(screen.getByRole('button', { name: /Status/ }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/?sort=-status');
   });
 
   it('pages through results', async () => {
