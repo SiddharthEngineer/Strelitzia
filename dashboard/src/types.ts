@@ -563,6 +563,10 @@ export interface ProfileSyncResult extends ProfileResponse {
   ok: boolean;
   problems: string[];
   changed: boolean;
+  /** Values from the Base Resume for fields that are still empty (not saved: the user reviews, then saves). */
+  draft: Partial<ProfileFields>;
+  /** Why the resume couldn't be read for the draft (the sync itself still worked), or null. */
+  parse_error: string | null;
 }
 
 /** POST /profile/docs/setup: done, or the names of the Docs it would overwrite. */
