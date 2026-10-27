@@ -40,6 +40,7 @@ from strelitzia.scoring.template import (
 from strelitzia.scoring.validator import (
     BANNED_WORDS,
     resume_parts,
+    validate_bullet_shape,
     validate_claims,
     validate_letter,
     validate_numbers_known,
@@ -653,7 +654,7 @@ def check_result(data: dict, job: dict, inputs: Inputs) -> tuple[TailoredResume 
                                   sign_off=personal.get("preferred_name") or personal.get("full_name", ""),
                                   max_words=COVER_MAX_WORDS,
                                   posting_text=job.get("full_description") or job.get("description") or "")
-    warnings = _coverage_warnings(resume, ev)
+    warnings = _coverage_warnings(resume, ev) + validate_bullet_shape(resume, base.skills if base else {})
     for version_warning in (rules_version_warning(data.get("rules_version")),
                             instructions_version_warning(data.get("instructions_version"))):
         if version_warning:
