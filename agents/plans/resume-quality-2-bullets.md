@@ -79,7 +79,7 @@ posting, one proof point; no tool list, no adjectives about me. Say why in Notes
 point for the bullet) and `**Detail:**` (code-level facts for interviews and for folding in; numbers there still count
 as facts; the rules say "never make a bullet out of Detail alone"). Update `TEMPLATE_LIBRARY`.
 **Validate:** `pytest tests/test_content_library.py -q` → both fields parse; a library without them still parses.
-**Status:** ❌
+**Status:** ✅ 2026-10-27
 
 ## Validation
 - `scripts/validate.sh --full` passes.

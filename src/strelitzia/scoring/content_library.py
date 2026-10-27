@@ -23,12 +23,14 @@ class Project:
     tools_actions: str = ""
     outcome_metrics: str = ""
     angles: list[str] = field(default_factory=list)
+    responsibility: str = ""  # optional: what you owned and for whom (the starting point for a bullet)
+    detail: str = ""  # optional: code-level facts for interviews and for folding into a bullet
     slug: str = ""  # stable id, unique within the library (set by parse_content_library)
 
     def facts(self) -> str:
         """All raw facts for this project, concatenated (used for provenance checks)."""
         return (f"{self.name} ({self.dates}) {self.context} {self.scope_scale} "
-                f"{self.tools_actions} {self.outcome_metrics}")
+                f"{self.tools_actions} {self.outcome_metrics} {self.responsibility} {self.detail}")
 
 
 @dataclass
@@ -161,6 +163,8 @@ def _parse_project(lines: list[str], role_header: str) -> Project | None:
     tools_actions = ""
     outcome_metrics = ""
     angles: list[str] = []
+    responsibility = ""
+    detail = ""
 
     field_pattern = re.compile(r"^-\s+\*\*(.+?):\*\*\s*(.*)")
 
@@ -168,7 +172,7 @@ def _parse_project(lines: list[str], role_header: str) -> Project | None:
     current_value_parts: list[str] = []
 
     def _flush():
-        nonlocal context, scope_scale, tools_actions, outcome_metrics, angles
+        nonlocal context, scope_scale, tools_actions, outcome_metrics, angles, responsibility, detail
         if current_field and current_value_parts:
             value = " ".join(current_value_parts).strip()
             normalized = current_field.lower().replace("/", "_").replace(" ", "_")
@@ -182,6 +186,10 @@ def _parse_project(lines: list[str], role_header: str) -> Project | None:
                 outcome_metrics = value
             elif normalized == "angles":
                 angles = _parse_angle_tags(value)
+            elif normalized == "responsibility":
+                responsibility = value
+            elif normalized == "detail":
+                detail = value
 
     for line in lines[1:]:
         stripped = line.strip()
@@ -208,6 +216,8 @@ def _parse_project(lines: list[str], role_header: str) -> Project | None:
         tools_actions=tools_actions,
         outcome_metrics=outcome_metrics,
         angles=angles,
+        responsibility=responsibility,
+        detail=detail,
     )
 
 

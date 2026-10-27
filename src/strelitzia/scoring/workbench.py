@@ -269,6 +269,8 @@ def _rules() -> _Doc:
         "5. Tool justification: is each tool in the posting or needed for context, at most 3? "
         "6. Distinctness: a different responsibility from every other bullet in the role?",
         "Start from my base resume's bullet for that work and adapt it to the posting; vary the verbs.",
+        "A project's Responsibility line (when it has one) is your starting point for its bullet. Its Detail line is "
+        "code-level facts for folding in (its numbers count as facts); never make a bullet out of Detail alone.",
         "Fold small technical work into the responsibility it served (\"..., including the MySQL-to-Parquet "
         "export\"). Give it its own bullet only if it has its own user, stakes or measurable effect; if its only "
         "value is the tool, leave it out (the tool goes in Skills).",

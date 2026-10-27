@@ -237,6 +237,7 @@ def test_rules_shape_bullets_around_responsibilities():
         assert check in rules, check
     for phrase in ("Start from my base resume's bullet", "Fold small technical work", "Name 1-3 tools per bullet",
                    "Skills holds the full inventory", "Order bullets in each role by relevance",
+                   "Responsibility line", "never make a bullet out of Detail alone",
                    "Before: \"Wrote the export in Python", "After: \"Owned ingestion orchestration"):
         assert phrase in rules, phrase
     working = rules.split("## Working with me", 1)[1].split("## Wording", 1)[0]
