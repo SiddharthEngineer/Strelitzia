@@ -102,6 +102,7 @@ def parse_resume_draft(text: str) -> tuple[dict, dict[str, str | None], str]:
     """
     errors: list[str] = []
     headline, versions = "", {"rules": None, "instructions": None}
+    in_summary = False  # lines right after "Summary:" continue it (a 1-2 line Summary may wrap)
     roles: list[dict] = []
     dropped: list[str] = []
     skills: list[dict] = []
@@ -140,9 +141,12 @@ def parse_resume_draft(text: str) -> tuple[dict, dict[str, str | None], str]:
         if section is None:
             key = _KEY_LINE.match(line)
             if key and key.group(1).lower() in ("summary", "headline"):
-                headline = key.group(2)
+                headline, in_summary = key.group(2), True
             elif key:
                 versions[_VERSION_KEYS[key.group(1).lower()]] = key.group(2) or None
+                in_summary = False
+            elif in_summary:
+                headline = f"{headline} {line.strip()}".strip()
             else:
                 errors.append(f"Line {no}: only the \"Rules version:\", \"Instructions version:\" and \"Summary:\" "
                               "lines go above the first ## heading")

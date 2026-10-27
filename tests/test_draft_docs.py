@@ -67,6 +67,12 @@ def test_an_old_headline_line_parses_as_the_summary():
     assert dd.parse_resume_draft(old)[0]["headline"] == "Data engineer building Airflow and Spark pipelines"
 
 
+def test_a_summary_may_wrap_onto_the_next_lines():
+    text = _resume_text(good_result()).replace("Summary: Data engineer building Airflow and Spark pipelines\n",
+                                               "Summary:\nData engineer building Airflow\nand Spark pipelines\n")
+    assert dd.parse_resume_draft(text)[0]["headline"] == "Data engineer building Airflow and Spark pipelines"
+
+
 def test_unknown_section_is_kept_as_a_role_key_for_the_schema_check():
     text = _resume_text(good_result()).replace("## data-engineer-acme", "## data-engineer-acmee")
     resume, _, _ = dd.parse_resume_draft(text)

@@ -115,6 +115,11 @@ class TestParseProject:
         assert proj.angles == ["PIPELINE"] and "40M rows" in proj.outcome_metrics
         assert "250k-row" in proj.facts() and "30 analysts" in proj.facts()
 
+    def test_plural_field_names(self):
+        lines = ["### P (2024)", "- **Responsibilities:** Owned it.", "- **Details:** Moves 40M rows per run."]
+        proj = _parse_project(lines, "## CURRENT ROLE — Data Engineer, Acme (2024)")
+        assert proj.responsibility == "Owned it." and "40M" in proj.facts()
+
     def test_without_responsibility_and_detail(self):
         lines = ["### Older Project (2023)", "- **Context:** Something.", "- **Angles:** ANALYTICS"]
         proj = _parse_project(lines, "## PRIOR ROLE — Analyst, Globex (2023)")

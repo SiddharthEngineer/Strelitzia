@@ -576,26 +576,41 @@ def validate_wording(resume: "TailoredResume", bullet_max: int = 230) -> list[st
     return errors
 
 
+def _tool_pattern(tool: str) -> re.Pattern:
+    """A tool and its acronym or expansion as whole words, like targets' matching; forms of 1-2 characters ("R",
+    "Go", "ML") match case-sensitively, so "go-live" doesn't name Go."""
+    from strelitzia.scoring.targets import term_variants
+
+    forms = []
+    for v in sorted(term_variants(tool), key=len, reverse=True):
+        if len(v) > 2:
+            forms.append(f"(?i:{re.escape(v)})")
+        else:
+            forms += [re.escape(f) for f in dict.fromkeys((v.upper(), tool.strip())) if f.casefold() == v]
+    return re.compile(r"(?<![\w+#&])(?:" + "|".join(forms) + r")(?![\w+#&])")
+
+
 def validate_bullet_shape(resume: "TailoredResume", skills: dict[str, str], max_tools: int = 3,
                           min_rest: int = 60) -> list[str]:
     """Warnings for task-level bullets: more than `max_tools` tools from the base resume's Skills, a role split
     into several bullets about one project, or a bullet that is little more than its tools."""
     tools = list(dict.fromkeys(part.strip() for items in skills.values() for item in split_items(items)
                                for part in _skill_parts(item) if part.strip()))
-    patterns = {t: re.compile(r"(?<!\w)" + re.escape(t) + r"(?!\w)", re.I) for t in tools}
+    # Longest first, and each match is removed before the next tool looks, so "Spark SQL" isn't also Spark and SQL.
+    patterns = [(t, _tool_pattern(t)) for t in sorted(tools, key=len, reverse=True)]
     warnings = []
     for role in resume.roles:
         for i, bullet in enumerate(role.bullets, 1):
             where = f"{role.role_key} bullet {i}"
-            named = [t for t, p in patterns.items() if p.search(bullet.text)]
+            named, rest = [], bullet.text
+            for tool, pattern in patterns:
+                rest, hits = pattern.subn(" ", rest)
+                if hits:
+                    named.append(tool)
             if len(named) > max_tools:
                 warnings.append(f"{where} names {len(named)} tools ({', '.join(named)}); keep 1-3 and let Skills "
                                 "hold the rest")
-            rest = bullet.text
-            for t in sorted(named, key=len, reverse=True):
-                rest = patterns[t].sub("", rest)
-            rest = " ".join(rest.split())
-            if len(rest) < min_rest:
+            if named and len(" ".join(rest.split())) < min_rest:
                 warnings.append(f"{where} is mostly tool names; say what the work owned or changed")
         singles = [b.project_ids[0] for b in role.bullets if len(set(b.project_ids)) == 1]
         for slug in dict.fromkeys(s for s in singles if singles.count(s) > 1):
