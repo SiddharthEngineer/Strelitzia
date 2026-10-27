@@ -19,9 +19,15 @@ function joinNames(names: string[]): string {
   return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
-/** When the app last pulled the Docs (the older of the two): edits made in a Doc since then aren't in its copy. */
-function lastSynced(docs: ProfileDocs | null): string | null {
-  const times = [docs?.library?.synced_at, docs?.resume?.synced_at].filter((t): t is string => Boolean(t));
+// The Doc names setup reports as existing (drive_layout.PROFILE_DOCS).
+const DOC_NAMES = { library: 'Content Library', resume: 'Base Resume' } as const;
+
+/** When the app last pulled the named Docs (the oldest): edits made in a Doc since then aren't in its copy. */
+function lastSynced(docs: ProfileDocs | null, names: string[]): string | null {
+  const times = (Object.keys(DOC_NAMES) as (keyof typeof DOC_NAMES)[])
+    .filter((k) => names.includes(DOC_NAMES[k]))
+    .map((k) => docs?.[k]?.synced_at)
+    .filter((t): t is string => Boolean(t));
   return times.length ? times.reduce((a, b) => (new Date(a) <= new Date(b) ? a : b)) : null;
 }
 
@@ -82,6 +88,8 @@ export default function ClaudeSetupPage() {
     }
   }
 
+  const synced = existing ? lastSynced(setup?.profile_docs ?? null, existing) : null;
+
   if (!setup) {
     return error ? <p className="notice error" role="alert">Couldn't load the Claude setup: {error}</p> : (
       <div className="loader-state" aria-live="polite" aria-busy="true"><Flower variant="loader" size={64} />Loading…</div>
@@ -130,9 +138,11 @@ export default function ClaudeSetupPage() {
             <div className="notice warning" role="alertdialog" aria-label="Replace the Profile Docs?">
               <p>
                 <strong>This replaces the text of {joinNames(existing)}.</strong> They'll be rewritten from the app's
-                last-synced copy (the example templates where that copy is empty). Edits you made in the Docs since the
-                last sync ({relativeTime(lastSynced(setup.profile_docs))}) will be lost. Use Sync now on the Profile
-                page first to keep them.
+                last-synced copy (the example templates where that copy is empty).{' '}
+                {synced
+                  ? `Edits you made in the Docs since the last sync (${relativeTime(synced)}) will be lost.`
+                  : "The app hasn't synced them, so what's in them now will be lost."}{' '}
+                Use Sync now on the Profile page first to keep them.
               </p>
               <button type="button" className="primary" disabled={busy} onClick={() => setUpDocs(true)}>Replace the Docs</button>{' '}
               <button type="button" disabled={busy} onClick={() => setExisting(null)}>Cancel</button>
