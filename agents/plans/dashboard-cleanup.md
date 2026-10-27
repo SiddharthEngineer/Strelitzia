@@ -1,5 +1,5 @@
 # Plan: Dashboard cleanup (issue #98, items 1, 4, 5, 6)
-**Status:** ❌ Not started (planned with the user 2026-10-27)
+**Status:** ✅ Done 2026-10-27 (all four tasks)
 **Risk:** low (dashboard UI and one sort key; no data changes)
 **Depends on:** —
 
