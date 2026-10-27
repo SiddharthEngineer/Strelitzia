@@ -457,3 +457,29 @@ class TestFitToOnePage:
         r = self._resume(library)
         info, dropped = fit_to_one_page(r, PROFILE, FIXED, {}, tmp_path / "x.pdf")
         assert len(dropped) == 4 and len(calls) == 5 and info["overflow"] is True
+
+
+class TestSummary:
+    def test_summary_renders_under_the_contact_line(self, library):
+        data = _llm_json()
+        data["headline"] = "Data engineer with 6 years in finance analytics"
+        html = render_resume(TailoredResume.from_llm_json(data, library), PROFILE,
+                             template_path=DEFAULT_TEMPLATE_PATH, fixed=FIXED)
+        summary = _block(html, "resume-summary")
+        assert "Data engineer with 6 years in finance analytics" in summary
+        assert html.index('class="contact"') < html.index('id="resume-summary"') < html.index('id="resume-experience"')
+
+    def test_empty_summary_renders_nothing(self, library):
+        data = _llm_json()
+        data["headline"] = ""
+        html = render_resume(TailoredResume.from_llm_json(data, library), PROFILE,
+                             template_path=DEFAULT_TEMPLATE_PATH, fixed=FIXED)
+        assert 'id="resume-summary"' not in html
+
+    def test_custom_templates_still_get_headline(self, library, tmp_path):
+        data = _llm_json()
+        data["headline"] = "Analyst"
+        user = tmp_path / "t.html"
+        user.write_text("{{ headline }}|{{ summary }}", encoding="utf-8")
+        html = render_resume(TailoredResume.from_llm_json(data, library), PROFILE, template_path=user, fixed=FIXED)
+        assert html == "Analyst|Analyst"

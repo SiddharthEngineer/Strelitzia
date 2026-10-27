@@ -476,7 +476,7 @@ DASHES = ("—", "–")
 
 
 def validate_numbers_known(text: str, known_text: str, where: str) -> list[str]:
-    """Every number in `text` (e.g. the headline, which cites no projects) must appear in the candidate's material."""
+    """Every number in `text` (e.g. the Summary, which cites no projects) must appear in the candidate's material."""
     facts = known_text.replace(",", "")
     missing = [n for n in dict.fromkeys(_numbers(text)) if not _number_in(n, facts)]
     if missing:
@@ -485,8 +485,8 @@ def validate_numbers_known(text: str, known_text: str, where: str) -> list[str]:
 
 
 def resume_parts(resume: "TailoredResume") -> list[tuple[str, str]]:
-    """(where, text) for every piece of a resume that a model wrote: headline, bullets, skills."""
-    parts = [("headline", resume.headline)] if resume.headline else []
+    """(where, text) for every piece of a resume that a model wrote: Summary, bullets, skills."""
+    parts = [("Summary", resume.headline)] if resume.headline else []
     for role in resume.roles:
         for i, b in enumerate(role.bullets, 1):
             parts.append((f"{role.role_key} bullet {i}", b.text))
@@ -495,9 +495,9 @@ def resume_parts(resume: "TailoredResume") -> list[tuple[str, str]]:
 
 
 def validate_claims(resume: "TailoredResume", evidence: "EvidenceMap", known_text: str = "") -> list[str]:
-    """Every posting target the resume states (bullets, headline, Skills) must be evidenced.
+    """Every posting target the resume states (bullets, Summary, Skills) must be evidenced.
 
-    Also extends the fabrication watchlist from the Skills section to bullets and the headline: a watchlist
+    Also extends the fabrication watchlist from the Skills section to bullets and the Summary: a watchlist
     term the candidate's material (known_text: library facts and base resume) doesn't mention is an error.
     """
     from strelitzia.scoring.targets import matches

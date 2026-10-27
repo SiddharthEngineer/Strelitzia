@@ -70,7 +70,7 @@ as Summary. Rules (Claude's call per job): "Leave Summary empty unless my curren
 a domain switch or gap, or the page is short; then 1-2 lines: role noun, years, one specialization matching the
 posting, one proof point; no tool list, no adjectives about me. Say why in Notes for me."
 **Validate:** `pytest tests/test_draft_docs.py tests/test_resume_template.py -q` → Summary renders; an old Headline draft parses.
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (also moved the Summary under the contact line in the text and .docx exports)
 
 ### Task 4: Content-library format: Responsibility and Detail
 **Runs:** unattended
