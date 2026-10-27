@@ -50,7 +50,7 @@ Add to "Working with me" (interactive; the user may ask freely):
 - "When you are unsure whether a Summary helps, ask me."
 **Validate:** `pytest tests/test_workbench_packet.py -q` → no "Cover every evidenced required"; the checklist and the
 plan-first question are in the rules.
-**Status:** ❌
+**Status:** ✅ 2026-10-27
 
 ### Task 2: Warnings for task-level bullets
 **Runs:** unattended
