@@ -46,7 +46,7 @@ Remove the "Not claimable (unevidenced)" heading. `matches()` gains a light stem
 so the hints are better; the term gate is unchanged.
 **Validate:** `pytest tests/test_targets.py tests/test_workbench_packet.py -q` → a sentence target never prints
 "UNEVIDENCED"; "Built and maintain" hints "building and maintaining"; an absent tool still prints "not in your material".
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (this commit)
 
 ### Task 2: Rules and checks follow
 **Runs:** unattended

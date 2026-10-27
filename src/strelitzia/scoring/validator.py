@@ -504,9 +504,7 @@ def validate_claims(resume: "TailoredResume", evidence: "EvidenceMap", known_tex
 
     errors: list[str] = []
     parts = resume_parts(resume)
-    for e in evidence.unevidenced():
-        if not e.target.is_term:
-            continue
+    for e in evidence.absent_terms():
         where = [w for w, text in parts if matches(e.target, text, evidence.pairs)]
         if where:
             errors.append(f"'{e.target.text}' is not backed by your content library or base resume "
@@ -605,8 +603,8 @@ def validate_letter(paragraphs: list[str], evidence_slugs: list[str], library: "
         errors.append(f"Cover letter number(s) {', '.join(missing)} are not in the facts of its evidence_slugs ({cited}) "
                       "or the posting")
     if evidence is not None:
-        for e in evidence.unevidenced():
-            if e.target.is_term and matches(e.target, body, evidence.pairs):
+        for e in evidence.absent_terms():
+            if matches(e.target, body, evidence.pairs):
                 errors.append(f"Cover letter mentions '{e.target.text}', which your content library and base "
                               "resume don't back; remove it")
     return errors

@@ -36,8 +36,19 @@ def test_evidence_map_on_synthetic_library():
     # A skills-boundary-only skill is not claimable.
     assert not ev["Kubernetes"].evidenced
     assert not ev["Terraform"].evidenced
-    # Sentences match by content words.
+    # Sentences match by content words (a hint only: absent_terms never lists them).
     assert ev["3+ years building data pipelines with Spark"].evidenced
+    absent = [e.target.text for e in evidence_map(POSTING, library(), BASE_RESUME, description=DESCRIPTION)
+              .absent_terms()]
+    assert "Kubernetes" in absent and "Airflow" not in absent and all(len(t.split()) <= 4 for t in absent)
+
+
+def test_sentences_match_across_word_forms():
+    assert matches("Experience building and maintaining production data pipelines",
+                   "Built and maintain the production data pipeline for orders")
+    assert matches("Ran scheduled jobs and wrote tests", "Running schedules for job runners, writing test suites")
+    # The term gate is still a whole-phrase match: no stemming.
+    assert not matches("Airflows", "Built DAGs in Airflow")
 
 
 def test_evidence_without_base_resume_uses_library_only():

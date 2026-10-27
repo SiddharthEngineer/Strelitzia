@@ -1,9 +1,10 @@
 """Posting targets: the required and preferred qualifications a screener checks a resume against.
 
 A target is either a short term (a skill or tool, "Airflow", "CI/CD") matched as a phrase, or a qualification
-sentence ("3+ years building data pipelines in Python") matched by its content words. Each target is
-`evidenced` only by the content library or the base resume: the profile's skills boundary doesn't make a
-skill claimable. Coverage of a resume against the targets is reported, never enforced.
+sentence ("3+ years building data pipelines in Python") matched by its content words. A term is `evidenced`
+only by the content library or the base resume: the profile's skills boundary doesn't make a skill claimable, and an
+absent term is blocked. A sentence's word-overlap matches are only hints: Claude judges qualifications itself.
+Coverage of a resume against the targets is reported, never enforced.
 """
 
 from __future__ import annotations
@@ -55,6 +56,10 @@ _STOPWORDS = {
     "working", "work", "hands-on", "demonstrated", "preferred", "required", "including", "such", "like",
     "related", "relevant", "similar", "least", "minimum", "more", "one", "two", "three", "other", "tools",
 }
+# Irregular past forms a resume uses, mapped to the base verb before stemming.
+_IRREGULAR = {"built": "build", "led": "lead", "ran": "run", "wrote": "write", "written": "write", "drove": "drive",
+              "driven": "drive", "made": "make", "taught": "teach", "grew": "grow", "grown": "grow", "won": "win",
+              "brought": "bring", "began": "begin", "begun": "begin", "chose": "choose", "chosen": "choose"}
 _TOKEN = re.compile(r"[a-z0-9][a-z0-9+#./-]*")
 _ACRONYM_PAIR = re.compile(r"((?:[A-Za-z][\w-]*[ ,]+){1,7})\(([A-Za-z][A-Za-z0-9/&]{1,9})\)")
 
@@ -87,11 +92,13 @@ class EvidenceMap:
     items: list[Evidence] = field(default_factory=list)
     pairs: dict[str, str] = field(default_factory=dict)  # acronym -> expansion found in the posting
 
-    def evidenced(self) -> list[Evidence]:
-        return [e for e in self.items if e.evidenced]
+    def terms(self) -> list[Evidence]:
+        """Tools and skills (short terms): checked mechanically against the candidate's material."""
+        return [e for e in self.items if e.target.is_term]
 
-    def unevidenced(self) -> list[Evidence]:
-        return [e for e in self.items if not e.evidenced]
+    def absent_terms(self) -> list[Evidence]:
+        """Terms that appear nowhere in the library or base resume: never to be claimed."""
+        return [e for e in self.terms() if not e.evidenced]
 
     def targets(self) -> list[Target]:
         return [e.target for e in self.items]
@@ -159,14 +166,29 @@ def _phrase_in(phrase: str, text: str) -> bool:
     return re.search(rf"(?<![\w+#]){re.escape(phrase)}(?![\w+#])", text.casefold()) is not None
 
 
+def stem(word: str) -> str:
+    """A light stem, the same for "build", "builds", "building" and "built": strips -ing/-ed/-s and a final -e."""
+    w = _IRREGULAR.get(word, word)
+    for suffix in ("ing", "ed"):
+        if w.endswith(suffix) and len(w) - len(suffix) >= 3:
+            w = w[:-len(suffix)]
+            if len(w) > 3 and w[-1] == w[-2] and w[-1] not in "aeiouls":  # "running" -> "run"
+                w = w[:-1]
+            break
+    else:
+        if len(w) > 3 and w.endswith("s") and not w.endswith("ss"):
+            w = w[:-1]
+    return w[:-1] if len(w) > 3 and w.endswith("e") else w
+
+
 def content_tokens(text: str) -> set[str]:
-    """Content words of a sentence, singular ("pipelines" -> "pipeline"), without stopwords and bare numbers."""
+    """Stemmed content words of a sentence ("pipelines" -> "pipelin"), without stopwords and bare numbers."""
     out = set()
     for tok in _TOKEN.findall(text.casefold()):
         tok = tok.strip("./-")
         if len(tok) < 2 or tok in _STOPWORDS or not any(c.isalpha() for c in tok):
             continue
-        out.add(tok[:-1] if len(tok) > 3 and tok.endswith("s") and not tok.endswith("ss") else tok)
+        out.add(stem(tok))
     return out
 
 
@@ -184,7 +206,10 @@ def matches(target: Target | str, text: str, pairs: dict[str, str] | None = None
 
 def evidence_map(posting: dict, library: ContentLibrary | None, base_resume_text: str = "",
                  description: str = "") -> EvidenceMap:
-    """Which targets the candidate can honestly claim: backed by a library project or the base resume."""
+    """Where each target shows up in the candidate's material: a library project or a base-resume role.
+
+    For a term this decides whether it may be claimed; for a qualification sentence it is only a hint.
+    """
     pairs = acronym_pairs(" ".join([description, *(t.text for t in targets(posting))]))
     projects = [(p.slug, p.facts()) for r in (library.ensure_keys().roles if library else []) for p in r.projects]
     base = parse_base_resume(base_resume_text, library) if base_resume_text.strip() else None

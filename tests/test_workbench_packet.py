@@ -76,18 +76,31 @@ def test_project_instructions_are_versioned_and_point_at_the_packet():
     assert "0ld0ld00" in old and wb.INSTRUCTIONS_VERSION in old and "Claude setup" in old
 
 
-def test_packet_lists_targets_and_unmet():
+def test_packet_lists_terms_and_qualifications():
     p = wb.job_packet(job(), library(), BASE_RESUME)
     assert p.name == "Initech – Senior Data Engineer – Claude packet"
-    assert "Required qualifications" in p.text and "Preferred qualifications" in p.text
-    assert "Airflow: evidenced (projects orders-pipeline; base resume data-engineer-acme, skills)" in p.text
-    assert "Kubernetes: UNEVIDENCED, do not claim" in p.text
-    unmet = p.text.split("## Not claimable (unevidenced)")[1].split("##")[0]
-    assert "- Kubernetes" in unmet and "- Terraform" in unmet and "Airflow" not in unmet
+    assert "Required tools and skills" in p.text and "Required qualifications" in p.text
+    assert "Preferred tools and skills" in p.text
+    assert "Airflow: in your material (projects orders-pipeline; base resume data-engineer-acme, skills)" in p.text
+    assert "Kubernetes: not in your material: leave out of Skills and bullets" in p.text
+    assert "Terraform: not in your material" in p.text
+    assert "UNEVIDENCED" not in p.text and "Not claimable" not in p.text
+    quals = p.text.split("## Required qualifications")[1].split("##")[0]
+    assert "Assess each against the Content Library, Base Resume and About me" in quals
+    assert "claimable / partly / not" in quals
+    assert "- 3+ years building data pipelines with Spark (possible evidence: base resume data-engineer-acme)" in quals
+    assert "not in your material" not in quals
     assert "data-engineer-acme: Data Engineer at Acme Corp (Jan 2024 – Present); 1-2 bullets, required" in p.text
     assert "projects: orders-pipeline, quality-dashboard" in p.text
     assert "Customer Data Platform (CDP)" in p.text
     assert "<h2>Required qualifications</h2>" in p.html
+
+
+def test_packet_gives_an_unmatched_sentence_no_verdict():
+    posting = {"required_qualifications": ["Deep familiarity with corporate bonds, Treasury rates and credit spreads"]}
+    p = wb.job_packet(job(details_json=json.dumps(posting)), library(), BASE_RESUME)
+    assert "corporate bonds, Treasury rates and credit spreads (possible evidence: none found by word match)" in p.text
+    assert "UNEVIDENCED" not in p.text and "not in your material" not in p.text
 
 
 def test_drive_prompt_is_short_and_names_the_docs():
