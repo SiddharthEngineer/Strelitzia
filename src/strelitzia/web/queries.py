@@ -23,7 +23,6 @@ SORT_COLUMNS = {
 }
 SORT_PATTERN = r"^-?(" + "|".join(SORT_COLUMNS) + r")$"
 STATUS_FILTERS = (*STATUSES, "no_response", "all")
-SourceFilter = Literal["manual", "discovered"]
 StatusFilter = Literal["active", "inactive", "in_progress", "submitted", "rejected", "heard_back", "no_response", "all"]
 MAX_PAGE_SIZE = 200
 
@@ -51,7 +50,6 @@ class JobFilters:
     score_max: int | None = None
     q: str | None = None
     hide_flagged: bool = True
-    source: list[str] = field(default_factory=list)
 
 
 def _like(text: str) -> str:
@@ -112,8 +110,6 @@ def where_clause(f: JobFilters, today: date, user_id: str) -> tuple[str, list]:
         params.append(f.score_max)
     if f.hide_flagged:  # the prefilter and dealbreakers never hide a job the user added
         conds.append(f"({UNFLAGGED_WHERE} OR {MANUAL_WHERE})")
-    if f.source and set(f.source) != {"manual", "discovered"}:
-        conds.append(MANUAL_WHERE if "manual" in f.source else f"(source IS NULL OR NOT {MANUAL_WHERE})")
     if f.q and f.q.strip():
         cols = ("title", "company", "site")
         conds.append("(" + " OR ".join(f"LOWER(COALESCE({c}, '')) LIKE ? ESCAPE '!'" for c in cols) + ")")
@@ -190,7 +186,7 @@ def list_jobs(conn: Connection, user_id: str, filters: JobFilters, *, sort: str 
 
 def facets(conn: Connection, user_id: str, today: date, top_locations: int = 30) -> dict:
     """Counts over the user's jobs for the filter dropdowns: per status (plus no_response), role_category,
-    work_mode, source; top locations."""
+    work_mode; top locations."""
     status_expr = status_sql(today.isoformat())
     mine = (user_id,)
     by_status = {s: 0 for s in STATUSES}
@@ -210,7 +206,6 @@ def facets(conn: Connection, user_id: str, today: date, top_locations: int = 30)
 
     locations = counts("location")[:top_locations]
     total = conn.execute("SELECT COUNT(*) FROM jobs WHERE user_id = ?", mine).fetchone()[0]
-    manual = conn.execute(f"SELECT COUNT(*) FROM jobs WHERE user_id = ? AND {MANUAL_WHERE}", mine).fetchone()[0]
     return {
         "total": total,
         "status": [{"value": s, "count": by_status[s], "color": COLORS.get(s)} for s in (*STATUSES, "no_response")],
@@ -222,5 +217,4 @@ def facets(conn: Connection, user_id: str, today: date, top_locations: int = 30)
             f"SELECT COUNT(*) FROM jobs WHERE user_id = ? AND NOT ({UNFLAGGED_WHERE}) "
             f"AND (source IS NULL OR NOT {MANUAL_WHERE})", mine
         ).fetchone()[0],
-        "source": [{"value": "manual", "count": manual}, {"value": "discovered", "count": total - manual}],
     }

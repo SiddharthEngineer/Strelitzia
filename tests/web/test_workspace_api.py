@@ -267,7 +267,7 @@ def test_writes_need_the_csrf_header(db_path, conn):
     assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 1
 
 
-# --- Jobs list: source filter, next interview, flagged manual rows ---
+# --- Jobs list: source, next interview, flagged manual rows ---
 
 def _list(client, **params):
     r = client.get("/strelitzia/dashboard/api/jobs", params=params)
@@ -275,19 +275,18 @@ def _list(client, **params):
     return r.json()["items"]
 
 
-def test_source_filter_and_facets(client, conn):
+def test_list_ignores_source_and_shows_every_job(client, conn):
     add_job(conn, "https://x/old")  # source NULL = discovered
     add_job(conn, "https://x/disc", source="discovered")
     add_job(conn, "https://x/mine", source="manual", added_at="2026-10-10T00:00:00+00:00")
-    keys = lambda items: sorted(i["key"] for i in items)  # noqa: E731
-    assert keys(_list(client, source="manual")) == [job_key("https://x/mine")]
-    assert keys(_list(client, source="discovered")) == sorted([job_key("https://x/old"), job_key("https://x/disc")])
-    assert len(_list(client, source=["manual", "discovered"])) == 3
-    mine = _list(client, source="manual")[0]
+    every = sorted(job_key(u) for u in ("https://x/old", "https://x/disc", "https://x/mine"))
+    assert sorted(i["key"] for i in _list(client)) == every
+    # A stale source= from an old bookmark is ignored, not a 422.
+    for source in ("manual", "discovered", "bogus"):
+        assert sorted(i["key"] for i in _list(client, source=source)) == every
+    mine = next(i for i in _list(client) if i["key"] == job_key("https://x/mine"))
     assert (mine["source"], mine["added_at"]) == ("manual", "2026-10-10T00:00:00+00:00")
-    assert client.get("/strelitzia/dashboard/api/jobs", params={"source": "bogus"}).status_code == 422
-    facets = client.get("/strelitzia/dashboard/api/facets").json()
-    assert facets["source"] == [{"value": "manual", "count": 1}, {"value": "discovered", "count": 2}]
+    assert "source" not in client.get("/strelitzia/dashboard/api/facets").json()
 
 
 def test_manual_jobs_are_never_hidden_by_flags(client, conn):

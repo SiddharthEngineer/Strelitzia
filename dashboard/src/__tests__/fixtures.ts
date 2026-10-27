@@ -49,7 +49,6 @@ export const FACETS: Facets = {
   work_mode: [{ value: 'remote', count: 4 }, { value: 'hybrid', count: 3 }],
   location: [{ value: 'Chicago, IL', count: 4 }, { value: 'Remote, US', count: 3 }],
   flagged: 2,
-  source: [{ value: 'manual', count: 0 }, { value: 'discovered', count: 10 }],
 };
 
 export function jobDetail(extra: Partial<JobDetail> = {}): JobDetail {
