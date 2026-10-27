@@ -73,6 +73,15 @@ def test_a_summary_may_wrap_onto_the_next_lines():
     assert dd.parse_resume_draft(text)[0]["headline"] == "Data engineer building Airflow and Spark pipelines"
 
 
+def test_a_blank_line_ends_the_summary():
+    text = _resume_text(good_result()).replace("Summary: Data engineer building Airflow and Spark pipelines\n",
+                                               "Summary: Data engineer building Airflow and Spark pipelines\n\n"
+                                               "Stray text\n")
+    with pytest.raises(dd.DraftFormatError) as e:
+        dd.parse_resume_draft(text)
+    assert any("above the first ## heading" in m for m in e.value.errors)
+
+
 def test_unknown_section_is_kept_as_a_role_key_for_the_schema_check():
     text = _resume_text(good_result()).replace("## data-engineer-acme", "## data-engineer-acmee")
     resume, _, _ = dd.parse_resume_draft(text)

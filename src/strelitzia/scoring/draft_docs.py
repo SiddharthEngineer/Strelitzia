@@ -122,6 +122,7 @@ def parse_resume_draft(text: str) -> tuple[dict, dict[str, str | None], str]:
         if not line.strip():
             if section == NOTES and notes:
                 notes.append("")
+            in_summary = False
             continue
         heading = _HEADING.match(line)
         if heading:
