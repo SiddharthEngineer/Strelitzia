@@ -46,8 +46,8 @@ def test_schema_rejects_wrong_version_and_bool_as_int():
 def test_rules_cover_the_rules_and_the_draft_format():
     html = wb.rules_text()
     assert "```json" not in html and "project_ids" not in html
-    for phrase in ("every evidenced required qualification", "most recent role", "exact term",
-                   "Never mention an unevidenced", "No keyword lists", "No hidden text", "230 characters",
+    for phrase in ("every required qualification you rate claimable", "most recent role", "exact term",
+                   "Never claim a tool or skill the packet lists as not in my material", "Working with me", "No keyword lists", "No hidden text", "230 characters",
                    "3 paragraphs", "250 words", "spearheaded", "## Dropped roles", "## Notes for me",
                    "Evidence: ", "never create a new Doc", "Resume draft", "Instructions version: "):
         assert phrase in html, phrase

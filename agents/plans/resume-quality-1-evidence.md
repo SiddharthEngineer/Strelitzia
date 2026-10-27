@@ -62,7 +62,7 @@ agree, keeping the Doc's format." `PROJECT_INSTRUCTIONS` loosens "edit the Profi
 when I agree" (bumps `INSTRUCTIONS_VERSION`: a manual repaste step, like M35).
 **Validate:** `pytest tests/test_workbench_import.py tests/test_workbench_packet.py -q` → the rules have "Working with me"; a draft that states a qualification sentence passes; a
 draft that adds an absent tool still fails.
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (this commit)
 
 ## Validation
 - `scripts/validate.sh --full` passes.
