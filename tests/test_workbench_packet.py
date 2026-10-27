@@ -43,21 +43,37 @@ def test_schema_rejects_wrong_version_and_bool_as_int():
     assert wb.schema_errors(data, wb.RESULT_SCHEMA)
 
 
-def test_rules_doc_covers_the_rules_and_the_draft_format():
-    html = wb.rules_doc()
+def test_rules_cover_the_rules_and_the_draft_format():
+    html = wb.rules_text()
     assert "```json" not in html and "project_ids" not in html
     for phrase in ("every evidenced required qualification", "most recent role", "exact term",
                    "Never mention an unevidenced", "No keyword lists", "No hidden text", "230 characters",
                    "3 paragraphs", "250 words", "spearheaded", "## Dropped roles", "## Notes for me",
-                   "Evidence: ", "never create a new Doc", "Resume draft"):
+                   "Evidence: ", "never create a new Doc", "Resume draft", "Instructions version: "):
         assert phrase in html, phrase
     assert len(wb.RULES_VERSION) == 8 and wb.RULES_VERSION in wb.job_packet(job(), library(), BASE_RESUME).text
 
 
-def test_library_doc_shows_slugs_and_base_resume():
-    html = wb.library_doc(library(), BASE_RESUME)
-    assert "Project slug: orders-pipeline" in html and "Role data-engineer-acme" in html
-    assert "Data Analyst Intern at Globex" in html
+def test_packet_carries_the_full_rules():
+    p = wb.job_packet(job(), library(), BASE_RESUME)
+    assert f"Rules version: {wb.RULES_VERSION} (the Rules section" in p.text
+    rules = p.text.split("\n## Rules\n", 1)[1]
+    for heading in ("Honesty", "Wording", "Cover letter", "Output format"):
+        assert f"## Rules: {heading}" in rules, heading
+    assert "No hidden text" in rules and "## Dropped roles" in rules
+    assert "<h2>Rules: Output format</h2>" in p.html
+    assert "Rules section" in p.prompt
+
+
+def test_project_instructions_are_versioned_and_point_at_the_packet():
+    text = wb.project_instructions()
+    assert text.splitlines()[0] == f"Instructions version: {wb.INSTRUCTIONS_VERSION}"
+    assert len(wb.INSTRUCTIONS_VERSION) == 8 and wb.PROJECT_INSTRUCTIONS in text
+    assert "Rules section" in text and "knowledge" not in text
+    assert wb.instructions_version_warning(wb.INSTRUCTIONS_VERSION) is None
+    assert "didn't say" in wb.instructions_version_warning(None)
+    old = wb.instructions_version_warning("0ld0ld00")
+    assert "0ld0ld00" in old and wb.INSTRUCTIONS_VERSION in old and "Claude setup" in old
 
 
 def test_packet_lists_targets_and_unmet():
@@ -140,8 +156,10 @@ def test_first_open_creates_seeded_drafts(drive, client, conn):
     resume = docs["Initech - Senior Data Engineer - Resume draft"]
     cover = docs["Initech - Senior Data Engineer - Cover letter draft"]
     assert drive.path_of(resume["id"])[:3] == ["Strelitzia", "Initech", "Senior Data Engineer"]
-    assert resume["content"].decode().startswith(f"Rules version: {wb.RULES_VERSION}\nHeadline: \n")
+    # The version lines start empty: Claude fills them from the packet and its instructions, never from the seed.
+    assert resume["content"].decode().startswith("Rules version: \nInstructions version: \nHeadline: \n")
     assert b"## data-engineer-acme" in resume["content"] and b"Write the cover letter here" in cover["content"]
+    assert not cover["content"].startswith(b"Rules version")
     row = _row(conn)
     assert row["resume_draft_doc_id"] == resume["id"] and row["cover_draft_doc_url"] == urls["cover"]
     assert row["drafts_written_at"] == max(resume["modifiedTime"], cover["modifiedTime"])

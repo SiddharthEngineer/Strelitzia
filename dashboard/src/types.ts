@@ -206,15 +206,14 @@ export interface ClaudeSetup {
   drive_source: 'user' | 'legacy' | null;
   /** Where Connect Google Drive goes (a full-page redirect to Google), or null when the server can't offer it. */
   connect_url: string | null;
+  /** The rules travel in each job's packet; this is only shown for reference. */
   rules_version: string;
-  /** The rules as the .md file for the project's knowledge (first line "Rules version: <v>"). */
-  rules_markdown: string;
-  /** Where "Download rules (.md)" points. */
-  rules_url: string;
   /** The user's Profile Docs, or null before setup. */
   profile_docs: ProfileDocs | null;
   project_name: string;
+  /** What to paste into the project's instructions; its first line is "Instructions version: <v>". */
   project_instructions: string;
+  instructions_version: string;
 }
 
 /** One Profile Doc in Drive (Strelitzia/Profile/) and when the app last pulled it. */
@@ -447,11 +446,11 @@ export interface PanelOverview {
   comparable: Record<PanelMode, number>;
   runs: PanelRunSummary[];
   project_name: string;
+  /** What to paste into the Panel project's instructions; its first line is "Instructions version: <v>". */
   project_instructions: string;
-  rubric: { name: string; url: string | null; text: string };
-  rubric_markdown: string;
-  /** Where "Download rubric (.md)" points. */
-  rubric_url: string;
+  instructions_version: string;
+  /** The rubric travels in each packet prompt; this is only shown for reference. */
+  rubric_version: string;
 }
 
 export interface PanelSideStats {
@@ -498,7 +497,7 @@ export interface PanelRun {
 }
 
 export type PanelGradeOutcome =
-  | { ok: true; graded: number | null; run: PanelRun }
+  | { ok: true; graded: number | null; warnings: string[]; run: PanelRun }
   | { ok: false; errors: string[] };
 
 /** The signed-in account (GET /auth/me). While login is off every request acts as the owner. */

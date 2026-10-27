@@ -294,7 +294,8 @@ async function postPanelGrade(id: string, body: object): Promise<PanelGradeOutco
     if (err && Array.isArray(err.errors)) return { ok: false, errors: err.errors };
   }
   if (!res.ok) throw await failure(res);
-  return { ok: true, ...((await res.json()) as { graded: number | null; run: PanelRun }) };
+  const out = (await res.json()) as { graded: number | null; warnings?: string[]; run: PanelRun };
+  return { ok: true, graded: out.graded, warnings: out.warnings ?? [], run: out.run };
 }
 
 /** Import a model's pasted reply: ok with the run, or not ok with the errors (e.g. the wrong item count). */

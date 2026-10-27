@@ -8,6 +8,7 @@ reported by the schema check (with the valid keys) instead of being dropped.
 Resume Doc:
 
     Rules version: 1a2b3c4d
+    Instructions version: 5e6f7a8b
     Headline: Data engineer who ships reliable pipelines
 
     ## <role-key>
@@ -22,7 +23,8 @@ Resume Doc:
     ## Notes for me
     Free text.
 
-Cover letter Doc: an optional `Rules version:` line, the paragraphs separated by blank lines, then a last line
+The two version lines are what Claude read in the packet and its project instructions (`workbench` warns when
+either is missing or old). Cover letter Doc: an optional `Rules version:` line, the paragraphs separated by blank lines, then a last line
 `Evidence: slug-a, slug-b`.
 """
 
@@ -40,7 +42,8 @@ COVER_PLACEHOLDER = "Write the cover letter here: three paragraphs, then a last 
 _HEADING = re.compile(r"^#{1,3}\s+(.+?)\s*#*\s*$")
 _BULLET = re.compile(r"^\s*[-*+]\s+(.*)$")
 _TAGS = re.compile(r"\s*\[([^\[\]]*)\]\s*$")
-_KEY_LINE = re.compile(r"^\s*(rules version|headline)\s*:\s*(.*?)\s*$", re.I)
+_KEY_LINE = re.compile(r"^\s*(rules version|instructions version|headline)\s*:\s*(.*?)\s*$", re.I)
+_VERSION_KEYS = {"rules version": "rules", "instructions version": "instructions"}
 _EVIDENCE = re.compile(r"^\s*evidence\s*:\s*(.*?)\s*$", re.I)
 
 
@@ -62,10 +65,11 @@ def _slugs(raw: str) -> list[str]:
 
 # ── Resume ────────────────────────────────────────────────────────────────
 
-def resume_draft_text(result: dict | None, library: ContentLibrary, rules_version: str) -> str:
+def resume_draft_text(result: dict | None, library: ContentLibrary, rules_version: str,
+                      instructions_version: str = "") -> str:
     """The resume Doc's text: the result's resume, or (result=None) a skeleton with one section per library role."""
     library.ensure_keys()
-    out = [f"Rules version: {rules_version}"]
+    out = [f"Rules version: {rules_version}", f"Instructions version: {instructions_version}"]
     if result is None:
         out += ["Headline: ", ""]
         for role in library.roles:
@@ -89,14 +93,14 @@ def resume_draft_text(result: dict | None, library: ContentLibrary, rules_versio
     return "\n".join(out).rstrip() + "\n"
 
 
-def parse_resume_draft(text: str) -> tuple[dict, str | None, str]:
-    """(resume dict, rules version or None, notes for the user) from the resume Doc's text.
+def parse_resume_draft(text: str) -> tuple[dict, dict[str, str | None], str]:
+    """(resume dict, {"rules", "instructions"} versions (None when missing), notes for the user) from the resume Doc.
 
     Raises:
         DraftFormatError: with one message per problem, each naming its line or section.
     """
     errors: list[str] = []
-    headline, rules_version = "", None
+    headline, versions = "", {"rules": None, "instructions": None}
     roles: list[dict] = []
     dropped: list[str] = []
     skills: list[dict] = []
@@ -137,10 +141,10 @@ def parse_resume_draft(text: str) -> tuple[dict, str | None, str]:
             if key and key.group(1).lower() == "headline":
                 headline = key.group(2)
             elif key:
-                rules_version = key.group(2) or None
+                versions[_VERSION_KEYS[key.group(1).lower()]] = key.group(2) or None
             else:
-                errors.append(f"Line {no}: only the \"Rules version:\" and \"Headline:\" lines go above the first "
-                              "## heading")
+                errors.append(f"Line {no}: only the \"Rules version:\", \"Instructions version:\" and \"Headline:\" "
+                              "lines go above the first ## heading")
             continue
         bullet = _BULLET.match(line)
         if not bullet:
@@ -171,14 +175,17 @@ def parse_resume_draft(text: str) -> tuple[dict, str | None, str]:
     if errors:
         raise DraftFormatError(errors)
     resume = {"headline": headline, "roles": roles, "skills": skills, "dropped_roles": dropped}
-    return resume, rules_version, "\n".join(notes).strip()
+    return resume, versions, "\n".join(notes).strip()
 
 
 # ── Cover letter ──────────────────────────────────────────────────────────
 
 def cover_draft_text(cover: dict | None, rules_version: str) -> str:
-    """The cover letter Doc's text: the paragraphs and the Evidence line, or (cover=None) a placeholder."""
-    out = [f"Rules version: {rules_version}", ""]
+    """The cover letter Doc's text: the paragraphs and the Evidence line, or (cover=None) a placeholder.
+
+    The Rules version line is written only when one is given (the app seeds the Docs without it).
+    """
+    out = [f"Rules version: {rules_version}", ""] if rules_version else []
     if cover is None:
         return "\n".join(out + [COVER_PLACEHOLDER]) + "\n"
     for paragraph in cover.get("paragraphs") or []:
@@ -188,14 +195,15 @@ def cover_draft_text(cover: dict | None, rules_version: str) -> str:
 
 
 def _cover_lines(text: str) -> tuple[list[str], str | None]:
-    """The letter's lines without the Rules version line, and that version."""
+    """The letter's lines without the leading version lines, and the Rules version."""
     lines, version = _lines(text), None
-    first = next((i for i, x in enumerate(lines) if x.strip()), None)
-    if first is not None:
+    while (first := next((i for i, x in enumerate(lines) if x.strip()), None)) is not None:
         key = _KEY_LINE.match(lines[first])
-        if key and key.group(1).lower() == "rules version":
+        if not key or key.group(1).lower() not in _VERSION_KEYS:
+            break
+        if key.group(1).lower() == "rules version":
             version = key.group(2) or None
-            lines = lines[:first] + lines[first + 1:]
+        lines = lines[:first] + lines[first + 1:]
     return lines, version
 
 
@@ -224,7 +232,8 @@ def parse_cover_draft(text: str) -> dict | None:
 def drafts_to_result(resume_text: str, cover_text: str) -> dict:
     """The full result dict (as a JSON paste would give) from the two draft Docs.
 
-    The rules version comes from the resume Doc, else the cover letter Doc; it's left out when neither has one.
+    The rules version comes from the resume Doc, else the cover letter Doc; the instructions version from the resume
+    Doc. Each is left out when missing.
 
     Raises:
         DraftFormatError: the problems in both Docs, each prefixed with the Doc it is in.
@@ -233,9 +242,10 @@ def drafts_to_result(resume_text: str, cover_text: str) -> dict:
 
     errors: list[str] = []
     resume = cover = None
-    version = notes = None
+    versions: dict[str, str | None] = {}
+    notes = None
     try:
-        resume, version, notes = parse_resume_draft(resume_text)
+        resume, versions, notes = parse_resume_draft(resume_text)
     except DraftFormatError as e:
         errors += [f"Resume draft, {m[0].lower()}{m[1:]}" for m in e.errors]
     try:
@@ -245,7 +255,9 @@ def drafts_to_result(resume_text: str, cover_text: str) -> dict:
     if errors:
         raise DraftFormatError(errors)
     out = {"strelitzia": SCHEMA_VERSION, "resume": resume, "cover_letter": cover, "notes_for_user": notes or ""}
-    version = version or _cover_lines(cover_text)[1]
-    if version:
-        out["rules_version"] = version
+    rules = versions.get("rules") or _cover_lines(cover_text)[1]
+    if rules:
+        out["rules_version"] = rules
+    if versions.get("instructions"):
+        out["instructions_version"] = versions["instructions"]
     return out

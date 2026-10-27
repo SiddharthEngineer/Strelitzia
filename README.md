@@ -110,20 +110,25 @@ Each draft has bullets per role (between your base resume's bullet count and two
 ### Resumes and cover letters in Claude
 
 Resumes and cover letters are written in your Claude Pro plan, not through the API, so they cost nothing extra and you
-pick the model (Opus or Sonnet) per chat. Results come back by pasting, which works on any plan.
+pick the model (Opus or Sonnet) per chat. Everything goes through Google Drive with Claude's Google Docs connector.
 
-1. **Once:** open **Claude setup** in the dashboard (`/strelitzia/dashboard/claude-setup`). With Google Drive set up, Strelitzia writes
-   two Google Docs into `Strelitzia/_Claude/`: "Strelitzia rules" (the writing rules and the JSON format every reply
-   ends with) and "Content Library". Create a claude.ai Project named "Strelitzia Resumes", add both Docs,
-   and paste the project instructions the page shows. Strelitzia keeps the Docs current when the rules or your library
-   change.
-2. **Per job:** **Open in Claude** writes "<Company> – <Role> – Claude packet" into the job's Drive folder and copies a
-   short prompt. Without Drive, the whole packet (with the rules and your library) is copied instead.
-3. **Iterate** in one chat. Every reply ends with a ```` ```json ```` block.
-4. **Paste result** on the job page. If a check fails, nothing is saved: you get the errors and a **Copy fix message**
-   for the same chat. If it passes, you get the PDF, DOCX and cover-letter PDF (moved to Drive when it's set up), a new
-   draft version, and **Resume targeting**: how many required qualifications the resume covers, and which ones nothing
-   in your library backs ("Not on your resume"; report-only, never written in).
+1. **Once:** open **Claude setup** in the dashboard (`/strelitzia/dashboard/claude-setup`): connect Google Drive, set up
+   your Profile Docs (`Strelitzia/Profile/`: "Content Library" and "Base Resume", the source of truth from then on), create
+   a claude.ai Project named "Strelitzia Resumes" and paste the project instructions the page shows. There is nothing to
+   upload: the rules travel inside each job's packet, so they are always the app's current ones.
+2. **Per job:** **Open in Claude** writes "<Company> – <Role> – Claude packet" (the posting, which qualifications you can
+   claim, the roles and slugs, and the full rules) plus a resume draft Doc and a cover letter draft Doc into the job's
+   Drive folder, and copies a short prompt. Claude writes into the two draft Docs.
+3. **Check & format** on the job page. If a check fails, nothing is saved: you get the problems and a **Copy fix
+   prompt** for the same chat. If it passes, you get the PDF, DOCX and cover-letter PDF, a new draft version, and
+   **Resume targeting**: how many required qualifications the resume covers, and which ones nothing in your library
+   backs ("Not on your resume"; report-only, never written in).
+
+The resume draft starts with the rules version Claude read in the packet and the version on the first line of its
+project instructions. Check & format warns when either is missing or old: an old rules version means a stale packet
+(Open in Claude again), an old instructions version means the project needs the current instructions pasted again.
+The panel works the same way: each packet prompt starts with the current rubric, and the grade import warns about an
+old rubric or old "Strelitzia Panel" instructions.
 
 Marking a job Submitted records its draft and rules versions (`submitted_draft_version`, `submitted_rules_version`).
 

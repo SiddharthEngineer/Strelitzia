@@ -13,14 +13,14 @@ const DRIVE_OUTCOMES: Record<string, { text: string; error: boolean }> = {
   unavailable: { text: "This server can't connect Google Drive yet.", error: true },
 };
 
-/** One-time setup: Drive, the Profile Docs, and a Claude Project with the rules file and the instructions. */
+/** One-time setup: Drive, the Profile Docs, and a Claude Project with the instructions (the rules come in each packet). */
 export default function ClaudeSetupPage() {
   const [params, setParams] = useSearchParams();
   const outcome = DRIVE_OUTCOMES[params.get('drive') ?? ''];
   const [setup, setSetup] = useState<ClaudeSetup | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState<'instructions' | 'rules' | null>(null);
+  const [copied, setCopied] = useState(false);
   // The Docs that setup would overwrite (asked before it does).
   const [existing, setExisting] = useState<string[] | null>(null);
 
@@ -60,11 +60,11 @@ export default function ClaudeSetupPage() {
     setSetup(await api.getClaudeSetup());
   });
 
-  async function copy(kind: 'instructions' | 'rules') {
+  async function copyInstructions() {
     if (!setup) return;
     try {
-      await api.copyText(kind === 'rules' ? setup.rules_markdown : setup.project_instructions);
-      setCopied(kind);
+      await api.copyText(setup.project_instructions);
+      setCopied(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -130,18 +130,15 @@ export default function ClaudeSetupPage() {
           project named <strong>{setup.project_name}</strong> and paste these project instructions (Project →
           Instructions):
           <p className="pre card">{setup.project_instructions}</p>
-          <button type="button" onClick={() => copy('instructions')}>
-            {copied === 'instructions' ? 'Copied' : 'Copy instructions'}
-          </button>
+          <button type="button" onClick={copyInstructions}>{copied ? 'Copied' : 'Copy instructions'}</button>
           <p>
-            Then add the rules to the project's knowledge: download the file and upload it, or copy the text and paste
-            it as text content. Turn on the Google Docs connector so Claude can open your Profile Docs.
+            Turn on the Google Docs connector so Claude can open the packet, your Profile Docs and the drafts. There's
+            nothing to upload: the rules come inside each job's packet. If the project's knowledge still has an old
+            rules file, delete it.
           </p>
-          <a className="button" href={setup.rules_url} download>Download rules (.md)</a>{' '}
-          <button type="button" onClick={() => copy('rules')}>{copied === 'rules' ? 'Copied' : 'Copy rules'}</button>
           <p className="muted small">
-            Rules version {setup.rules_version}. When the rules change, replace the file in the project; the check
-            warns when Claude used an older version.
+            Instructions version {setup.instructions_version} · rules version {setup.rules_version}. When the
+            instructions change, Check &amp; format warns you to paste them again.
           </p>
         </li>
       </ol>

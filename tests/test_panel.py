@@ -142,11 +142,14 @@ def version_grade(overall="B", clarity=3, flags=(), quals=None):
     return {"qualifications": quals, "overall": overall, "clarity": clarity, "red_flags": list(flags)}
 
 
-def model_reply(winners, first=None, second=None, count=None) -> str:
+def model_reply(winners, first=None, second=None, count=None, versions=True) -> str:
     """A panel reply with the given winner per item (first | second | tie), in the packet's order."""
     items = [{"item": no, "first": first or version_grade(), "second": second or version_grade(),
               "winner": w, "why": "Clearer fit."} for no, w in enumerate(winners, 1)]
-    return reply({"panel": 1, "items": items[:count] if count is not None else items}, prose="My grades follow.")
+    data = {"panel": 1, "items": items[:count] if count is not None else items}
+    if versions:
+        data |= {"rubric_version": panel.RUBRIC_VERSION, "instructions_version": panel.INSTRUCTIONS_VERSION}
+    return reply(data, prose="My grades follow.")
 
 
 @pytest.fixture
@@ -155,12 +158,12 @@ def run_id(conn):
     return panel.create_run(conn, _me(conn), n=5, rng=random.Random(3))
 
 
-def test_rubric_doc_has_the_grading_steps_and_format():
-    html = panel.rubric_doc()
-    for needle in ("met, partial or not_met", "Overall grade A-D", "Clarity 1-5", "Red flags", "Winner",
-                   "&quot;panel&quot;: 1", "&quot;winner&quot;", "verbatim"):
-        assert needle in html, needle
+def test_rubric_has_the_grading_steps_and_format():
     text = panel.rubric_text()
+    for needle in ("met, partial or not_met", "Overall grade A-D", "Clarity 1-5", "Red flags", "Winner",
+                   '"panel": 1', '"winner"', "verbatim", '"rubric_version"', '"instructions_version"'):
+        assert needle in text, needle
+    assert len(panel.RUBRIC_VERSION) == 8
     assert " A/B" not in text and "newer" not in text.replace("which version is newer", "")
 
 
@@ -169,6 +172,10 @@ def test_packets_are_blind_and_swapped(conn, run_id):
     p1, p2 = panel.panel_packet(conn, run), panel.panel_packet(conn, run, swapped=True)
     assert run["packet_text"] == p1.text and run["packet_text_swapped"] == p2.text
     assert p1.prompt.endswith(p1.text) and "Strelitzia panel rubric" in p1.prompt
+    # The rubric comes first in every prompt, so each model grades with the app's current one.
+    assert f"Rubric version: {panel.RUBRIC_VERSION}" in p1.prompt and panel.rubric_text() in p1.prompt
+    assert p1.prompt.index(panel.rubric_text()) < p1.prompt.index(p1.text)
+    assert panel.run_packets(run)[1]["prompt"] == p2.prompt
     for text in (p1.text, p2.text):
         assert "Item 1: Data Engineer 5 at Initech" in text and "Item 5: Data Engineer 1 at Initech" in text
         assert "Airflow" in text and "Terraform" in text and "Required qualifications" in text
@@ -191,7 +198,7 @@ def test_import_maps_each_models_order_back_to_the_drafts(conn, run_id):
     items = panel.run_items(conn, _me(conn), run_id)
     # Sonnet sees packet 1 and always picks First; Opus sees packet 2 and always picks First too.
     out = panel.import_grades(conn, _me(conn), run_id, "sonnet", model_reply(["first"] * 5, first=version_grade("A")))
-    assert out.ok and out.graded == 5
+    assert out.ok and out.graded == 5 and out.warnings == []
     assert panel.import_grades(conn, _me(conn), run_id, "opus", model_reply(["first"] * 5, first=version_grade("D"))).ok
     g = panel.grades(conn, _me(conn), run_id)
     for item in items:
@@ -414,3 +421,26 @@ def test_runs_belong_to_their_user(conn):
     assert {i["job"]["title"] for i in items} == {"Theirs 1", "Theirs 2", "Theirs 3"}
     assert {i["draft_b_id"] for i in items} == {"o-1-2", "o-2-2", "o-3-2"}
     assert [r["id"] for r in panel.list_runs(conn, _me(conn))] == [run_id]
+
+
+def test_project_instructions_are_versioned_and_point_at_the_prompt():
+    text = panel.project_instructions()
+    assert text.splitlines()[0] == f"Instructions version: {panel.INSTRUCTIONS_VERSION}"
+    assert "rubric in the prompt is binding" in text and "knowledge" not in text
+
+
+@pytest.mark.parametrize("versions, warned", [
+    ({}, ["didn't say which rubric version", "didn't say which project instructions"]),
+    ({"rubric_version": "0ld0ld00", "instructions_version": "0ld0ld01"},
+     ["rubric version 0ld0ld00", "old instructions (version 0ld0ld01)"]),
+])
+def test_import_warns_about_old_or_missing_versions_and_stores_them(conn, run_id, versions, warned):
+    data = json.loads(model_reply(["first"] * 5, versions=False).split("```json\n")[1].split("```")[0])
+    out = panel.import_grades(conn, _me(conn), run_id, "sonnet", json.dumps(data | versions))
+    assert out.ok and len(out.warnings) == 2, out.warnings
+    for needle, warning in zip(warned, out.warnings, strict=True):
+        assert needle in warning, warning
+    assert "Panel page" in out.warnings[1] and "Strelitzia Panel" in out.warnings[1]
+    detail = panel.grades(conn, _me(conn), run_id)["sonnet"][1]["detail"]
+    assert detail["versions"] == {"rubric": versions.get("rubric_version"),
+                                  "instructions": versions.get("instructions_version")}

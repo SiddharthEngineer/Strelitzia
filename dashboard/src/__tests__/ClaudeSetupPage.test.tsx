@@ -17,11 +17,10 @@ function setup(extra: Partial<ClaudeSetup> = {}): ClaudeSetup {
   return {
     drive: true, drive_detail: 'Connected 2026-10-16', drive_source: 'user', connect_url: '/strelitzia/dashboard/api/drive/connect',
     rules_version: 'r1234567',
-    rules_markdown: 'Rules version: r1234567\n\n# Strelitzia rules\n',
-    rules_url: '/strelitzia/dashboard/api/claude/rules.md',
+    instructions_version: 'i7654321',
     profile_docs: null,
     project_name: 'Strelitzia Resumes',
-    project_instructions: 'You tailor my resume and cover letter for one job per chat.',
+    project_instructions: 'Instructions version: i7654321\n\nYou tailor my resume and cover letter for one job per chat.',
     ...extra,
   };
 }
@@ -44,23 +43,23 @@ beforeEach(() => {
 });
 
 describe('ClaudeSetupPage', () => {
-  it('lists the steps with the rules download and version', async () => {
+  it('lists the steps with the instructions version and no rules file', async () => {
     renderPage();
     expect(await screen.findByRole('heading', { name: 'Claude setup' })).toBeInTheDocument();
     expect(screen.getByText('Strelitzia Resumes')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Download rules (.md)' })).toHaveAttribute('href', '/strelitzia/dashboard/api/claude/rules.md');
-    expect(screen.getByText(/Rules version r1234567/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Download rules/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Copy rules' })).toBeNull();
+    expect(screen.getByText(/Instructions version i7654321 · rules version r1234567/)).toBeInTheDocument();
+    expect(screen.getByText(/rules come inside each job's packet/)).toBeInTheDocument();
     expect(screen.getByText(/can only see files it created/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Write the Docs|Refresh the Docs/ })).toBeNull();
   });
 
-  it('copies the project instructions and the rules', async () => {
+  it('copies the project instructions with their version line', async () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(await screen.findByRole('button', { name: 'Copy instructions' }));
-    expect(api.copyText).toHaveBeenCalledWith('You tailor my resume and cover letter for one job per chat.');
-    await user.click(screen.getByRole('button', { name: 'Copy rules' }));
-    expect(api.copyText).toHaveBeenLastCalledWith('Rules version: r1234567\n\n# Strelitzia rules\n');
+    expect(api.copyText).toHaveBeenCalledWith('Instructions version: i7654321\n\nYou tailor my resume and cover letter for one job per chat.');
     expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
   });
 

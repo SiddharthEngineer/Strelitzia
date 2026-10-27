@@ -11,9 +11,9 @@ vi.mock('../api');
 function overview(extra: Partial<PanelOverview> = {}): PanelOverview {
   return {
     due: null, needed: 5, comparable: { latest_vs_previous: 5, rules_a_vs_b: 2 }, runs: [],
-    project_name: 'Strelitzia Panel', project_instructions: 'You are a strict resume screener.',
-    rubric: { name: 'Strelitzia panel rubric', url: null, text: '# Strelitzia panel rubric' },
-    rubric_markdown: '# Strelitzia panel rubric', rubric_url: '/strelitzia/dashboard/api/panel/rubric.md',
+    project_name: 'Strelitzia Panel',
+    project_instructions: 'Instructions version: p1234567\n\nYou are a strict resume screener.',
+    instructions_version: 'p1234567', rubric_version: 'b7654321',
     ...extra,
   };
 }
@@ -63,14 +63,14 @@ beforeEach(() => {
 });
 
 describe('PanelPage', () => {
-  it('offers the rubric as a download and as text to copy', async () => {
+  it('copies the versioned project instructions; the rubric needs no upload', async () => {
     const user = userEvent.setup();
     renderPage();
-    expect(await screen.findByRole('link', { name: 'Download rubric (.md)' }))
-      .toHaveAttribute('href', '/strelitzia/dashboard/api/panel/rubric.md');
-    await user.click(screen.getByRole('button', { name: 'Copy rubric' }));
-    expect(api.copyText).toHaveBeenCalledWith('# Strelitzia panel rubric');
-    expect(screen.getByRole('button', { name: 'Copied rubric' })).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Copy instructions' }));
+    expect(api.copyText).toHaveBeenCalledWith('Instructions version: p1234567\n\nYou are a strict resume screener.');
+    expect(screen.getByRole('button', { name: 'Copied instructions' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Download rubric/ })).toBeNull();
+    expect(screen.getByText(/Instructions version p1234567 · rubric version b7654321/)).toBeInTheDocument();
   });
 
   it('says how many more drafts are needed', async () => {
@@ -97,7 +97,10 @@ describe('PanelPage', () => {
     const user = userEvent.setup();
     vi.mocked(api.getPanel).mockResolvedValue(overview({ runs: [{ id: 'run1', created_at: '2026-10-15T09:00:00+00:00',
       mode: 'latest_vs_previous', rules_version_a: 'r1', rules_version_b: 'r2', status: 'open' }] }));
-    vi.mocked(api.importPanelGrades).mockResolvedValue({ ok: true, graded: 2, run: run({ graded: { sonnet: 2, opus: 0, you: 0 } }) });
+    vi.mocked(api.importPanelGrades).mockResolvedValue({
+      ok: true, graded: 2, warnings: ['The Strelitzia Panel project has old instructions (version 0ld0ld00)'],
+      run: run({ graded: { sonnet: 2, opus: 0, you: 0 } }),
+    });
     renderPage();
     const sonnet = await screen.findByRole('region', { name: 'Model 1: Sonnet' });
     expect(within(sonnet).getByText(/Use Sonnet, in a new chat in the Panel project/)).toBeInTheDocument();
@@ -107,6 +110,7 @@ describe('PanelPage', () => {
     await user.click(within(sonnet).getByRole('button', { name: 'Import grades' }));
     expect(api.importPanelGrades).toHaveBeenCalledWith('run1', 'sonnet', 'reply');
     expect(await within(sonnet).findByText('2 items graded.')).toBeInTheDocument();
+    expect(within(sonnet).getByRole('list', { name: 'Warnings' })).toHaveTextContent('old instructions (version 0ld0ld00)');
     expect(within(sonnet).getByText('2 of 2 graded')).toBeInTheDocument();
   });
 
