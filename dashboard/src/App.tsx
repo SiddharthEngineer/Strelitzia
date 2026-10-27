@@ -39,8 +39,6 @@ function Shell({ me }: { me: AuthMe | null }) {
     getPanel().then((p) => setPanelDue(p.due)).catch(() => {}); // the reminder is optional
   }, []);
   useEffect(refreshPanelDue, [refreshPanelDue]);
-  // Who may use the dashboard is managed on engineerfamily's Users page: site admins get a link to it.
-  const usersUrl = me?.site_admin ? me.users_url : null;
   // On engineerfamily.net the site's own home link and profile control frame the header. In proxy mode the session is
   // the site's, so its profile control also carries Sign out; otherwise the dashboard keeps its own user menu.
   const site = Boolean(me?.site_header_url);
@@ -90,7 +88,6 @@ function Shell({ me }: { me: AuthMe | null }) {
             Panel{panelDue && <span className="nav-dot" role="img" aria-label="due" title={`Panel due: ${panelDue}`} />}
           </NavLink>
           <NavLink to="/claude-setup">Claude setup</NavLink>
-          {usersUrl && <a href={usersUrl}>Users</a>}
         </nav>
         <button type="button" className="primary add-job-button" onClick={() => setAdding(true)}>Add job</button>
         {!siteSession && me?.enabled && me.user && (

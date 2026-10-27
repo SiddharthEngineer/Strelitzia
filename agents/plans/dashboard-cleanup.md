@@ -30,7 +30,7 @@ sorted by status then fit score by default, and a clear warning before Set up Pr
 **What:** Drop `usersUrl` and the nav link. Leave `site_admin`/`users_url` in `/me` (harmless; other callers may use
 them) and leave `web/admin.py` (standalone `strelitzia serve` without engineerfamily still uses it).
 **Validate:** `cd dashboard && npm test -- SiteSlots` → no "Users" link for a site admin.
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (this commit)
 
 ### Task 2: Remove the source filter
 **Runs:** unattended
