@@ -99,6 +99,33 @@ class TestParseProject:
         assert "Successful public release" in proj.outcome_metrics
         assert proj.angles == ["DEVOPS", "PIPELINE", "LEADERSHIP"]
 
+    def test_responsibility_and_detail_fields(self):
+        lines = [
+            "### Analytics Export (Jan 2024–present)",
+            "- **Responsibility:** Owned the nightly export that feeds the analytics lake for 30 analysts.",
+            "- **Context:** Analysts queried production directly.",
+            "- **Outcome/Metrics:** Moves 40M rows per run.",
+            "- **Angles:** PIPELINE",
+            "- **Detail:** Reads MySQL in chunks with Pandas,",
+            "  writes Parquet with PyArrow in 250k-row batches.",
+        ]
+        proj = _parse_project(lines, "## CURRENT ROLE — Data Engineer, Acme (Jan 2024–Present)")
+        assert proj.responsibility == "Owned the nightly export that feeds the analytics lake for 30 analysts."
+        assert proj.detail == "Reads MySQL in chunks with Pandas, writes Parquet with PyArrow in 250k-row batches."
+        assert proj.angles == ["PIPELINE"] and "40M rows" in proj.outcome_metrics
+        assert "250k-row" in proj.facts() and "30 analysts" in proj.facts()
+
+    def test_without_responsibility_and_detail(self):
+        lines = ["### Older Project (2023)", "- **Context:** Something.", "- **Angles:** ANALYTICS"]
+        proj = _parse_project(lines, "## PRIOR ROLE — Analyst, Globex (2023)")
+        assert proj.responsibility == "" and proj.detail == "" and proj.context == "Something."
+
+    def test_template_library_parses_with_both_fields(self):
+        from strelitzia.profile_sync import TEMPLATE_LIBRARY
+
+        project = parse_content_library_text(TEMPLATE_LIBRARY).roles[0].projects[0]
+        assert project.responsibility.startswith("What you owned") and project.detail.startswith("How the code")
+
     def test_combined_context_scope_field(self):
         lines = [
             "### PatentsView Data Quality Lead — earlier phase (Aug 2024–May 2025)",

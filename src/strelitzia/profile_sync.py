@@ -32,17 +32,20 @@ _MIME = {"library": "text/markdown", "resume": "text/plain"}
 TEMPLATE_LIBRARY = """# Content library
 
 Each role is a `## CURRENT ROLE` or `## PRIOR ROLE` heading, and each project under it a `###` heading. Every project
-needs the fields below; Angles is a comma-separated list of tags. Replace this example with your own work.
+needs the fields below; Angles is a comma-separated list of tags. Responsibility (what you owned and for whom, one
+line) and Detail (code-level facts for interviews) are optional. Replace this example with your own work.
 
 ## CURRENT ROLE — Job Title, Company (Jan 2024–Present)
 
 ### Example Project (Jan 2024–present)
 
+- **Responsibility:** What you owned and for whom, in one line.
 - **Context:** What the project was and why it mattered.
 - **Scope/Scale:** How big it was: users, data, teams, money.
 - **Tools/Actions:** What you used and what you did.
 - **Outcome/Metrics:** What changed, with numbers.
 - **Angles:** PIPELINE, LEADERSHIP
+- **Detail:** How the code works: libraries, file formats, tricky parts.
 
 ## PRIOR ROLE — Job Title, Company (Jun 2022–Dec 2023)
 
