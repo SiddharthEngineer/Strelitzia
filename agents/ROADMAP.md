@@ -7,7 +7,7 @@ Status: ⏳ queued · 🔄 in progress · 🟡 code done, user steps pending · 
 
 ## Active
 
-R25-R43 are on prod and archived (R40-R43, site-wide Google sign-in and the shared header: 2026-10-19, engineerfamily v1.3.3). #19 is the user's.
+R25-R43 are on prod and archived (R40-R43, site-wide Google sign-in and the shared header: 2026-10-19, engineerfamily v1.3.3). #19 is planned as R63-R64 (feedback streams in the Backlog) and #98 as R61, R62 and engineerfamily E14 (2026-10-27).
 
 | ID | Initiative | Plan | Risk | Status | Depends on |
 |---|---|---|---|---|---|
@@ -28,6 +28,10 @@ R25-R43 are on prod and archived (R40-R43, site-wide Google sign-in and the shar
 | R58 | Resume quality 3/5: a line budget per role so the resume fills 95-100% of the page; fill measured at Check & format | [resume-quality-3-page-fill](plans/resume-quality-3-page-fill.md) | review | ⏳ | R57 |
 | R59 | Resume quality 4/5: About me Profile Doc (questionnaire), per-job cover notes, and interview prompts that fill About me and revise the library | [resume-quality-4-about-me](plans/resume-quality-4-about-me.md) | review | ⏳ | R57 |
 | R60 | Resume quality 5/5: cover letter in its own chat with story-led rules and new checks | [resume-quality-5-cover-letter](plans/resume-quality-5-cover-letter.md) | review | ⏳ | R59, R57 |
+| R61 | Dashboard cleanup (#98): no Users nav link, no source filter, default sort status then fit score, orange overwrite warning on Set up Profile Docs | [dashboard-cleanup](plans/dashboard-cleanup.md) | low | ⏳ | — |
+| R62 | Edit a job's details or delete a job with its drafts, interviews and notes (#98) | [job-edit-delete](plans/job-edit-delete.md) | review | ⏳ | — |
+| R63 | Recruiter panel 1/2 (#19): one application graded A+ to F- per criterion by a recruiter; self-contained prompt for Claude, ChatGPT or Gemini; A/B panel removed | [recruiter-panel-1-review](plans/recruiter-panel-1-review.md) | review | ⏳ | — |
+| R64 | Recruiter panel 2/2: review box and scorecard on the job page; Panel page lists reviews and compares graders | [recruiter-panel-2-dashboard](plans/recruiter-panel-2-dashboard.md) | review | ⏳ | R63 (same PR) |
 
 ## Manual steps (you)
 
@@ -80,6 +84,7 @@ R25-R43 are on prod and archived (R40-R43, site-wide Google sign-in and the shar
 - 2026-10-01: Pipeline LLM calls stay on the Gemini free tier. `applypilot apply` keeps the user in the loop.
 
 ## Backlog (not yet planned)
+- Recruiter panel feedback streams (#19; user, 2026-10-27: wait until R63-R64 are live and there's sample feedback, about 10 reviewed jobs across graders). Draft plans to revise against real reviews before queueing: per-job feedback in Drive + revise prompts ([recruiter-panel-3-job-feedback](plans/recruiter-panel-3-job-feedback.md), also needs R60), recurring problems → profile check-up ([recruiter-panel-4-profile-patterns](plans/recruiter-panel-4-profile-patterns.md), also needs R59), owner-only rules report + rules review prompt + optimizer research ([recruiter-panel-5-admin-rules](plans/recruiter-panel-5-admin-rules.md)).
 - Site reorganization (user, 2026-10-18): the path move (`engineerfamily.net/strelitzia`, dashboard at `/strelitzia/dashboard`),
   site-wide Google sign-in and the shared header are done (R40-R43, engineerfamily v1.3.x). Left, and planned 2026-10-19:
   one header style everywhere, the dashboard's top bar (engineerfamily E3 + R46; changed from the Strelitzia page's on 2026-10-22), and the homepage as a scrollable demo with
