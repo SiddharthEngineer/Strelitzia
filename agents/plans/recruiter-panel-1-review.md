@@ -1,6 +1,6 @@
 # Plan: Recruiter panel 1/2: one application, graded A+ to F- by a recruiter (backend)
 **Status:** ❌ Not started (planned with the user 2026-10-27)
-**Risk:** review (replaces the panel module and its tables)
+**Risk:** low (user, 2026-10-27: merge without a review wait; protected paths still get the automated review and preprod check; was review: replaces the panel module and its tables)
 **Depends on:** —
 
 ## Goal
@@ -28,7 +28,7 @@ run in Claude (Haiku, Sonnet, Opus), ChatGPT or Gemini, and the replies compared
 
 ## Tasks
 ### Task 1: Criteria and scale (research brief)
-**Runs:** interactive (the user approves the list)
+**Runs:** unattended (the user signed off the list on 2026-10-27)
 **Files:** agents/research/recruiter-panel.md (new)
 **What:** Short brief on how recruiters screen (6-10 s scan, ATS match, hiring-manager read) and AI-text tells, ending
 in the criteria. Starting list (decision 1), each graded separately for the resume and the cover letter:
@@ -39,7 +39,7 @@ in the criteria. Starting list (decision 1), each graded separately for the resu
 5. **Clarity**: a recruiter sees the fit in 10 seconds; scannable, no filler.
 6. **Polish**: grammar, consistency, length (one page; cover letter under ~350 words).
 Plus an **overall** grade per document and a **verdict**: phone screen yes / maybe / no, with the top three fixes.
-**Validate:** the user signs off the list in the brief's Decisions.
+**Validate:** the brief's Decisions record the list below as signed off by the user (2026-10-27), unchanged.
 **Status:** ❌
 
 ### Task 2: Review module and tables
@@ -82,7 +82,7 @@ for each grader; wrong grade strings, missing criteria and wrong prompt_version 
 Covered in 2/2 (needs the page). On preprod for this PR, only check that the Panel page still loads.
 
 ## Decisions
-1. (Proposed) The six criteria above, graded per document, plus overall and verdict. Confirm or edit in Task 1.
+1. (User, 2026-10-27) Signed off as listed: the six criteria, graded per document, plus overall and verdict.
 2. (Proposed) Old A/B panel data is left in its tables, unused, after 2/2; the user drops the tables by hand after a
    backup (manual step), since agents never drop data.
 3. 1/2 and 2/2 are separate runner builds, so 1/2 only adds; 2/2 swaps the page and removes the A/B code

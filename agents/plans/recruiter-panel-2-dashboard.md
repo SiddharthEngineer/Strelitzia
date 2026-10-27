@@ -1,6 +1,6 @@
 # Plan: Recruiter panel 2/2: review on the job page, scorecards and grader comparison
 **Status:** ❌ Not started (planned with the user 2026-10-27)
-**Risk:** review
+**Risk:** low (user, 2026-10-27: merge without a review wait; protected paths still get the automated review and preprod check)
 **Depends on:** recruiter-panel-1-review
 
 ## Goal

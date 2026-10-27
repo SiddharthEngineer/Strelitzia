@@ -1,6 +1,6 @@
 # Plan: Resume quality 2/5: responsibility bullets, a Summary instead of the headline, and questions before drafting
 **Status:** ❌ Not started (planned with the user 2026-10-27)
-**Risk:** review (rules, draft format, renderer and content-library format)
+**Risk:** low (user, 2026-10-27: merge without a review wait; protected paths still get the automated review and preprod check; was review: rules, draft format, renderer and content-library format)
 **Depends on:** resume-quality-1-evidence
 
 ## Goal

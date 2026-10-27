@@ -1,6 +1,6 @@
 # Plan: Resume quality 1/5: Claude judges qualifications; word matching only hints
 **Status:** ❌ Not started (planned with the user 2026-10-27)
-**Risk:** review (changes the rules every draft is checked against, and the validator)
+**Risk:** low (user, 2026-10-27: merge without a review wait; protected paths still get the automated review and preprod check; was review: changes the rules every draft is checked against, and the validator)
 **Depends on:** —
 
 ## Goal

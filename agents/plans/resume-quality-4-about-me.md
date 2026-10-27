@@ -1,6 +1,6 @@
 # Plan: Resume quality 4/5: an About me Profile Doc and per-job "why this company" notes
 **Status:** ❌ Not started (planned with the user 2026-10-27)
-**Risk:** review (Profile Docs sync, a job column, API and dashboard)
+**Risk:** low (user, 2026-10-27: merge without a review wait; protected paths still get the automated review and preprod check; was review: Profile Docs sync, a job column, API and dashboard)
 **Depends on:** resume-quality-2-bullets (Task 4's library interview uses its Responsibility/Detail fields)
 
 ## Goal
