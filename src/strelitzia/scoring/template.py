@@ -288,7 +288,8 @@ def render_resume(
     template = env.from_string(_template_source(template_path))
     return template.render(
         name=header.get("name") or profile.get("personal", {}).get("full_name", ""),
-        headline=resume.headline,
+        summary=resume.headline,
+        headline=resume.headline,  # the old name, for custom templates
         contact=header.get("contact") or build_contact(profile),
         roles=resume.roles,
         skills=list(resume.skills.items()),
@@ -342,7 +343,7 @@ def resume_to_text(resume: TailoredResume, profile: dict, fixed: dict | None = N
     header = fixed.get("header") or {}
     name = header.get("name") or profile.get("personal", {}).get("full_name", "")
     contact = header.get("contact") or build_contact(profile)
-    lines = [name, *([resume.headline] if resume.headline else []), " | ".join(c["text"] for c in contact), "",
+    lines = [name, " | ".join(c["text"] for c in contact), *([resume.headline] if resume.headline else []), "",
              "WORK EXPERIENCE", ""]
     for role in resume.roles:
         head = f"{role.title} at {role.company}" if role.company else role.title

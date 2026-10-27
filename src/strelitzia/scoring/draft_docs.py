@@ -9,7 +9,7 @@ Resume Doc:
 
     Rules version: 1a2b3c4d
     Instructions version: 5e6f7a8b
-    Headline: Data engineer who ships reliable pipelines
+    Summary: Data engineer with 6 years in finance analytics, moving 40M rows a night
 
     ## <role-key>
     - Bullet text written for the posting [project-slug, other-slug]
@@ -23,7 +23,8 @@ Resume Doc:
     ## Notes for me
     Free text.
 
-The two version lines are what Claude read in the packet and its project instructions (`workbench` warns when
+`Summary:` is optional (empty = none; an old `Headline:` line still parses as the Summary). The two version
+lines are what Claude read in the packet and its project instructions (`workbench` warns when
 either is missing or old). Cover letter Doc: an optional `Rules version:` line, the paragraphs separated by blank lines, then a last line
 `Evidence: slug-a, slug-b`.
 """
@@ -42,7 +43,7 @@ COVER_PLACEHOLDER = "Write the cover letter here: three paragraphs, then a last 
 _HEADING = re.compile(r"^#{1,3}\s+(.+?)\s*#*\s*$")
 _BULLET = re.compile(r"^\s*[-*+]\s+(.*)$")
 _TAGS = re.compile(r"\s*\[([^\[\]]*)\]\s*$")
-_KEY_LINE = re.compile(r"^\s*(rules version|instructions version|headline)\s*:\s*(.*?)\s*$", re.I)
+_KEY_LINE = re.compile(r"^\s*(rules version|instructions version|summary|headline)\s*:\s*(.*?)\s*$", re.I)
 _VERSION_KEYS = {"rules version": "rules", "instructions version": "instructions"}
 _EVIDENCE = re.compile(r"^\s*evidence\s*:\s*(.*?)\s*$", re.I)
 
@@ -71,14 +72,14 @@ def resume_draft_text(result: dict | None, library: ContentLibrary, rules_versio
     library.ensure_keys()
     out = [f"Rules version: {rules_version}", f"Instructions version: {instructions_version}"]
     if result is None:
-        out += ["Headline: ", ""]
+        out += ["Summary: ", ""]
         for role in library.roles:
             slug = role.projects[0].slug if role.projects else "project-slug"
             out += [f"## {role.key}", f"- {PLACEHOLDER_BULLET} [{slug}]", ""]
         out += [f"## {DROPPED}", "", f"## {SKILLS}", "", f"## {NOTES}", ""]
         return "\n".join(out).rstrip() + "\n"
     resume = result.get("resume") or {}
-    out += [f"Headline: {resume.get('headline') or ''}", ""]
+    out += [f"Summary: {resume.get('headline') or ''}", ""]
     for role in resume.get("roles") or []:
         out.append(f"## {role['role_key']}")
         out += [f"- {b['text']} [{', '.join(b.get('project_ids') or [])}]" for b in role.get("bullets") or []]
@@ -138,12 +139,12 @@ def parse_resume_draft(text: str) -> tuple[dict, dict[str, str | None], str]:
             continue
         if section is None:
             key = _KEY_LINE.match(line)
-            if key and key.group(1).lower() == "headline":
+            if key and key.group(1).lower() in ("summary", "headline"):
                 headline = key.group(2)
             elif key:
                 versions[_VERSION_KEYS[key.group(1).lower()]] = key.group(2) or None
             else:
-                errors.append(f"Line {no}: only the \"Rules version:\", \"Instructions version:\" and \"Headline:\" "
+                errors.append(f"Line {no}: only the \"Rules version:\", \"Instructions version:\" and \"Summary:\" "
                               "lines go above the first ## heading")
             continue
         bullet = _BULLET.match(line)

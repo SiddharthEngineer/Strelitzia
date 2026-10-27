@@ -76,7 +76,7 @@ def test_unevidenced_skill_in_skills_and_headline(conn, tmp_path):
                        skills=[{"category": "Tools", "items": "Airflow, Kubernetes"}])
     out = _import(conn, tmp_path, data)
     assert any("'Kubernetes'" in e and "Skills (Tools)" in e for e in out.errors)
-    assert any("'Terraform'" in e and "headline" in e for e in out.errors)
+    assert any("'Terraform'" in e and "Summary" in e for e in out.errors)
     assert any("Skill 'Kubernetes' (Tools) is not in your content library" in e for e in out.errors)
 
 
@@ -107,7 +107,7 @@ def test_cover_letter_checks(conn, tmp_path):
 
 def test_number_in_the_headline_must_be_known(conn, tmp_path):
     out = _import(conn, tmp_path, good_result(headline="Data engineer with 10 years leading a team of 37"))
-    assert any("Number(s) 10, 37 in the headline" in e for e in out.errors), out.errors
+    assert any("Number(s) 10, 37 in the Summary" in e for e in out.errors), out.errors
     assert _import(conn, tmp_path, good_result(headline="Data engineer moving 40 million rows a day")).ok
 
 

@@ -29,7 +29,7 @@ def test_empty_version_lines_read_as_missing():
 
 def test_resume_text_reads_like_the_format():
     text = _resume_text(good_result(dropped_roles=["data-analyst-intern-globex"], roles=good_result()["resume"]["roles"][:1]))
-    assert text.startswith("Rules version: 1a2b3c4d\nInstructions version: 5e6f7a8b\nHeadline: Data engineer building Airflow and Spark pipelines\n")
+    assert text.startswith("Rules version: 1a2b3c4d\nInstructions version: 5e6f7a8b\nSummary: Data engineer building Airflow and Spark pipelines\n")
     assert "## data-engineer-acme\n- Migrated the nightly orders pipeline" in text
     assert "45 minutes [orders-pipeline]\n" in text
     assert "## Dropped roles\n- data-analyst-intern-globex\n" in text
@@ -55,9 +55,16 @@ def test_skeleton_has_every_role_and_placeholders_are_errors():
     assert e.value.errors[0].startswith("Line 6:")
 
 
-def test_missing_headline_is_empty():
-    text = _resume_text(good_result()).replace("Headline: Data engineer building Airflow and Spark pipelines\n", "")
+def test_missing_summary_is_empty():
+    text = _resume_text(good_result()).replace("Summary: Data engineer building Airflow and Spark pipelines\n", "")
     assert dd.parse_resume_draft(text)[0]["headline"] == ""
+
+
+def test_an_old_headline_line_parses_as_the_summary():
+    text = _resume_text(good_result())
+    old = text.replace("Summary: ", "Headline: ")
+    assert old != text and dd.parse_resume_draft(old) == dd.parse_resume_draft(text)
+    assert dd.parse_resume_draft(old)[0]["headline"] == "Data engineer building Airflow and Spark pipelines"
 
 
 def test_unknown_section_is_kept_as_a_role_key_for_the_schema_check():
@@ -73,7 +80,7 @@ def test_unknown_section_is_kept_as_a_role_key_for_the_schema_check():
     (lambda t: t.replace(" [orders-pipeline]", ""), 6, "no [slug] tags"),
     (lambda t: t.replace(" [orders-pipeline]", " []"), 6, "no [slug] tags"),
     (lambda t: t.replace("- Languages: Python, SQL", "- Python and SQL"), 15, "Category: skill"),
-    (lambda t: t.replace("Headline:", "Some intro\nHeadline:"), 3, "above the first ## heading"),
+    (lambda t: t.replace("Summary:", "Some intro\nSummary:"), 3, "above the first ## heading"),
     (lambda t: t.replace("- Migrated", "Migrated"), 6, "isn't a \"- \" list item"),
     (lambda t: t.replace("## data-analyst-intern-globex\n- Trained", "## data-analyst-intern-globex\n\n## Extra\n- Trained"),
      9, "has no bullets"),

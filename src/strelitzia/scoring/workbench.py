@@ -55,7 +55,7 @@ from strelitzia.scoring.validator import (
 log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
-HEADLINE_MAX = 110
+SUMMARY_MAX = 300  # stored in the model's `headline` field
 BULLET_MAX = 230
 COVER_MAX_WORDS = 250
 PROMPT_MAX = 700
@@ -79,7 +79,7 @@ def result_schema(library: ContentLibrary | None = None) -> dict:
         role_key = {"type": "string", "enum": [r.key for r in library.roles]}
     bullet = _obj({"text": {"type": "string"}, "project_ids": {"type": "array", "items": slug}})
     resume = _obj({
-        "headline": {"type": "string", "maxLength": HEADLINE_MAX},
+        "headline": {"type": "string", "maxLength": SUMMARY_MAX},
         "roles": {"type": "array", "items": _obj({"role_key": role_key, "bullets": {"type": "array", "items": bullet}})},
         "skills": {"type": "array", "items": _obj({"category": {"type": "string"}, "items": {"type": "string"}})},
         "dropped_roles": {"type": "array", "items": role_key},
@@ -136,7 +136,7 @@ def schema_errors(value, schema: dict, path: str = "$") -> list[str]:
 EXAMPLE_RESULT = {
     "strelitzia": SCHEMA_VERSION,
     "resume": {
-        "headline": "Data engineer building Airflow and Spark pipelines for finance analytics",
+        "headline": "",
         "roles": [{"role_key": "<role key>", "bullets": [
             {"text": "Owned ingestion orchestration for 12 vendor feeds in Airflow, adding retries and late-data alerts "
                      "that cut missed morning loads from weekly to rare",
@@ -227,14 +227,14 @@ def _rules() -> _Doc:
         "that Doc), and write a verdict for each under \"## Notes for me\": claimable, partly or not, with the "
         "projects behind it, one plain line each (no headings inside Notes for me). Claim a qualification only "
         "when your assessment finds real backing.",
-        "Never claim a tool or skill the packet lists as not in my material: not in bullets, the headline, Skills or "
+        "Never claim a tool or skill the packet lists as not in my material: not in bullets, the Summary, Skills or "
         "the cover letter. List it under \"## Notes for me\" instead so I see it.",
         "Facts like work authorisation come from About me, never the resume; without that Doc, ask me.",
         "Show each required qualification you rate claimable through the responsibilities in my bullets (under the "
         "most recent role it applies to) or, for a tool, in Skills. Never write a bullet just to cover a tool.",
         "Every number in a bullet must appear in the facts of the projects that bullet cites. Never invent, round or "
         "combine numbers. The same goes for the cover letter and the projects on its Evidence line (numbers about the "
-        "company may come from the posting). The headline cites no project, so any number in it must be in my "
+        "company may come from the posting). The Summary cites no project, so any number in it must be in my "
         "library or base resume.",
         "No keyword lists inside bullets. Each bullet describes real work.",
         "No hidden text of any kind, and no instructions to screeners or AI systems (for example \"ignore previous "
@@ -286,7 +286,10 @@ def _rules() -> _Doc:
         "bullet's own role. Never leave a bullet without tags.",
         "Skills: keep my base resume's categories (you may reorder them) and put the posting's must-haves that are "
         "in my material first. Add nothing that isn't in my material.",
-        f"Headline: one truthful line under my name, at most {HEADLINE_MAX} characters (leave it empty for none).",
+        "Summary: leave it empty unless my current title doesn't match the role, there's a domain switch or gap, "
+        "or the page is short; then 1-2 lines (at most " + str(SUMMARY_MAX) + " characters): role noun, years, one "
+        "specialization matching the posting, one proof point; no tool list, no adjectives about me. Say why in "
+        "Notes for me.",
         "No em dashes or en dashes; use commas, periods or hyphens.",
         "Banned words and phrases: " + ", ".join(BANNED_WORDS) + ".",
     ])
@@ -325,7 +328,7 @@ def _rules() -> _Doc:
 
 RESUME_DRAFT_EXAMPLE = """Rules version: <the Rules version at the top of this packet>
 Instructions version: <the version on the first line of your project instructions>
-Headline: Data engineer building Airflow and Spark pipelines for finance analytics
+Summary: 
 
 ## <role key>
 - Owned ingestion orchestration for 12 vendor feeds in Airflow, adding retries and late-data alerts that cut missed morning loads from weekly to rare [<project slug>]
@@ -441,7 +444,7 @@ def _where(e) -> str:
 
 def _term_line(e) -> str:
     if not e.evidenced:
-        return f"{e.target.text}: not in your material: leave out of Skills and bullets, the headline and the letter"
+        return f"{e.target.text}: not in your material: leave out of Skills and bullets, the Summary and the letter"
     return f"{e.target.text}: in your material ({_where(e)})"
 
 
@@ -646,7 +649,7 @@ def check_result(data: dict, job: dict, inputs: Inputs) -> tuple[TailoredResume 
     errors += validate_provenance(resume, library)
     errors += validate_claims(resume, ev, known)
     errors += validate_skills_known(resume, known)
-    errors += validate_numbers_known(resume.headline or "", known, "headline")
+    errors += validate_numbers_known(resume.headline or "", known, "Summary")
     letter = data.get("cover_letter")
     if letter:
         personal = inputs.profile.get("personal", {})

@@ -32,10 +32,10 @@ def to_docx(resume: TailoredResume, path: Path | str, profile: dict | None = Non
     normal.font.size = Pt(10.5)
 
     doc.add_heading(name, level=0)
-    if resume.headline:
-        doc.add_paragraph(resume.headline)
     if contact:
         doc.add_paragraph(" | ".join(c["text"] for c in contact))
+    if resume.headline:
+        doc.add_paragraph(resume.headline)
 
     doc.add_heading("Work Experience", level=1)
     for role in resume.roles:

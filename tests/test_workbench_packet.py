@@ -26,12 +26,12 @@ def test_schema_accepts_null_cover_letter_and_no_notes():
 
 def test_schema_errors_name_the_problem():
     data = good_result()
-    data["resume"]["headline"] = "x" * 111
+    data["resume"]["headline"] = "x" * 301
     del data["resume"]["skills"]
     data["extra"] = 1
     data["resume"]["roles"][0]["bullets"][0]["project_ids"] = ["nope"]
     errors = wb.schema_errors(data, wb.result_schema(library()))
-    assert any("headline" in e and "at most 110" in e for e in errors)
+    assert any("headline" in e and "at most 300" in e for e in errors)
     assert any('missing "skills"' in e for e in errors)
     assert any('unexpected key "extra"' in e for e in errors)
     assert any('"nope" is not allowed' in e for e in errors)
@@ -171,7 +171,7 @@ def test_first_open_creates_seeded_drafts(drive, client, conn):
     cover = docs["Initech - Senior Data Engineer - Cover letter draft"]
     assert drive.path_of(resume["id"])[:3] == ["Strelitzia", "Initech", "Senior Data Engineer"]
     # The version lines start empty: Claude fills them from the packet and its instructions, never from the seed.
-    assert resume["content"].decode().startswith("Rules version: \nInstructions version: \nHeadline: \n")
+    assert resume["content"].decode().startswith("Rules version: \nInstructions version: \nSummary: \n")
     assert b"## data-engineer-acme" in resume["content"] and b"Write the cover letter here" in cover["content"]
     assert not cover["content"].startswith(b"Rules version")
     row = _row(conn)
@@ -188,7 +188,7 @@ def test_drafts_seed_from_the_current_draft(drive, client, conn, tmp_path, monke
     assert wb.import_data(conn, job, good_result(), inputs=inputs(), out_dir=tmp_path / "out").ok
     wb.publish_drafts(client, conn, _row(conn), inputs())
     resume = next(f for n, f in _draft_docs(drive).items() if n.endswith("Resume draft"))
-    assert b"Headline: Data engineer building Airflow and Spark pipelines" in resume["content"]
+    assert b"Summary: Data engineer building Airflow and Spark pipelines" in resume["content"]
     assert b"[orders-pipeline]" in resume["content"]
 
 
@@ -243,3 +243,11 @@ def test_rules_shape_bullets_around_responsibilities():
     for phrase in ("Before drafting, show me your plan", "no outcome or number, ask me for one",
                    "unsure whether a Summary helps, ask me"):
         assert phrase in working, phrase
+
+
+def test_rules_make_the_summary_optional_with_a_reason():
+    rules = wb.rules_text()
+    assert "Headline" not in rules
+    assert "Summary: leave it empty unless my current title doesn't match the role" in rules
+    assert "no tool list" in rules and "Say why in Notes for me" in rules
+    assert "Summary: \n" in rules

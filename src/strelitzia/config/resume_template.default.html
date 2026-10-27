@@ -7,7 +7,8 @@
   Copy to ~/.strelitzia/resume_template.html and edit to match your own resume.
   Variables:
     name       full name (profile.json)
-    headline   one truthful line under the name, may be empty (custom templates opt in by using it)
+    summary    a 1-2 line Summary under the contact line, often empty (custom templates opt in by using it;
+               `headline` is the same text under its old name)
     contact    [{text, href}] (profile.json)
     roles      [{title, company, dates, tagline, bullets: [{text, project_ids}]}]
     skills     [(category, items)]
@@ -44,10 +45,10 @@ body {
     color: #1a3a5c;
     letter-spacing: 0.5px;
 }
-.headline {
-    font-size: 10pt;
-    color: #1a3a5c;
-    margin-top: 1px;
+.summary {
+    font-size: 9.5pt;
+    line-height: 1.35;
+    margin-top: 4px;
 }
 .contact {
     font-size: 9pt;
@@ -113,7 +114,6 @@ li {
 <body>
 <div class="header" id="resume-header">
     <div class="name">{{ name }}</div>
-    {% if headline %}<div class="headline">{{ headline }}</div>{% endif %}
     <div class="contact">
     {%- for c in contact -%}
         {%- if not loop.first %} &nbsp;|&nbsp; {% endif -%}
@@ -121,6 +121,9 @@ li {
     {%- endfor -%}
     </div>
 </div>
+{% if summary %}
+<div class="summary" id="resume-summary">{{ summary }}</div>
+{% endif %}
 
 <div class="section" id="resume-experience">
     <div class="section-title">Work Experience</div>

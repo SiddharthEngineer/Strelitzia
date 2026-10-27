@@ -38,7 +38,7 @@ def _render(tmp_path):
 def test_pdf_text_in_reading_order(tmp_path):
     model, html, info, text = _render(tmp_path)
     assert info["pages"] == 1
-    expected = ["Alex Tester", model.headline, "Springfield, IL", "alex@example.com"]
+    expected = ["Alex Tester", "Springfield, IL", "alex@example.com", model.headline]
     for role in model.roles:
         expected += [role.title, role.company, role.dates] + [b.text for b in role.bullets]
     edu = FIXED["education"][0]
@@ -65,4 +65,4 @@ def test_dates_inline_and_no_layout_traps():
                  "@top-", "@bottom-"):
         assert trap not in template, trap
     assert "Calibri, Carlito, Arial, sans-serif" in template
-    assert "{{ headline }}" in template
+    assert "{{ summary }}" in template
