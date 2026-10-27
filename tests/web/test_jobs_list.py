@@ -6,7 +6,9 @@ import pytest
 from web_helpers import add_job
 
 from strelitzia.database import job_key
+from strelitzia.tracking import effective_status
 from strelitzia.web import app as app_mod
+from strelitzia.web import queries
 
 TODAY = date(2026, 10, 5)
 
@@ -56,11 +58,18 @@ def get(client, **params):
     return client.get("/strelitzia/dashboard/api/jobs", params=params)
 
 
-def test_default_lists_everything_newest_first(client, jobs):
+def test_default_lists_everything_by_status_then_fit(client, jobs):
     r = get(client)
     body = r.json()
     assert body["total"] == 7 and body["page"] == 1
-    assert _urls(r) == _keys("de", "swe", "ds-chicago", "ds-remote", "mle", "no-desc", "applied")
+    # heard_back, in_progress, submitted (fit 90 before 60), active, inactive, rejected.
+    assert _urls(r) == _keys("de", "swe", "ds-remote", "applied", "no-desc", "ds-chicago", "mle")
+    assert _urls(get(client, sort="status")) == _urls(r)
+
+
+def test_newest_first(client, jobs):
+    assert _urls(get(client, sort="-discovered_at")) == _keys(
+        "de", "swe", "ds-chicago", "ds-remote", "mle", "no-desc", "applied")
 
 
 def test_item_shape(client, jobs):
@@ -152,6 +161,36 @@ def test_sort_with_nulls_last(client, jobs):
     assert by_deadline[:3] == _keys("ds-chicago", "de", "ds-remote")
     assert _urls(get(client, sort="-deadline"))[:3] == _keys("ds-remote", "de", "ds-chicago")
     assert _urls(get(client, sort="discovered_at"))[0] == _keys("applied")[0]
+
+
+# One row per effective status, including the ones the deadline decides (TODAY is 2026-10-05).
+STATUS_ROWS = {
+    "heard_back": {"user_status": "heard_back", "deadline": "2026-09-01"},
+    "in_progress": {"user_status": "in_progress", "deadline": "2026-09-01"},
+    "submitted": {"apply_status": "applied"},
+    "active": {"deadline": "2026-10-05"},  # due today is still open
+    "inactive": {"deadline": "2026-10-04"},
+    "rejected": {"user_status": "rejected"},
+}
+
+
+@pytest.mark.parametrize("status", list(STATUS_ROWS))
+def test_status_rank_matches_effective_status(conn, status):
+    add_job(conn, f"https://x/{status}", **STATUS_ROWS[status])
+    row = dict(conn.execute("SELECT * FROM jobs").fetchone())
+    rank = conn.execute(f"SELECT {queries.status_rank_sql(TODAY)} FROM jobs").fetchone()[0]
+    assert effective_status(row, TODAY) == status
+    assert rank == queries.STATUS_SORT_ORDER.index(status)
+
+
+def test_status_sort_orders_every_status_and_ties_by_fit(client, conn):
+    for i, (status, cols) in enumerate(STATUS_ROWS.items()):
+        add_job(conn, f"https://x/{status}-low", fit_score=40 + i, **cols)
+        add_job(conn, f"https://x/{status}-none", fit_score=None, **cols)
+        add_job(conn, f"https://x/{status}-high", fit_score=90 + i, **cols)
+    expected = _keys(*(f"{s}-{fit}" for s in queries.STATUS_SORT_ORDER for fit in ("high", "low", "none")))
+    assert _urls(get(client, sort="status")) == expected
+    assert _urls(get(client)) == expected
 
 
 @pytest.mark.parametrize("sort", ["title", "fit_score; DROP TABLE jobs", "-url", "--fit_score", "fit_score DESC"])

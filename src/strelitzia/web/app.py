@@ -87,7 +87,7 @@ def list_jobs(
     score_max: Annotated[int | None, Query(ge=0, le=100)] = None,
     hide_flagged: bool = True,
     q: str | None = None,
-    sort: Annotated[str, Query(pattern=queries.SORT_PATTERN)] = "-discovered_at",
+    sort: Annotated[str, Query(pattern=queries.SORT_PATTERN)] = queries.DEFAULT_SORT,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=queries.MAX_PAGE_SIZE)] = 50,
 ) -> dict:

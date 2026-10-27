@@ -50,7 +50,7 @@ Rank (decision 1): heard_back, in_progress, submitted, active, inactive, rejecte
 `DEFAULT_SORT`; clicking a column header still sorts by that column alone, and the Status header sorts by `status`.
 **Validate:** `pytest tests/test_queries.py -q` → the rank matches `effective_status` for each fixture row (one test
 per status, including deadline-driven active/inactive), and ties order by fit score.
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (this commit; tests live in `tests/web/test_jobs_list.py`)
 
 ### Task 4: Overwrite warning
 **Runs:** unattended
