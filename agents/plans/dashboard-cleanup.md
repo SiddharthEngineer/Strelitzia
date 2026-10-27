@@ -39,7 +39,7 @@ dashboard/src/types.ts, src/strelitzia/web/queries.py, src/strelitzia/web/app.py
 **What:** Remove the source buttons, the "Added by me" default and the facet. The API ignores a stale `source=` query
 param (old bookmarks) instead of 422. Keep the `source` column and the "manual" value on new rows.
 **Validate:** `pytest tests/test_web_jobs.py -q` and `npm test -- JobsPage` → list shows every job, no source facet.
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (this commit; tests live in `tests/web/test_workspace_api.py` and `Workspace.test.tsx`)
 
 ### Task 3: Default sort = status, then fit score
 **Runs:** unattended

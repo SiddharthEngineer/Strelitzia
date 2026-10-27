@@ -81,7 +81,6 @@ export interface JobQuery {
   score_max?: number;
   q?: string;
   hide_flagged?: boolean;
-  source?: Source[];
   sort?: Sort;
   page?: number;
   page_size?: number;
@@ -99,7 +98,6 @@ export interface Facets {
   work_mode: FacetCount[];
   location: FacetCount[];
   flagged?: number;
-  source?: (FacetCount & { value: Source })[];
 }
 
 export interface PostingLocation {

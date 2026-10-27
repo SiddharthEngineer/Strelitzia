@@ -302,34 +302,14 @@ describe('Interviews panel', () => {
   });
 });
 
-describe('Jobs list: source and next interview', () => {
-  it('defaults to "Added by me" when there are manual jobs, and "All sources" clears it', async () => {
-    const user = userEvent.setup();
-    vi.mocked(api.getFacets).mockResolvedValue({ ...FACETS, source: [{ value: 'manual', count: 2 }, { value: 'discovered', count: 8 }] });
-    renderAt('/', <Routes><Route path="/" element={<JobsPage />} /></Routes>);
+describe('Jobs list: no source filter, next interview', () => {
+  it('has no source filter: every job is listed, and a stale source= from an old link is dropped', async () => {
+    renderAt('/?source=manual', <Routes><Route path="/" element={<JobsPage />} /></Routes>);
     await waitFor(() => expect(api.listJobs).toHaveBeenCalled());
-    expect(vi.mocked(api.listJobs).mock.calls[0][0]).toMatchObject({ source: ['manual'] });
-    const group = screen.getByRole('group', { name: 'Source' });
-    expect(within(group).getByRole('button', { name: /Added by me/ })).toHaveAttribute('aria-pressed', 'true');
-
-    await user.click(within(group).getByRole('button', { name: 'All sources' }));
-    expect(screen.getByTestId('location')).toHaveTextContent('/?source=all');
-    await waitFor(() => expect(vi.mocked(api.listJobs).mock.lastCall![0]).toMatchObject({ source: [] }));
-
-    await user.click(within(group).getByRole('button', { name: /Discovered/ }));
-    expect(screen.getByTestId('location')).toHaveTextContent('/?source=discovered');
-
-    // Clear filters shows every source rather than falling back to the "Added by me" default.
-    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
-    expect(screen.getByTestId('location')).toHaveTextContent('/?source=all');
-    expect(within(group).getByRole('button', { name: 'All sources' })).toHaveAttribute('aria-pressed', 'true');
+    expect(vi.mocked(api.listJobs).mock.calls[0][0]).not.toHaveProperty('source');
+    expect(screen.queryByRole('group', { name: 'Source' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Added by me/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Clear filters' })).toBeDisabled();
-  });
-
-  it('no manual jobs: no default source', async () => {
-    renderAt('/', <Routes><Route path="/" element={<JobsPage />} /></Routes>);
-    await waitFor(() => expect(api.listJobs).toHaveBeenCalled());
-    expect(vi.mocked(api.listJobs).mock.calls[0]![0]?.source).toBeUndefined();
   });
 
   it('sorts by next interview soonest first and shows the badge within a week', async () => {

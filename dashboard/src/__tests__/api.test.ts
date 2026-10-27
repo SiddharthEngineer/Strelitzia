@@ -125,9 +125,8 @@ describe('api', () => {
     expect(jobsQueryString({ hide_flagged: false, score_min: 70 })).toBe('hide_flagged=false&score_min=70');
   });
 
-  it('sends the source filter and the next-interview sort', () => {
-    expect(jobsQueryString({ source: ['manual'], sort: 'next_interview' })).toBe('source=manual&sort=next_interview');
-    expect(jobsQueryString({ source: [], sort: '-next_interview' })).toBe('sort=-next_interview'); // all sources
+  it('sends the next-interview sort', () => {
+    expect(jobsQueryString({ sort: 'next_interview' })).toBe('sort=next_interview');
   });
 
   it('POSTs a new job and PUTs a pasted description with the CSRF header', async () => {

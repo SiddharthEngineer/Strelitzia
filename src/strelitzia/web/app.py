@@ -86,7 +86,6 @@ def list_jobs(
     score_min: Annotated[int | None, Query(ge=0, le=100)] = None,
     score_max: Annotated[int | None, Query(ge=0, le=100)] = None,
     hide_flagged: bool = True,
-    source: Annotated[list[queries.SourceFilter], Query()] = [],  # noqa: B006
     q: str | None = None,
     sort: Annotated[str, Query(pattern=queries.SORT_PATTERN)] = "-discovered_at",
     page: Annotated[int, Query(ge=1)] = 1,
@@ -98,7 +97,7 @@ def list_jobs(
     filters = queries.JobFilters(
         status=list(status), role=role, work_mode=work_mode, location=location,
         found_from=found_from, found_to=found_to, due_from=due_from, due_to=due_to,
-        score_min=score_min, score_max=score_max, q=q, hide_flagged=hide_flagged, source=list(source),
+        score_min=score_min, score_max=score_max, q=q, hide_flagged=hide_flagged,
     )
     return queries.list_jobs(conn, user.id, filters, sort=sort, page=page, page_size=page_size, today=today(),
                              current_key=current_assessment_key(conn, user_id=user.id))

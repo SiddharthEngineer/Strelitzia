@@ -6,15 +6,9 @@ import Flower from '../components/Flower';
 import Hero from '../components/Hero';
 import JobsTable from '../components/JobsTable';
 import TaskProgress from '../components/TaskProgress';
-import type { Facets, JobList, JobQuery, RescorePreview, Task } from '../types';
+import type { Facets, JobList, RescorePreview, Task } from '../types';
 import { usd } from '../labels';
 import { DEFAULT_SORT, PAGE_SIZE, useQueryState } from '../useQueryState';
-
-const CLEAR_ALL_SOURCES: Partial<JobQuery> = {
-  status: undefined, role: undefined, work_mode: undefined, location: undefined, found_from: undefined,
-  found_to: undefined, due_from: undefined, due_to: undefined, score_min: undefined, score_max: undefined,
-  q: undefined, hide_flagged: undefined, source: [],
-};
 
 export default function JobsPage({ panelDue = null }: { panelDue?: string | null }) {
   const [query, update] = useQueryState();
@@ -22,7 +16,6 @@ export default function JobsPage({ panelDue = null }: { panelDue?: string | null
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [facets, setFacets] = useState<Facets | null>(null);
-  const [facetsLoaded, setFacetsLoaded] = useState(false);
   const [reload, setReload] = useState(0);
   // Rescore all: the confirm dialog's preview, then the queued task.
   const [rescore, setRescore] = useState<RescorePreview | null>(null);
@@ -31,15 +24,11 @@ export default function JobsPage({ panelDue = null }: { panelDue?: string | null
   const [rescoreTask, setRescoreTask] = useState<Task | null>(null);
   const [rescoreNote, setRescoreNote] = useState<string | null>(null);
   const rescoring = rescoreTask?.state === 'queued' || rescoreTask?.state === 'running';
-  // Without a source in the URL, show the jobs the user added when there are any.
-  const hasManual = (facets?.source?.find((s) => s.value === 'manual')?.count ?? 0) > 0;
-  const shown: JobQuery = query.source === undefined && hasManual ? { ...query, source: ['manual'] } : query;
-  const queryKey = JSON.stringify(shown);
+  const queryKey = JSON.stringify(query);
 
   useEffect(() => {
     const ctrl = new AbortController();
-    getFacets(ctrl.signal).then(setFacets).catch(() => {}) // counts are optional
-      .finally(() => { if (!ctrl.signal.aborted) setFacetsLoaded(true); });
+    getFacets(ctrl.signal).then(setFacets).catch(() => {}); // counts are optional
     return () => ctrl.abort();
   }, []);
 
@@ -53,11 +42,10 @@ export default function JobsPage({ panelDue = null }: { panelDue?: string | null
   }, []);
 
   useEffect(() => {
-    if (query.source === undefined && !facetsLoaded) return; // the default source depends on the facets
     const ctrl = new AbortController();
     setLoading(true);
     setError(null);
-    listJobs({ ...shown, page_size: PAGE_SIZE }, ctrl.signal)
+    listJobs({ ...query, page_size: PAGE_SIZE }, ctrl.signal)
       .then((res) => setData(res))
       .catch((err) => {
         if (!ctrl.signal.aborted) setError(err.message || String(err));
@@ -67,7 +55,7 @@ export default function JobsPage({ panelDue = null }: { panelDue?: string | null
       });
     return () => ctrl.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryKey, facetsLoaded, reload]);
+  }, [queryKey, reload]);
 
   async function openRescore() {
     setRescoreBusy(true);
@@ -161,9 +149,7 @@ export default function JobsPage({ panelDue = null }: { panelDue?: string | null
           Panel due: {panelDue}. <Link to="/panel">Run the resume panel</Link>
         </p>
       )}
-      <Filters query={shown} facets={facets}
-        // Clear filters shows every source, or the "Added by me" default would come straight back.
-        onChange={(patch) => update(patch === null && hasManual ? CLEAR_ALL_SOURCES : patch)} />
+      <Filters query={query} facets={facets} onChange={update} />
       {error ? (
         <p className="notice error" role="alert">Couldn't load jobs: {error}</p>
       ) : !data && loading ? (
