@@ -114,7 +114,7 @@ pick the model (Opus or Sonnet) per chat. Results come back by pasting, which wo
 
 1. **Once:** open **Claude setup** in the dashboard (`/strelitzia/dashboard/claude-setup`). With Google Drive set up, Strelitzia writes
    two Google Docs into `Strelitzia/_Claude/`: "Strelitzia rules" (the writing rules and the JSON format every reply
-   ends with) and "Strelitzia content library". Create a claude.ai Project named "Strelitzia Resumes", add both Docs,
+   ends with) and "Content Library". Create a claude.ai Project named "Strelitzia Resumes", add both Docs,
    and paste the project instructions the page shows. Strelitzia keeps the Docs current when the rules or your library
    change.
 2. **Per job:** **Open in Claude** writes "<Company> – <Role> – Claude packet" into the job's Drive folder and copies a

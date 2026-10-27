@@ -132,7 +132,7 @@ written as `<prefix>.docx` next to the PDF. `cover_letter.render_pdf(paragraphs,
 **Files:** `src/strelitzia/storage/drive.py`, `src/strelitzia/storage/drive_layout.py`, `src/strelitzia/scoring/workbench.py`, `tests/test_drive_docs.py` (new)
 **What:** `DriveClient.upsert_doc(folder_id, name, html, known_id=None) -> DriveFile`: upload HTML with target mimeType
 `application/vnd.google-apps.document` (Drive converts it to a Google Doc); update in place when `known_id` or a same-named Doc the app created exists.
-`workbench.publish_static_docs(client, conn)` writes "Strelitzia rules" and "Strelitzia content library" into `Strelitzia/_Claude/`, only when their hash
+`workbench.publish_static_docs(client, conn)` writes "Strelitzia rules" and "Content Library" into `Strelitzia/_Claude/`, only when their hash
 changed (hashes kept in a small `app_state` key/value table or file), and returns their URLs. `workbench.publish_packet(client, conn, job) -> (doc_id, url)`
 writes "<Company> – <Role> – Claude packet" into the job's folder (`drive_layout.folder_path`), saving `packet_doc_id` / `packet_doc_url`. No Drive configured → callers fall back to the clipboard text.
 **Validate:** `pytest tests/test_drive_docs.py -q` with a fake Drive service: creates a Doc with the conversion mimeType, the second call updates instead of creating, static docs skip unchanged hashes. `scripts/validate.sh` green.

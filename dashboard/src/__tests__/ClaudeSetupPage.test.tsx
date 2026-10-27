@@ -71,26 +71,26 @@ describe('ClaudeSetupPage', () => {
     await user.click(await screen.findByRole('button', { name: 'Set up Profile Docs' }));
     expect(api.setupProfileDocs).toHaveBeenCalledWith(false);
     const docs = await screen.findByRole('list', { name: 'Profile Docs' });
-    expect(within(docs).getByRole('link', { name: /Strelitzia content library/ })).toHaveAttribute('href', DOCS.library!.url);
-    expect(within(docs).getByRole('link', { name: /Strelitzia base resume/ })).toHaveAttribute('href', DOCS.resume!.url);
+    expect(within(docs).getByRole('link', { name: /Content Library/ })).toHaveAttribute('href', DOCS.library!.url);
+    expect(within(docs).getByRole('link', { name: /Base Resume/ })).toHaveAttribute('href', DOCS.resume!.url);
   });
 
   it('asks before overwriting existing Profile Docs, and Cancel changes nothing', async () => {
     const user = userEvent.setup();
     vi.mocked(api.getClaudeSetup).mockResolvedValue(setup({ profile_docs: DOCS }));
     vi.mocked(api.setupProfileDocs).mockResolvedValueOnce({
-      ok: false, existing: ['Strelitzia content library', 'Strelitzia base resume'],
+      ok: false, existing: ['Content Library', 'Base Resume'],
     });
     renderPage();
     await user.click(await screen.findByRole('button', { name: 'Set up Profile Docs' }));
     const dialog = await screen.findByRole('alertdialog');
-    expect(dialog).toHaveTextContent('This will overwrite: Strelitzia content library, Strelitzia base resume. Continue?');
+    expect(dialog).toHaveTextContent('This will overwrite: Content Library, Base Resume. Continue?');
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(api.setupProfileDocs).toHaveBeenCalledTimes(1);
 
     vi.mocked(api.setupProfileDocs).mockResolvedValueOnce({
-      ok: false, existing: ['Strelitzia content library', 'Strelitzia base resume'],
+      ok: false, existing: ['Content Library', 'Base Resume'],
     });
     vi.mocked(api.setupProfileDocs).mockResolvedValueOnce({ ok: true, profile: profile(DOCS) });
     await user.click(screen.getByRole('button', { name: 'Set up Profile Docs' }));

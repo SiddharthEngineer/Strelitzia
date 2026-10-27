@@ -188,7 +188,7 @@ describe('JobPage Claude workbench', () => {
   it('lists Profile Docs problems from Open in Claude', async () => {
     const user = userEvent.setup();
     vi.mocked(api.openPacket).mockRejectedValue(apiError(409, 'Your Profile Docs have problems',
-      { detail: 'Your Profile Docs have problems', problems: ['The Strelitzia content library Doc has no projects.'] }));
+      { detail: 'Your Profile Docs have problems', problems: ['The Content Library Doc has no projects.'] }));
     renderJob();
     await user.click(await screen.findByRole('button', { name: 'Open in Claude' }));
     const alert = await screen.findByRole('alert');

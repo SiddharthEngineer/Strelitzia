@@ -104,8 +104,8 @@ export default function ClaudeSetupPage() {
           {setup.drive_source === 'legacy' && <p className="muted small"><strong>Connected</strong> ({setup.drive_detail}).</p>}
         </li>
         <li>
-          Set up your Profile Docs: the app creates <strong>Strelitzia content library</strong> and
-          <strong> Strelitzia base resume</strong> in the Drive folder Strelitzia/Profile, filled with what it has now.
+          Set up your Profile Docs: the app creates <strong>Content Library</strong> and
+          <strong> Base Resume</strong> in the Drive folder Strelitzia/Profile, filled with what it has now.
           From then on you edit your library and resume there, and every packet reads them fresh.
           <p className="muted small">
             The app can only see files it created. Edit these two Docs; don't add new ones to the folder (by hand or

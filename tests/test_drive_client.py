@@ -296,7 +296,7 @@ def test_create_doc_from_text_then_export(drive):
     folder = client.ensure_folder_path(profile_folder_path())
     doc = client.create_doc_from_text(folder, PROFILE_DOCS["library"], "## CURRENT ROLE\n", "text/markdown")
     assert doc.created and drive.store[doc.id]["mimeType"] == DOC_MIME
-    assert drive.path_of(doc.id)[-2:] == ["Profile", "Strelitzia content library"]
+    assert drive.path_of(doc.id)[-2:] == ["Profile", "Content Library"]
     assert client.export_text(doc.id, "text/markdown") == "## CURRENT ROLE\n"
 
 

@@ -84,8 +84,8 @@ describe('ProfilePage', () => {
     vi.mocked(api.getProfile).mockResolvedValue({ ...RESPONSE, profile_docs: DOCS });
     renderPage();
     const docs = await screen.findByRole('list', { name: 'Profile Docs' });
-    expect(within(docs).getByRole('link', { name: /Strelitzia content library/ })).toHaveAttribute('href', DOCS.library!.url);
-    expect(within(docs).getByRole('link', { name: /Strelitzia base resume/ })).toHaveAttribute('href', DOCS.resume!.url);
+    expect(within(docs).getByRole('link', { name: /Content Library/ })).toHaveAttribute('href', DOCS.library!.url);
+    expect(within(docs).getByRole('link', { name: /Base Resume/ })).toHaveAttribute('href', DOCS.resume!.url);
     expect(screen.getByText(/Last synced 5 minutes ago/)).toBeInTheDocument();
   });
 
@@ -107,12 +107,12 @@ describe('ProfilePage', () => {
     vi.mocked(api.getProfile).mockResolvedValue({ ...RESPONSE, profile_docs: DOCS });
     vi.mocked(api.syncProfileDocs).mockResolvedValue({
       ...RESPONSE, profile_docs: DOCS, ok: false, changed: false,
-      problems: ['The Strelitzia content library Doc has no projects.'],
+      problems: ['The Content Library Doc has no projects.'],
     });
     const user = renderPage();
     await user.click(await screen.findByRole('button', { name: 'Sync now' }));
     const alert = await screen.findByRole('alert');
-    expect(within(alert).getByText('The Strelitzia content library Doc has no projects.')).toBeInTheDocument();
+    expect(within(alert).getByText('The Content Library Doc has no projects.')).toBeInTheDocument();
     expect(alert).toHaveTextContent('Nothing was synced');
   });
 
