@@ -167,18 +167,24 @@ def _phrase_in(phrase: str, text: str) -> bool:
 
 
 def stem(word: str) -> str:
-    """A light stem, the same for "build", "builds", "building" and "built": strips -ing/-ed/-s and a final -e."""
+    """A light stem, the same for "build", "builds", "building" and "built": strips -ing/-ed/-s/-ies and a final -e.
+
+    The -ing/-ed strip keeps a stem with a vowel ("string", "bring" and "speed" stay whole).
+    """
     w = _IRREGULAR.get(word, word)
     for suffix in ("ing", "ed"):
-        if w.endswith(suffix) and len(w) - len(suffix) >= 3:
-            w = w[:-len(suffix)]
-            if len(w) > 3 and w[-1] == w[-2] and w[-1] not in "aeiouls":  # "running" -> "run"
+        rest = w[:-len(suffix)]
+        if w.endswith(suffix) and len(rest) >= 2 and any(c in "aeiouy" for c in rest) and not w.endswith("eed"):
+            w = rest
+            if len(w) > 3 and w[-1] == w[-2] and w[-1] not in "aeioulsfz":  # "running" -> "run"
                 w = w[:-1]
             break
     else:
-        if len(w) > 3 and w.endswith("s") and not w.endswith("ss"):
+        if len(w) > 4 and w.endswith("ies"):
+            w = w[:-3] + "y"
+        elif len(w) > 3 and w.endswith("s") and not w.endswith("ss"):
             w = w[:-1]
-    return w[:-1] if len(w) > 3 and w.endswith("e") else w
+    return w[:-1] if len(w) >= 3 and w.endswith("e") else w
 
 
 def content_tokens(text: str) -> set[str]:
