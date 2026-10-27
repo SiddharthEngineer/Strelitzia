@@ -106,6 +106,20 @@ describe('ClaudeSetupPage', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
+  it("says what's lost when the app never synced the Docs, and uses only the named Docs' sync time", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getClaudeSetup).mockResolvedValue(setup({ profile_docs: {
+      library: { url: DOCS.library!.url, synced_at: '2020-01-01T00:00:00+00:00' }, resume: { url: null, synced_at: null },
+    } }));
+    vi.mocked(api.setupProfileDocs).mockResolvedValueOnce({ ok: false, existing: ['Base Resume'] });
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Set up Profile Docs' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('This replaces the text of Base Resume.');
+    expect(dialog).toHaveTextContent("The app hasn't synced them, so what's in them now will be lost. Use Sync now");
+    expect(dialog).not.toHaveTextContent('2020');
+  });
+
   it('hints that setting up again replaces existing Docs, only when they exist', async () => {
     vi.mocked(api.getClaudeSetup).mockResolvedValue(setup({ profile_docs: DOCS }));
     const { unmount } = renderPage();

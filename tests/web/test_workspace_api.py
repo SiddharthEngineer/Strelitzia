@@ -267,7 +267,7 @@ def test_writes_need_the_csrf_header(db_path, conn):
     assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 1
 
 
-# --- Jobs list: source, next interview, flagged manual rows ---
+# --- Jobs list: source= ignored, next interview, flagged manual rows ---
 
 def _list(client, **params):
     r = client.get("/strelitzia/dashboard/api/jobs", params=params)
