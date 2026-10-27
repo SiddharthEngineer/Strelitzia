@@ -306,6 +306,24 @@ def test_rescore_all_preview_and_queue(client, conn):
     assert conn.execute("SELECT COUNT(*) FROM dashboard_tasks").fetchone()[0] == 1
 
 
+def test_rescore_all_active_returns_the_users_waiting_or_running_task(client, conn):
+    """The Jobs page shows a Rescore all's progress again after a reload (2026-10-26: it vanished on prod)."""
+    from strelitzia import users
+
+    active = "/strelitzia/dashboard/api/rescore/active"
+    assert client.get(active).json() == {"task": None}
+    tasks.enqueue(conn, users.invite(conn, "b@example.com").id, None, "rescore_all")  # someone else's
+    assert client.get(active).json() == {"task": None}
+    mine = tasks.enqueue(conn, users.owner(conn).id, None, "rescore_all")
+    assert client.get(active).json()["task"]["id"] == mine["id"]
+    conn.execute("UPDATE dashboard_tasks SET state = 'running' WHERE id = ?", (mine["id"],))
+    conn.commit()
+    assert client.get(active).json()["task"]["state"] == "running"
+    conn.execute("UPDATE dashboard_tasks SET state = 'done' WHERE id = ?", (mine["id"],))
+    conn.commit()
+    assert client.get(active).json() == {"task": None}
+
+
 def test_rescore_all_over_the_cap_returns_402_and_queues_nothing(client, conn, monkeypatch):
     monkeypatch.setenv("LLM_MONTHLY_BUDGET_USD", "5")
     _spend(conn, 4.99)

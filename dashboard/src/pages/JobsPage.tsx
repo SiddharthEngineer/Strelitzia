@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getFacets, listJobs, rescoreAll, rescorePreview } from '../api';
+import { activeRescoreAll, getFacets, listJobs, rescoreAll, rescorePreview } from '../api';
 import Filters from '../components/Filters';
 import Flower from '../components/Flower';
 import Hero from '../components/Hero';
@@ -40,6 +40,15 @@ export default function JobsPage({ panelDue = null }: { panelDue?: string | null
     const ctrl = new AbortController();
     getFacets(ctrl.signal).then(setFacets).catch(() => {}) // counts are optional
       .finally(() => { if (!ctrl.signal.aborted) setFacetsLoaded(true); });
+    return () => ctrl.abort();
+  }, []);
+
+  // A Rescore all started earlier (before a reload, or from another page) is still running: show its progress again.
+  useEffect(() => {
+    const ctrl = new AbortController();
+    activeRescoreAll(ctrl.signal)
+      .then(({ task }) => { if (task) setRescoreTask((current) => current ?? task); })
+      .catch(() => {}); // the banner is optional
     return () => ctrl.abort();
   }, []);
 

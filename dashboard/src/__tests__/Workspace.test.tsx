@@ -47,6 +47,7 @@ beforeEach(() => {
   vi.mocked(api.getJob).mockResolvedValue(jobDetail());
   vi.mocked(api.listJobTasks).mockResolvedValue([]);
   vi.mocked(api.getFacets).mockResolvedValue(FACETS);
+  vi.mocked(api.activeRescoreAll).mockResolvedValue({ task: null });
   vi.mocked(api.listJobs).mockResolvedValue(jobList([listItem('active', 1)]));
   vi.mocked(api.listContacts).mockResolvedValue([]);
   vi.mocked(api.getPanel).mockResolvedValue({

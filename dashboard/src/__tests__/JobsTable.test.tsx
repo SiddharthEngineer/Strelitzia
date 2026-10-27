@@ -89,6 +89,7 @@ describe('JobsPage', () => {
   beforeEach(() => {
     vi.mocked(api.listJobs).mockResolvedValue(jobList([listItem('active', 1), listItem('submitted', 2)], 120));
     vi.mocked(api.getFacets).mockResolvedValue(FACETS);
+    vi.mocked(api.activeRescoreAll).mockResolvedValue({ task: null });
   });
 
   it('shows the total and loads page 1 sorted by found date', async () => {
@@ -173,6 +174,32 @@ describe('JobsPage', () => {
       await act(() => vi.advanceTimersByTimeAsync(3000));
       expect(screen.getByRole('status')).toHaveTextContent('Finished re-assessment of your active jobs');
       await waitFor(() => expect(vi.mocked(api.listJobs).mock.calls.length).toBe(loads + 1));
+      expect(screen.getByRole('button', { name: 'Rescore all' })).toBeEnabled();
+    });
+
+    it('after a reload, shows a Rescore all that is still running and reloads the list when it finishes', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      vi.mocked(api.activeRescoreAll).mockResolvedValue({ task: task('running') });
+      vi.mocked(api.getTask).mockResolvedValueOnce(task('running')).mockResolvedValueOnce(task('done'));
+      renderPage();
+      await screen.findByText('Company 1');
+      expect(await screen.findByRole('status')).toHaveTextContent('re-assessment of your active jobs');
+      expect(screen.getByRole('button', { name: 'Rescore all' })).toBeDisabled(); // no second paid run
+      expect(api.rescoreAll).not.toHaveBeenCalled();
+      await act(() => vi.advanceTimersByTimeAsync(3000));
+      expect(screen.getByRole('button', { name: 'Rescore all' })).toBeDisabled();
+      const loads = vi.mocked(api.listJobs).mock.calls.length;
+      await act(() => vi.advanceTimersByTimeAsync(3000));
+      expect(screen.getByRole('status')).toHaveTextContent('Finished re-assessment of your active jobs');
+      await waitFor(() => expect(vi.mocked(api.listJobs).mock.calls.length).toBe(loads + 1));
+      expect(screen.getByRole('button', { name: 'Rescore all' })).toBeEnabled();
+    });
+
+    it('shows no banner when no Rescore all is running', async () => {
+      renderPage();
+      await screen.findByText('Company 1');
+      await waitFor(() => expect(api.activeRescoreAll).toHaveBeenCalled());
+      expect(screen.queryByRole('status')).toBeNull();
       expect(screen.getByRole('button', { name: 'Rescore all' })).toBeEnabled();
     });
 

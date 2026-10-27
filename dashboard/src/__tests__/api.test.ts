@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  addJob, ApiError, checkDrafts, jobsQueryString, linkContact, listJobs, onUnauthorized, openPacket, putDescription,
+  activeRescoreAll, addJob, ApiError, checkDrafts, jobsQueryString, linkContact, listJobs, onUnauthorized, openPacket, putDescription,
   rescore, rescoreAll, savePreferences, setStatus,
 } from '../api';
 import type { Preferences } from '../types';
@@ -104,6 +104,12 @@ describe('api', () => {
     const again = mockFetch(200, { prefs: {}, rescored: 0, task: null });
     await savePreferences({ skills_want: ['Rust'] } as unknown as Preferences, true, 'active');
     expect(JSON.parse(again.mock.calls[0][1].body).reassess_scope).toBe('active');
+  });
+
+  it('asks for the running Rescore all', async () => {
+    const fetch = mockFetch(200, { task: null });
+    expect(await activeRescoreAll()).toEqual({ task: null });
+    expect(fetch.mock.calls[0][0]).toBe('/strelitzia/dashboard/api/rescore/active');
   });
 
   it('Rescore all confirms the cost in the request', async () => {
