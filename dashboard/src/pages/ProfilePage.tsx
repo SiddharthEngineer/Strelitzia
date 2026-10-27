@@ -10,10 +10,23 @@ import type { ProfileFields, ProfileResponse } from '../types';
 type FieldKey = keyof ProfileFields;
 type TextKey = { [K in FieldKey]: ProfileFields[K] extends string ? K : never }[FieldKey];
 
+const isEmpty = (v: unknown) => v === null || v === '' || (Array.isArray(v) && v.length === 0);
+
+/** The profile with `draft` filled into the fields that are still empty. */
+function withDraft(form: ProfileFields, draft: Partial<ProfileFields>): ProfileFields {
+  const next = { ...form };
+  for (const [key, value] of Object.entries(draft) as [FieldKey, ProfileFields[FieldKey]][]) {
+    if (value !== undefined && !isEmpty(value) && isEmpty(form[key])) (next as Record<FieldKey, unknown>)[key] = value;
+  }
+  return next;
+}
+
 export default function ProfilePage() {
   const [data, setData] = useState<ProfileResponse | null>(null);
   const [form, setForm] = useState<ProfileFields | null>(null);
   const [saved, setSaved] = useState('');
+  // The resume's draft from Sync now (until Save or Discard); a field is highlighted while it holds the drafted value.
+  const [draft, setDraft] = useState<Partial<ProfileFields>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -47,12 +60,15 @@ export default function ProfilePage() {
   }
 
   const dirty = JSON.stringify(form) !== saved;
+  const drafted = (Object.keys(draft) as FieldKey[]).filter(
+    (k) => JSON.stringify(form[k]) === JSON.stringify(draft[k]));
   const set = <K extends FieldKey>(key: K, value: ProfileFields[K]) => setForm((f) => (f ? { ...f, [key]: value } : f));
 
   const row = (key: FieldKey, name: string, control: ReactNode) => (
-    <div key={key} className="pref-row">
+    <div key={key} className={`pref-row${drafted.includes(key) ? ' drafted' : ''}`}>
       <div className="pref-label">{name}</div>
       <div className="pref-value">{control}</div>
+      {drafted.includes(key) && <span className="tag tag-soon" title="From your resume; Save to keep it">From resume</span>}
     </div>
   );
   const textRow = (key: TextKey, name: string, type = 'text', placeholder?: string) => row(key, name, (
@@ -67,6 +83,7 @@ export default function ProfilePage() {
     setMessage(null);
     try {
       load(await api.saveProfile(form));
+      setDraft({});
       setMessage('Saved.');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -77,6 +94,7 @@ export default function ProfilePage() {
 
   function onDiscard() {
     setForm(JSON.parse(saved));
+    setDraft({});
   }
 
   async function onSync() {
@@ -87,7 +105,15 @@ export default function ProfilePage() {
       const res = await api.syncProfileDocs();
       setData(res);  // the fields being edited stay as typed
       setProblems(res.problems);
-      if (res.ok) setSyncNote(res.changed ? 'Synced: your changes are in.' : 'Synced: nothing changed.');
+      const found = Object.keys(res.draft ?? {}).length > 0;
+      if (found) {
+        setForm((f) => (f ? withDraft(f, res.draft) : f));
+        setDraft((d) => ({ ...d, ...res.draft }));
+      }
+      if (res.parse_error) setSyncError(res.parse_error);
+      if (!res.ok) return;
+      if (found) setSyncNote('Synced. The highlighted fields are from your resume: check them, then Save.');
+      else setSyncNote(res.changed ? 'Synced: your changes are in.' : 'Synced: nothing changed.');
     } catch (err) {
       setSyncError(err instanceof Error ? err.message : String(err));
     } finally {

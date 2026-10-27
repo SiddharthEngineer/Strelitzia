@@ -13,6 +13,7 @@ auth/* needs a session; the UI routes stay public so the SPA can show its login 
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -32,11 +33,12 @@ from starlette.middleware.sessions import SessionMiddleware
 from strelitzia import __version__, intake, tracking, users, workspace
 from strelitzia import profile as profile_store
 from strelitzia.config import env
-from strelitzia.database import Connection, backend_name, backfill_job_keys, get_connection, init_db, job_company
+from strelitzia.database import (Connection, backend_name, backfill_job_keys, get_connection, get_state, init_db,
+                                 job_company, set_state)
 from strelitzia.llm import LLMStopRun, check_budget, month_spend, user_month_spend
 from strelitzia.scoring import panel
 from strelitzia.scoring import preferences as prefs_mod
-from strelitzia.scoring import workbench
+from strelitzia.scoring import resume_parse, workbench
 from strelitzia.scoring.assessment import current_assessment_key, recompute_fit
 from strelitzia.scoring.content_library import parse_content_library_text
 from strelitzia.web import admin, auth, queries, tasks
@@ -1046,7 +1048,58 @@ def sync_profile_docs(request: Request) -> dict:
         raise HTTPException(status_code=409, detail="Set up your Profile Docs on the Claude setup page first")
     client = _require_drive(request)
     result = profile_sync.pull_profile(client, conn, user.id, is_owner=user.role == "owner")
-    return {"ok": result.ok, "problems": result.problems, "changed": result.changed, **get_profile(request)}
+    draft, parse_error = _resume_draft(conn, user.id) if result.ok else ({}, None)
+    return {"ok": result.ok, "problems": result.problems, "changed": result.changed, **get_profile(request),
+            "draft": draft, "parse_error": parse_error}
+
+
+_PARSED_RESUME_KEY = "{}:profile_parse:resume"  # user id -> sha256 of the last resume text parsed for a draft
+
+
+def _is_empty(value) -> bool:
+    return value is None or value == "" or value == []
+
+
+def _valid_draft_value(name: str, value) -> bool:
+    """Whether PUT /profile would accept the drafted value (a bad link in the draft would block the user's Save)."""
+    try:
+        if name == "email":
+            _check_email(value)
+        elif name == "linkedin_url":
+            _check_link(value, "linkedin.com", "LinkedIn")
+        elif name == "github_url":
+            _check_link(value, "github.com", "GitHub")
+    except ValueError:
+        return False
+    return True
+
+
+def _resume_draft(conn, user_id: str) -> tuple[dict, str | None]:
+    """Claude's draft of the blank profile fields from the synced Base Resume, and why it failed (or None).
+
+    Only parses a resume text it hasn't parsed before, and only while some field is blank, so most syncs make no
+    LLM call. The draft isn't saved: the user reviews it on the Profile page and saves. A failed parse is retried
+    on the next sync.
+    """
+    profile = profile_store.load_profile(conn, user_id)
+    text = profile.resume_text.strip()
+    blank = {name for name in PROFILE_FIELDS if _is_empty(getattr(profile, name))}
+    if not text or not blank:
+        return {}, None
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    key = _PARSED_RESUME_KEY.format(user_id)
+    if get_state(conn, key) == digest:
+        return {}, None
+    try:
+        parsed = resume_parse.parse_resume(text, user_id, conn=conn)
+    except LLMStopRun as e:
+        return {}, f"Synced, but your resume couldn't be read to fill in your profile: {e}"
+    except Exception as e:  # an unusable answer or an API error: the sync itself still worked
+        log.warning("resume parse after sync failed for user %s: %s", user_id, type(e).__name__)
+        return {}, f"Synced, but your resume couldn't be read to fill in your profile ({type(e).__name__})."
+    set_state(conn, key, digest)
+    conn.commit()
+    return {k: v for k, v in parsed.items() if k in blank and _valid_draft_value(k, v)}, None
 
 
 @api.get("/profile/resume")

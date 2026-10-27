@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -93,7 +93,7 @@ describe('ProfilePage', () => {
     vi.mocked(api.getProfile).mockResolvedValue({ ...RESPONSE, profile_docs: DOCS });
     const synced = { library: { ...DOCS.library!, synced_at: minutesAgo(0) }, resume: { ...DOCS.resume!, synced_at: minutesAgo(0) } };
     vi.mocked(api.syncProfileDocs).mockResolvedValue({
-      ...RESPONSE, profile_docs: synced, ok: true, problems: [], changed: true,
+      ...RESPONSE, profile_docs: synced, ok: true, problems: [], changed: true, draft: {}, parse_error: null,
     });
     const user = renderPage();
     await user.click(await screen.findByRole('button', { name: 'Sync now' }));
@@ -106,7 +106,7 @@ describe('ProfilePage', () => {
   it('lists the problems a sync found', async () => {
     vi.mocked(api.getProfile).mockResolvedValue({ ...RESPONSE, profile_docs: DOCS });
     vi.mocked(api.syncProfileDocs).mockResolvedValue({
-      ...RESPONSE, profile_docs: DOCS, ok: false, changed: false,
+      ...RESPONSE, profile_docs: DOCS, ok: false, changed: false, draft: {}, parse_error: null,
       problems: ['The Content Library Doc has no projects.'],
     });
     const user = renderPage();
@@ -114,6 +114,63 @@ describe('ProfilePage', () => {
     const alert = await screen.findByRole('alert');
     expect(within(alert).getByText('The Content Library Doc has no projects.')).toBeInTheDocument();
     expect(alert).toHaveTextContent('Nothing was synced');
+  });
+
+  it('fills the empty fields from the resume, highlighted, without saving them until Save', async () => {
+    vi.mocked(api.getProfile).mockResolvedValue({ ...RESPONSE, profile_docs: DOCS });
+    vi.mocked(api.syncProfileDocs).mockResolvedValue({
+      ...RESPONSE, profile_docs: DOCS, ok: true, problems: [], changed: true, parse_error: null,
+      draft: { last_name: 'Example', current_job_title: 'Widget Engineer', education_level: 'masters',
+        years_experience: 4, skills: ['Python', 'SQL'] },
+    });
+    const user = renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Sync now' }));
+    expect(await screen.findByLabelText('Last name')).toHaveValue('Example');
+    expect(screen.getByLabelText('Current title')).toHaveValue('Widget Engineer');
+    expect(screen.getByLabelText('Education')).toHaveValue('masters');
+    expect(screen.getByLabelText('Years of experience')).toHaveValue(4);
+    expect(screen.getByText('SQL')).toBeInTheDocument();
+    expect(screen.getByLabelText('First name')).toHaveValue('Ada');
+    expect(screen.getAllByText('From resume')).toHaveLength(5);
+    expect(screen.getByLabelText('Last name').closest('.pref-row')).toHaveClass('drafted');
+    expect(screen.getByText(/The highlighted fields are from your resume/)).toBeInTheDocument();
+    expect(api.saveProfile).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(api.saveProfile).toHaveBeenCalledWith(expect.objectContaining({
+      first_name: 'Ada', last_name: 'Example', current_job_title: 'Widget Engineer', education_level: 'masters',
+      years_experience: 4, skills: ['Python', 'SQL'],
+    }));
+    await waitFor(() => expect(screen.queryAllByText('From resume')).toHaveLength(0));
+  });
+
+  it('a field typed before the sync keeps the typed value, and Discard drops the draft', async () => {
+    vi.mocked(api.getProfile).mockResolvedValue({ ...RESPONSE, profile_docs: DOCS });
+    vi.mocked(api.syncProfileDocs).mockResolvedValue({
+      ...RESPONSE, profile_docs: DOCS, ok: true, problems: [], changed: false, parse_error: null,
+      draft: { last_name: 'Example', location: 'Springfield' },
+    });
+    const user = renderPage();
+    await user.type(await screen.findByLabelText('Last name'), 'Typed');
+    await user.click(screen.getByRole('button', { name: 'Sync now' }));
+    expect(await screen.findByLabelText('Location')).toHaveValue('Springfield');
+    expect(screen.getAllByText('From resume')).toHaveLength(1);
+    expect(screen.getByLabelText('Last name')).toHaveValue('Typed');
+    await user.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(screen.getByLabelText('Location')).toHaveValue('');
+    expect(screen.queryAllByText('From resume')).toHaveLength(0);
+  });
+
+  it('shows why the resume could not be read after a good sync', async () => {
+    vi.mocked(api.getProfile).mockResolvedValue({ ...RESPONSE, profile_docs: DOCS });
+    vi.mocked(api.syncProfileDocs).mockResolvedValue({
+      ...RESPONSE, profile_docs: DOCS, ok: true, problems: [], changed: true, draft: {},
+      parse_error: 'Synced, but your resume couldn\'t be read to fill in your profile (ValueError).',
+    });
+    const user = renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Sync now' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't be read to fill in your profile/);
+    expect(screen.getByText('Synced: your changes are in.')).toBeInTheDocument();
   });
 
   it('shows a sync error', async () => {

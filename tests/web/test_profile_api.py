@@ -176,3 +176,115 @@ def test_profile_docs_are_owner_only(client, conn, drive, monkeypatch):
     act_as(monkeypatch, second_user(conn))
     assert client.post("/strelitzia/dashboard/api/profile/docs/setup", json={}).status_code == 403
     assert client.post("/strelitzia/dashboard/api/profile/docs/sync").status_code == 403
+
+
+# --- Sync now drafts the blank fields from the Base Resume ---
+
+PARSED = {"first_name": "Ada", "last_name": "Example", "email": "ada@example.com", "phone": None,
+          "linkedin_url": "https://linkedin.com/in/example", "github_url": "not a link", "location": "Springfield",
+          "current_job_title": "Widget Engineer", "years_experience": 4, "education_level": "masters",
+          "skills": ["Python", "SQL"]}
+
+
+def _llm(reply=PARSED, error=None):
+    import json
+    from unittest.mock import MagicMock
+
+    from strelitzia.scoring import resume_parse
+
+    llm = MagicMock()
+    if error:
+        llm.chat.side_effect = error
+    else:
+        llm.chat.return_value = json.dumps(reply)
+    return patch.object(resume_parse, "get_client", return_value=llm)
+
+
+def _resume_id(drive):
+    return next(f["id"] for f in drive.store.values() if f["name"] == "Base Resume")
+
+
+def _sync(client):
+    r = client.post("/strelitzia/dashboard/api/profile/docs/sync")
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_sync_drafts_only_the_blank_fields_and_saves_nothing(client, conn, drive):
+    owner = _seed(conn)
+    client.put("/strelitzia/dashboard/api/profile", json={"first_name": "Adeline", "skills": ["Go"]})
+    client.post("/strelitzia/dashboard/api/profile/docs/setup", json={"overwrite": False})
+    with _llm() as get_client:
+        body = _sync(client)
+    assert body["ok"] is True and body["parse_error"] is None
+    # first_name and skills are set, phone isn't stated, and the bad GitHub link would block Save.
+    assert body["draft"] == {"last_name": "Example", "email": "ada@example.com",
+                             "linkedin_url": "https://linkedin.com/in/example", "location": "Springfield",
+                             "current_job_title": "Widget Engineer", "years_experience": 4.0,
+                             "education_level": "masters"}
+    assert "Test Person" in get_client.return_value.chat.call_args.args[0][1]["content"]
+    saved = store.load_profile(conn, owner)
+    assert saved.last_name == "" and saved.first_name == "Adeline"
+
+
+def test_sync_parses_each_resume_text_once(client, conn, drive):
+    _seed(conn)
+    client.post("/strelitzia/dashboard/api/profile/docs/setup", json={"overwrite": False})
+    with _llm() as get_client:
+        assert _sync(client)["draft"]
+        assert _sync(client)["draft"] == {}  # same resume: no new call, even with blanks left
+        assert get_client.return_value.chat.call_count == 1
+        drive.edit(_resume_id(drive), b"Test Person\nSenior Data Engineer\n")
+        assert _sync(client)["draft"]
+        assert get_client.return_value.chat.call_count == 2
+
+
+def test_sync_skips_the_parse_when_nothing_is_blank(client, conn, drive):
+    _seed(conn)
+    client.put("/strelitzia/dashboard/api/profile", json={
+        "first_name": "A", "last_name": "B", "phone": "1", "email": "a@example.com",
+        "linkedin_url": "https://linkedin.com/in/a", "github_url": "https://github.com/a", "location": "X",
+        "current_job_title": "Y", "years_experience": 1, "education_level": "masters", "skills": ["Z"]})
+    client.post("/strelitzia/dashboard/api/profile/docs/setup", json={"overwrite": False})
+    with _llm() as get_client:
+        assert _sync(client)["draft"] == {}
+    get_client.assert_not_called()
+
+
+def test_a_sync_with_problems_does_not_parse(client, conn, drive):
+    _seed(conn)
+    client.post("/strelitzia/dashboard/api/profile/docs/setup", json={"overwrite": False})
+    drive.edit(_resume_id(drive), b"   ")
+    with _llm() as get_client:
+        body = _sync(client)
+    assert body["ok"] is False and body["draft"] == {}
+    get_client.assert_not_called()
+
+
+def test_a_failed_parse_keeps_the_sync_and_retries_next_time(client, conn, drive):
+    _seed(conn)
+    client.post("/strelitzia/dashboard/api/profile/docs/setup", json={"overwrite": False})
+    with _llm(error=RuntimeError("boom")):
+        body = _sync(client)
+    assert body["ok"] is True and body["draft"] == {}
+    assert "couldn't be read to fill in your profile (RuntimeError)" in body["parse_error"]
+    with _llm() as get_client:
+        assert _sync(client)["draft"]
+    assert get_client.return_value.chat.call_count == 1
+
+
+def test_over_budget_the_sync_still_works(client, conn, drive, monkeypatch):
+    from strelitzia.llm import LLMStopRun
+    from strelitzia.scoring import resume_parse
+
+    _seed(conn)
+    client.post("/strelitzia/dashboard/api/profile/docs/setup", json={"overwrite": False})
+
+    def stop(**kwargs):
+        raise LLMStopRun("budget", "Over the monthly budget.")
+
+    monkeypatch.setattr(resume_parse, "check_budget", stop)
+    with _llm() as get_client:
+        body = _sync(client)
+    assert body["ok"] is True and body["draft"] == {} and "Over the monthly budget" in body["parse_error"]
+    get_client.assert_not_called()

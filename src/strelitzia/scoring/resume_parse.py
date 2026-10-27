@@ -1,7 +1,8 @@
-"""Resume upload on the Profile page: the text of a PDF or DOCX, and Claude's draft of the profile fields it states.
+"""Claude's draft of the profile fields a resume states (after Sync now pulls the Base Resume), and the text of a
+PDF or DOCX resume.
 
-The draft only holds what the resume says (no guesses); the web layer merges it into the empty fields for the user
-to review. Never log the resume text.
+The draft only holds what the resume says (no guesses); the web layer keeps the fields that are still empty for the
+user to review. Never log the resume text.
 """
 
 from __future__ import annotations
