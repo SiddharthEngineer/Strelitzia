@@ -576,6 +576,34 @@ def validate_wording(resume: "TailoredResume", bullet_max: int = 230) -> list[st
     return errors
 
 
+def validate_bullet_shape(resume: "TailoredResume", skills: dict[str, str], max_tools: int = 3,
+                          min_rest: int = 60) -> list[str]:
+    """Warnings for task-level bullets: more than `max_tools` tools from the base resume's Skills, a role split
+    into several bullets about one project, or a bullet that is little more than its tools."""
+    tools = list(dict.fromkeys(part.strip() for items in skills.values() for item in split_items(items)
+                               for part in _skill_parts(item) if part.strip()))
+    patterns = {t: re.compile(r"(?<!\w)" + re.escape(t) + r"(?!\w)", re.I) for t in tools}
+    warnings = []
+    for role in resume.roles:
+        for i, bullet in enumerate(role.bullets, 1):
+            where = f"{role.role_key} bullet {i}"
+            named = [t for t, p in patterns.items() if p.search(bullet.text)]
+            if len(named) > max_tools:
+                warnings.append(f"{where} names {len(named)} tools ({', '.join(named)}); keep 1-3 and let Skills "
+                                "hold the rest")
+            rest = bullet.text
+            for t in sorted(named, key=len, reverse=True):
+                rest = patterns[t].sub("", rest)
+            rest = " ".join(rest.split())
+            if len(rest) < min_rest:
+                warnings.append(f"{where} is mostly tool names; say what the work owned or changed")
+        singles = [b.project_ids[0] for b in role.bullets if len(set(b.project_ids)) == 1]
+        for slug in dict.fromkeys(s for s in singles if singles.count(s) > 1):
+            warnings.append(f"{role.role_key} has {singles.count(slug)} bullets citing only [{slug}]; fold them "
+                            "into one responsibility and feature other projects")
+    return warnings
+
+
 def validate_letter(paragraphs: list[str], evidence_slugs: list[str], library: "ContentLibrary",
                     evidence: "EvidenceMap | None" = None, sign_off: str = "", max_words: int = 250,
                     posting_text: str = "") -> list[str]:

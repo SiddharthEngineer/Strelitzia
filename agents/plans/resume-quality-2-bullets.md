@@ -59,7 +59,7 @@ plan-first question are in the rules.
 resume's Skills; two or more bullets in one role citing only the same single project (task splitting); a bullet whose
 text left after removing tool names is under 60 characters (the tool is the point). Shown with the other warnings.
 **Validate:** `pytest tests/test_workbench_validate.py -q` → the research's "Before" #1 warns; its "After" #1 doesn't.
-**Status:** ❌
+**Status:** ✅ 2026-10-27
 
 ### Task 3: Summary replaces headline
 **Runs:** unattended
