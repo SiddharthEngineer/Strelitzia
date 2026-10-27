@@ -213,14 +213,7 @@ def test_a_draft_is_the_jobs_users_only(conn, tmp_path):
     assert len(tracking.status_events(conn, mine["user_id"], mine["url"])) == 1
 
 
-# ── Rules version (profile-docs-2-api Task 3) ──
-
-def test_rules_markdown_starts_with_the_version_line():
-    text = wb.rules_markdown()
-    assert text.splitlines()[0] == f"Rules version: {wb.RULES_VERSION}"
-    assert "Rules version: <the version at the top of this file>" in text and wb.rules_text() in text
-    assert wb.rules_file_name() == f"Strelitzia rules {wb.RULES_VERSION}.md"
-
+# ── Rules and instructions versions ──
 
 @pytest.mark.parametrize("used, warned", [(wb.RULES_VERSION, None), (None, "didn't say"), ("0ld0ld00", "0ld0ld00")])
 def test_rules_version_warning(conn, tmp_path, used, warned):
@@ -233,7 +226,24 @@ def test_rules_version_warning(conn, tmp_path, used, warned):
     if warned is None:
         assert found == []
     else:
-        assert len(found) == 1 and warned in found[0] and "download the current rules" in found[0]
+        assert len(found) == 1 and warned in found[0] and "Open in Claude" in found[0]
+
+
+@pytest.mark.parametrize("used, warned", [(wb.INSTRUCTIONS_VERSION, None), (None, "didn't say"),
+                                         ("0ld0ld00", "old instructions (version 0ld0ld00)")])
+def test_instructions_version_warning(conn, tmp_path, used, warned):
+    data = good_result()
+    data["rules_version"] = wb.RULES_VERSION
+    if used:
+        data["instructions_version"] = used
+    outcome = _import(conn, tmp_path, data)
+    assert outcome.ok, outcome.errors
+    found = [w for w in outcome.warnings if "instructions" in w]
+    if warned is None:
+        assert found == []
+    else:
+        assert len(found) == 1 and warned in found[0] and wb.INSTRUCTIONS_VERSION in found[0]
+        assert "Claude setup" in found[0] and "Strelitzia Resumes" in found[0]
 
 
 # ── Draft Docs (docs-drafts-1-format Task 3) ──
@@ -242,7 +252,7 @@ def _draft_texts(data):
     from strelitzia.scoring import draft_docs as dd
     from workbench_helpers import library
 
-    return (dd.resume_draft_text(data, library(), wb.RULES_VERSION),
+    return (dd.resume_draft_text(data, library(), wb.RULES_VERSION, wb.INSTRUCTIONS_VERSION),
             dd.cover_draft_text(data["cover_letter"], wb.RULES_VERSION))
 
 
@@ -252,7 +262,7 @@ def test_import_drafts_accepts_a_rendered_valid_draft(conn, tmp_path):
     outcome = wb.import_drafts(conn, job, resume_text, cover_text, inputs=inputs(), out_dir=tmp_path / "out")
     assert outcome.ok, outcome.errors
     assert outcome.draft_version == 1 and outcome.files["resume"] and outcome.files["cover_letter"]
-    assert not any("rules version" in w for w in outcome.warnings)
+    assert not any("version" in w for w in outcome.warnings), outcome.warnings
 
 
 def test_import_drafts_rejects_a_broken_draft_and_saves_nothing(conn, tmp_path):
@@ -292,6 +302,15 @@ def test_import_drafts_warns_about_the_resume_docs_rules_version(conn, tmp_path,
     outcome = wb.import_drafts(conn, job, resume_text, cover_text, inputs=inputs(), out_dir=tmp_path / "out")
     assert outcome.ok, outcome.errors
     assert any(warned in w and wb.RULES_VERSION in w for w in outcome.warnings)
+
+
+def test_import_drafts_warns_when_the_instructions_are_old(conn, tmp_path):
+    job = add_job_row(conn)
+    resume_text, cover_text = _draft_texts(good_result())
+    resume_text = resume_text.replace(f"Instructions version: {wb.INSTRUCTIONS_VERSION}\n", "Instructions version: \n")
+    outcome = wb.import_drafts(conn, job, resume_text, cover_text, inputs=inputs(), out_dir=tmp_path / "out")
+    assert outcome.ok, outcome.errors
+    assert [w for w in outcome.warnings if "version" in w] == [wb.instructions_version_warning(None)]
 
 
 def test_the_rules_ask_for_the_version_line_at_the_top_of_the_resume_draft():

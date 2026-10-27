@@ -45,9 +45,9 @@ def test_panel_summary_counts_and_due(client, conn):
     body = client.get("/strelitzia/dashboard/api/panel").json()
     assert body["due"] is None and body["needed"] == 5 and body["runs"] == []
     assert body["comparable"] == {"latest_vs_previous": 0, "rules_a_vs_b": 0}
-    assert body["project_name"] == "Strelitzia Panel" and "not_met" in body["rubric"]["text"]
-    assert body["rubric"]["url"] is None
-    assert body["rubric_markdown"] == panel.rubric_markdown() and body["rubric_url"].endswith("/api/panel/rubric.md")
+    assert body["project_name"] == "Strelitzia Panel" and body["project_instructions"] == panel.project_instructions()
+    assert body["instructions_version"] == panel.INSTRUCTIONS_VERSION and body["rubric_version"] == panel.RUBRIC_VERSION
+    assert "rubric" not in body and "rubric_url" not in body  # the rubric travels in each prompt
     _seed(conn)
     body = client.get("/strelitzia/dashboard/api/panel").json()
     assert body["due"] == "no panel has been run yet"
@@ -81,6 +81,9 @@ def test_model_replies_picks_and_report(client, run):
     url = f"/strelitzia/dashboard/api/panel/runs/{run['id']}/grades"
     res = client.post(url, json={"grader": "sonnet", "text": _reply(["first"] * 5)})
     assert res.status_code == 200 and res.json()["graded"] == 5
+    # This reply names no versions, so the page shows both warnings (the grades are still stored).
+    warnings = res.json()["warnings"]
+    assert len(warnings) == 2 and all("didn't say" in w for w in warnings)
     assert res.json()["run"]["graded"] == {"sonnet": 5, "opus": 0, "you": 0}
     assert client.post(url, json={"grader": "opus", "text": _reply(["second"] * 5)}).status_code == 200
     for no in range(1, 6):
@@ -124,7 +127,5 @@ def test_another_users_panel_run_is_404(client, conn, monkeypatch):
     assert panel.grades(conn, users.owner(conn).id, run["id"]) == {}
 
 
-def test_rubric_download(client):
-    r = client.get("/strelitzia/dashboard/api/panel/rubric.md")
-    assert r.status_code == 200 and r.headers["content-type"].startswith("text/markdown")
-    assert "not_met" in r.text and "Strelitzia%20panel%20rubric.md" in r.headers["content-disposition"]
+def test_rubric_download_is_gone(client):
+    assert client.get("/strelitzia/dashboard/api/panel/rubric.md").status_code == 404

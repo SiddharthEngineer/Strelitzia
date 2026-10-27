@@ -141,8 +141,9 @@ def test_setup_without_drive(client):
     s = client.get("/strelitzia/dashboard/api/claude/setup").json()
     assert s["drive"] is False and s["rules_version"] == wb.RULES_VERSION
     assert "docs" not in s and s["profile_docs"] is None
-    assert s["rules_markdown"] == wb.rules_markdown() and s["rules_url"] == "/strelitzia/dashboard/api/claude/rules.md"
-    assert "Strelitzia rules" in s["project_instructions"]
+    assert "rules_markdown" not in s and "rules_url" not in s  # the rules travel in each packet
+    assert s["project_instructions"] == wb.project_instructions() and s["project_name"] == "Strelitzia Resumes"
+    assert s["instructions_version"] == wb.INSTRUCTIONS_VERSION
     assert client.post("/strelitzia/dashboard/api/claude/docs").status_code in (404, 405)  # removed
 
 
@@ -330,11 +331,8 @@ def test_without_profile_docs_the_database_copy_is_used(client, conn, the_job, d
     assert drive.calls["export"] == 0
 
 
-def test_rules_download(client):
-    r = client.get("/strelitzia/dashboard/api/claude/rules.md")
-    assert r.status_code == 200 and r.headers["content-type"].startswith("text/markdown")
-    assert r.text.splitlines()[0] == f"Rules version: {wb.RULES_VERSION}"
-    assert f"Strelitzia%20rules%20{wb.RULES_VERSION}.md" in r.headers["content-disposition"]
+def test_rules_download_is_gone(client):
+    assert client.get("/strelitzia/dashboard/api/claude/rules.md").status_code == 404
 
 
 def test_setup_shows_the_profile_docs(client, conn, the_job, drive, profile_docs):
@@ -376,7 +374,7 @@ def test_check_a_bullet_without_tags_is_422_naming_the_line(client, conn, the_jo
     r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/drafts/check")
     assert r.status_code == 422
     body = r.json()
-    assert body["errors"][0].startswith("Resume draft, line 5:") and "no [slug] tags" in body["errors"][0]
+    assert body["errors"][0].startswith("Resume draft, line 6:") and "no [slug] tags" in body["errors"][0]
     assert body["fix_prompt"].endswith("Fix them in the two draft Docs and change nothing else.")
     assert conn.execute("SELECT draft_version FROM jobs").fetchone()[0] is None
 

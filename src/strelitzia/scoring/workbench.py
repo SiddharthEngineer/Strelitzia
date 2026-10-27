@@ -1,10 +1,12 @@
 """Claude workbench: resumes and cover letters are written in a Claude Pro chat, not through the API.
 
 The app prepares the inputs and checks the output:
-- `rules_markdown()` is the fixed input (a file in the Claude Project's knowledge); the content library and base
-  resume are the user's Profile Docs (`profile_sync`).
-- `job_packet()` is the per-job input (a Doc in the job's Drive folder): the posting, its required/preferred
-  targets marked evidenced or not, the allowed role keys and project slugs.
+- `project_instructions()` is the only text the user pastes into the Claude project, once per version. It stays short
+  and stable; it carries `INSTRUCTIONS_VERSION`, which Claude echoes in the resume draft.
+- `job_packet()` is the per-job input (a Doc in the job's Drive folder, rewritten on every Open in Claude): the
+  posting, its required/preferred targets marked evidenced or not, the allowed role keys and project slugs, and the
+  full rules (`RULES_VERSION`), so the rules are always the app's current ones. The content library and base resume
+  are the user's Profile Docs (`profile_sync`).
 - Claude writes the resume and cover letter into the job's two draft Docs (`publish_drafts`, format in
   `draft_docs`). "Check & format" reads them back and `import_drafts()` runs the deterministic checks, then
   renders and records the draft.
@@ -90,6 +92,7 @@ def result_schema(library: ContentLibrary | None = None) -> dict:
         "cover_letter": cover,
         "notes_for_user": {"type": "string"},
         "rules_version": {"type": "string"},
+        "instructions_version": {"type": "string"},
     }, required=["strelitzia", "resume", "cover_letter"])
 
 
@@ -198,14 +201,21 @@ class _Doc:
                 out += ["```", value, "```", ""]
         return "\n".join(out).rstrip() + "\n"
 
+    def include(self, other: _Doc, prefix: str) -> _Doc:
+        """Append another document's blocks under one heading; its own headings become "<prefix>: <heading>"."""
+        self.h(prefix)
+        for kind, value in other.blocks:
+            self.blocks.append((kind, f"{prefix}: {value}" if kind == "h" else value))
+        return self
+
 
 def _rules() -> _Doc:
     d = _Doc("Strelitzia rules")
-    d.p("You write my one-page resume and a short cover letter for one job at a time. Each job comes as a "
-        "\"Claude packet\" (a Google Doc in the job's Drive folder, or pasted text). My real experience is in the "
-        "\"Content Library\" Google Doc (projects with stable slugs, grouped under role keys) and the "
-        "\"Base Resume\" Google Doc, both in the Drive folder Strelitzia/Profile. "
-        "Strelitzia checks every reply mechanically, so follow these rules exactly.")
+    d.p("You write my one-page resume and a short cover letter for one job at a time. These rules come with each "
+        "job's Claude packet and are binding; if anything else (an older rules file, say) disagrees, these win. "
+        "My real experience is in the \"Content Library\" Google Doc (projects with stable slugs, grouped under role "
+        "keys) and the \"Base Resume\" Google Doc, both in the Drive folder Strelitzia/Profile. "
+        "Strelitzia checks every draft mechanically, so follow these rules exactly.")
     d.h("Honesty")
     d.ul([
         "Only claim what the content library or the base resume shows. The packet marks each required and preferred "
@@ -252,8 +262,10 @@ def _rules() -> _Doc:
         "draft\" Doc (both in the job's Drive folder, named in the prompt) with the Google Docs connector. Replace "
         "each Doc's whole text, in the formats below: the full resume and letter, not a diff.",
         "Edit only those two Docs, and never create a new Doc: Strelitzia can only read Docs it created.",
-        "The first line of the resume draft is \"Rules version: \" followed by the value of the \"Rules version:\" "
-        "line at the top of this rules file.",
+        "The first line of the resume draft is \"Rules version: \" followed by the Rules version this packet "
+        "states at the top. The second line is \"Instructions version: \" followed by the version on the first "
+        "line of your project instructions; leave it empty if they have none. Never copy these values from "
+        "anywhere else, including the draft Docs.",
         "When I ask for a change, write the complete updated resume and letter into the Docs again.",
         "When I paste \"These problems were found\", fix exactly those in the Docs and change nothing else.",
         "In the chat, say briefly what you wrote or changed; the Docs hold the result.",
@@ -267,7 +279,8 @@ def _rules() -> _Doc:
     return d
 
 
-RESUME_DRAFT_EXAMPLE = """Rules version: <the version at the top of this file>
+RESUME_DRAFT_EXAMPLE = """Rules version: <the Rules version at the top of this packet>
+Instructions version: <the version on the first line of your project instructions>
 Headline: Data engineer building Airflow and Spark pipelines for finance analytics
 
 ## <role key>
@@ -293,67 +306,56 @@ COVER_DRAFT_EXAMPLE = """<paragraph 1>
 Evidence: <project slug>, <other project slug>"""
 
 
-def rules_doc() -> str:
-    """The "Strelitzia rules" Google Doc (HTML)."""
-    return _rules().html()
-
-
 def rules_text() -> str:
+    """The rules as text (the job packet carries them under its "Rules" heading)."""
     return _rules().text()
 
 
-RULES_VERSION = hashlib.sha256(rules_doc().encode("utf-8")).hexdigest()[:8]
-
-
-def rules_markdown() -> str:
-    """The rules as the .md file for the Claude project's knowledge. The version line sits outside the hashed text."""
-    return f"Rules version: {RULES_VERSION}\n\n" + rules_text()
-
-
-def rules_file_name() -> str:
-    return f"Strelitzia rules {RULES_VERSION}.md"
+RULES_VERSION = hashlib.sha256(rules_text().encode("utf-8")).hexdigest()[:8]
 
 
 def rules_version_warning(used: str | None) -> str | None:
-    """A warning when Claude's reply names no rules version or an old one (an old copy in the project)."""
+    """A warning when the draft names no rules version or an old one (a stale packet or an old rules file)."""
     if used == RULES_VERSION:
         return None
+    refresh = ("click Open in Claude to refresh the packet, then ask Claude to reread it and rewrite the drafts")
     if not used:
-        return (f"Claude didn't say which rules version it used; download the current rules ({RULES_VERSION}) "
-                "into the project")
-    return f"Claude used rules version {used}; download the current rules ({RULES_VERSION}) into the project"
+        return f"Claude didn't say which rules version it used (current: {RULES_VERSION}); {refresh}"
+    return f"Claude used rules version {used}, not the current {RULES_VERSION}; {refresh}"
 
 
-def _library(library: ContentLibrary, base_resume_text: str = "") -> _Doc:
-    library.ensure_keys()
-    d = _Doc("Content Library")
-    d.p("Everything here is true and may be claimed. Cite projects by slug and roles by key; numbers must come "
-        "from the cited project's facts.")
-    for role in library.roles:
-        d.h(f"Role {role.key}: {role.title} ({role.dates})")
-        for proj in role.projects:
-            facts = [f"Project slug: {proj.slug}", f"Name: {proj.name} ({proj.dates})"]
-            facts += [f"{label}: {value}" for label, value in (
-                ("Context", proj.context), ("Scope/Scale", proj.scope_scale),
-                ("Tools & Actions", proj.tools_actions), ("Outcome/Metrics", proj.outcome_metrics),
-            ) if value]
-            if proj.angles:
-                facts.append("Angles: " + ", ".join(proj.angles))
-            d.ul(facts)
-    if base_resume_text.strip():
-        d.h("Base resume")
-        d.p("My current resume. Its roles, dates, education and skills are also true.")
-        d.pre(base_resume_text.strip())
-    return d
+# ── Project instructions (pasted into the "Strelitzia Resumes" Claude project) ──
+# Keep them short and stable: everything that changes with the app (the rules, the draft format) goes in the
+# packet. Changing this text changes INSTRUCTIONS_VERSION, and Check & format then asks the user to paste it again.
+
+PROJECT_NAME = "Strelitzia Resumes"
+PROJECT_INSTRUCTIONS = (
+    "You tailor my resume and cover letter for one job per chat. Each prompt names the job's Claude packet, a "
+    "Google Doc in the job's Google Drive folder: open it with the Google Docs connector before you write anything. "
+    "The Rules section of that packet is binding and always current; if anything else in this project disagrees "
+    "with it (an older rules file, say), follow the packet. Also open the Google Docs \"Content Library\" and "
+    "\"Base Resume\" in the Drive folder Strelitzia/Profile, and use only their facts and the packet's. Never claim "
+    "a qualification the packet marks unevidenced, and never invent numbers. Write only into the job's two draft "
+    "Docs named in the prompt; edit the Profile Docs only when I ask. When I ask for changes, keep everything else "
+    "the same."
+)
+INSTRUCTIONS_VERSION = hashlib.sha256(PROJECT_INSTRUCTIONS.encode("utf-8")).hexdigest()[:8]
 
 
-def library_doc(library: ContentLibrary, base_resume_text: str = "") -> str:
-    """The "Content Library" Google Doc (HTML), slugs visible."""
-    return _library(library, base_resume_text).html()
+def project_instructions() -> str:
+    """What the user pastes into the project's instructions: the version line, then the instructions."""
+    return f"Instructions version: {INSTRUCTIONS_VERSION}\n\n{PROJECT_INSTRUCTIONS}"
 
 
-def library_text(library: ContentLibrary, base_resume_text: str = "") -> str:
-    return _library(library, base_resume_text).text()
+def instructions_version_warning(used: str | None, current: str = INSTRUCTIONS_VERSION,
+                                 project: str = PROJECT_NAME, page: str = "Claude setup") -> str | None:
+    """A warning when Claude names no instructions version or an old one: the project's instructions are stale."""
+    if used == current:
+        return None
+    paste = f"paste the current instructions (version {current}) from the {page} page into the {project} project"
+    if not used:
+        return f"Claude didn't say which project instructions it has; {paste}"
+    return f"The {project} project has old instructions (version {used}); {paste}"
 
 
 # ── Job packet ────────────────────────────────────────────────────────────
@@ -399,7 +401,8 @@ def job_packet(job: dict, library: ContentLibrary, base_resume_text: str, curren
                *, fixed_roles: dict | None = None) -> Packet:
     """The per-job packet and the prompt to paste into the chat.
 
-    The packet is a Doc in the job's Drive folder, so the prompt is a short pointer to it and the draft Docs.
+    The packet is a Doc in the job's Drive folder, so the prompt is a short pointer to it and the draft Docs. It ends
+    with the full rules, so Claude always works from the app's current ones.
     """
     from strelitzia.scoring.tailor import _role_slots
 
@@ -413,7 +416,7 @@ def job_packet(job: dict, library: ContentLibrary, base_resume_text: str, curren
     d = _Doc(name)
     d.ul([f"Role: {job.get('title') or ''}", f"Company: {job_company(job)}",
           f"Location: {job.get('location') or 'N/A'}", f"Posting: {job.get('url') or ''}",
-          f"Rules version: {RULES_VERSION}"])
+          f"Rules version: {RULES_VERSION} (the Rules section at the end of this packet is binding)"])
     for kind, label in (("required", "Required qualifications"), ("preferred", "Preferred qualifications")):
         d.h(label)
         lines = [_evidence_line(e) for e in ev.items if e.target.kind == kind]
@@ -447,6 +450,7 @@ def job_packet(job: dict, library: ContentLibrary, base_resume_text: str, curren
         d.h("Current draft")
         d.p("The current draft is in the job's resume and cover letter draft Docs: start from it and keep what "
             "already works.")
+    d.include(_rules(), "Rules")
 
     from strelitzia.storage.drive_layout import draft_name
 
@@ -456,7 +460,7 @@ def job_packet(job: dict, library: ContentLibrary, base_resume_text: str, curren
     prompt = (f"Tailor my resume and cover letter for the job in '{short(name)}'. Write the resume into the "
               f"Google Doc '{short(draft_name(job, 'resume'))}' and the cover letter into "
               f"'{short(draft_name(job, 'cover'))}' (both in the job's folder) with the Google Docs connector. "
-              "Replace each Doc's whole text, in the format in the rules, and edit only those two Docs."
+              "Follow the packet's Rules section: replace each Doc's whole text and edit only those two Docs."
               + (" Start from the current draft in them." if current else ""))
     text = d.text()
     return Packet(name=name, html=d.html(), text=text, prompt=prompt, evidence=ev)
@@ -597,8 +601,10 @@ def check_result(data: dict, job: dict, inputs: Inputs) -> tuple[TailoredResume 
                                   max_words=COVER_MAX_WORDS,
                                   posting_text=job.get("full_description") or job.get("description") or "")
     warnings = _coverage_warnings(resume, ev)
-    if version_warning := rules_version_warning(data.get("rules_version")):
-        warnings.append(version_warning)
+    for version_warning in (rules_version_warning(data.get("rules_version")),
+                            instructions_version_warning(data.get("instructions_version"))):
+        if version_warning:
+            warnings.append(version_warning)
     return resume, list(dict.fromkeys(errors)), warnings
 
 
@@ -763,71 +769,7 @@ def current_result(job: dict) -> dict | None:
         return None
 
 
-# ── Drive Docs (Claude Project inputs and job packets) ─────────────────────
-
-PROJECT_INSTRUCTIONS = (
-    "You tailor my resume and cover letter for one job per chat. The Strelitzia rules file in this project's "
-    "knowledge is binding: follow every rule in it. At the start of each chat, open the Google Docs "
-    "\"Content Library\" and \"Base Resume\" in the Google Drive folder Strelitzia/Profile "
-    "with the Google Docs connector, and use only their facts and the job's Claude packet; never claim a "
-    "qualification the packet marks unevidenced, and never invent numbers. Edit those two Docs only when I ask. "
-    "Write the resume and cover letter into the job's two draft Docs (named in each prompt) in the rules' "
-    "format, and when I ask for changes, keep everything else the same."
-)
-
-# The panel rubric belongs in a separate "Strelitzia Panel" project (strelitzia.scoring.panel).
-STATIC_DOCS = {"rules": "Strelitzia rules", "panel_rubric": "Strelitzia panel rubric"}
-RESUME_DOCS = ("rules",)  # the ones the Strelitzia Resumes project holds (the library is a Profile Doc now)
-_STATE_KEY = "{}:claude_doc:{}"  # user id, kind
-
-
-def static_doc_html(kind: str, inputs: Inputs) -> str:
-    if kind == "panel_rubric":
-        from strelitzia.scoring.panel import rubric_doc
-
-        return rubric_doc()
-    return rules_doc()
-
-
-def published_static_docs(conn: Connection, user_id: str) -> dict[str, dict]:
-    """{kind: {"id", "url", "hash", "changed_at"}} for each static Doc the user has published so far."""
-    from strelitzia.database import get_state
-
-    out = {}
-    for kind in STATIC_DOCS:
-        raw = get_state(conn, _STATE_KEY.format(user_id, kind))
-        if raw:
-            out[kind] = json.loads(raw)
-    return out
-
-
-def publish_static_docs(client, conn: Connection, user_id: str, inputs: Inputs | None = None,
-                        force: bool = False) -> dict[str, str]:
-    """Write the rules and panel-rubric Docs into Strelitzia/_Claude/ when their content changed.
-
-    Returns {kind: doc URL}. `force` rewrites them even when the stored hash matches (e.g. a Doc was deleted).
-    """
-    from strelitzia.database import set_state
-    from strelitzia.storage.drive_layout import claude_folder_path
-
-    inputs = inputs or Inputs.for_user(conn, user_id)
-    known = published_static_docs(conn, user_id)
-    urls, folder_id = {}, None
-    for kind, name in STATIC_DOCS.items():
-        html = static_doc_html(kind, inputs)
-        digest = hashlib.sha256(html.encode("utf-8")).hexdigest()[:16]
-        prev = known.get(kind) or {}
-        if not force and prev.get("hash") == digest and prev.get("id"):
-            urls[kind] = prev.get("url", "")
-            continue
-        folder_id = folder_id or client.ensure_folder_path(claude_folder_path())
-        f = client.upsert_doc(folder_id, name, html, known_id=prev.get("id"))
-        state = {"id": f.id, "url": f.url, "hash": digest, "changed_at": datetime.now(UTC).isoformat()}
-        set_state(conn, _STATE_KEY.format(user_id, kind), json.dumps(state))
-        conn.commit()
-        urls[kind] = f.url
-    return urls
-
+# ── Drive Docs (job packets and drafts) ──────────────────────────────────
 
 def packet_for(job: dict, inputs: Inputs) -> Packet:
     """The job's packet from the loaded inputs: the current draft, and role facts from resume_fixed.yaml."""
@@ -861,12 +803,16 @@ def _after(a: str | None, b: str | None) -> bool:
 
 
 def draft_texts(job: dict, inputs: Inputs) -> dict[str, str]:
-    """{kind: text} to seed the job's draft Docs: the current draft, else a skeleton and a placeholder."""
+    """{kind: text} to seed the job's draft Docs: the current draft, else a skeleton and a placeholder.
+
+    The version lines are left empty, so the versions Check & format reads are the ones Claude wrote from the packet
+    and its project instructions, not ones the app put there.
+    """
     from strelitzia.scoring.draft_docs import cover_draft_text, resume_draft_text
 
     current = current_result(job)
-    return {"resume": resume_draft_text(current, inputs.library, RULES_VERSION),
-            "cover": cover_draft_text((current or {}).get("cover_letter"), RULES_VERSION)}
+    return {"resume": resume_draft_text(current, inputs.library, ""),
+            "cover": cover_draft_text((current or {}).get("cover_letter"), "")}
 
 
 def publish_drafts(client, conn: Connection, job: dict, inputs: Inputs | None = None) -> dict[str, str]:

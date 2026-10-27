@@ -26,7 +26,7 @@ export default function PanelPage({ onChange }: { onChange?: () => void }) {
   const [n, setN] = useState(5);
   const [mode, setMode] = useState<PanelMode>('latest_vs_previous');
   const [creating, setCreating] = useState(false);
-  const [copiedRubric, setCopiedRubric] = useState(false);
+  const [copiedInstructions, setCopiedInstructions] = useState(false);
   const runId = params.get('run') ?? overview?.runs[0]?.id ?? null;
 
   useEffect(() => {
@@ -76,11 +76,11 @@ export default function PanelPage({ onChange }: { onChange?: () => void }) {
     if (finished) void refreshOverview();
   }
 
-  async function copyRubric() {
+  async function copyInstructions() {
     if (!overview) return;
     try {
-      await api.copyText(overview.rubric_markdown);
-      setCopiedRubric(true);
+      await api.copyText(overview.project_instructions);
+      setCopiedInstructions(true);
     } catch (err) {
       setError(errText(err));
     }
@@ -112,14 +112,19 @@ export default function PanelPage({ onChange }: { onChange?: () => void }) {
             <strong>{overview.project_name}</strong> (separate from your resume project).
           </li>
           <li>
-            Add the rubric to its knowledge: download the file and upload it, or copy the text and paste it as text
-            content.{' '}
-            <a className="button" href={overview.rubric_url} download>Download rubric (.md)</a>
-            {' '}<button type="button" onClick={copyRubric}>{copiedRubric ? 'Copied rubric' : 'Copy rubric'}</button>
+            Paste these project instructions (Project → Instructions):
+            <p className="pre card">{overview.project_instructions}</p>
+            <button type="button" onClick={copyInstructions}>
+              {copiedInstructions ? 'Copied instructions' : 'Copy instructions'}
+            </button>
           </li>
           <li>
-            Project instructions:
-            <p className="pre card">{overview.project_instructions}</p>
+            There's nothing to upload: the rubric comes at the top of each packet you copy. If the project's knowledge
+            still has an old rubric file, delete it.
+            <p className="muted small">
+              Instructions version {overview.instructions_version} · rubric version {overview.rubric_version}. When the
+              instructions change, Import grades warns you to paste them again.
+            </p>
           </li>
         </ol>
       </details>
@@ -184,6 +189,7 @@ function ModelStep({ run, packet, onUpdated }: {
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const model = MODEL_LABELS[packet.model];
   const graded = run.graded[packet.model];
 
@@ -200,10 +206,12 @@ function ModelStep({ run, packet, onUpdated }: {
     setBusy(true);
     setErrors([]);
     setMessage(null);
+    setWarnings([]);
     try {
       const out = await api.importPanelGrades(run.id, packet.model, text);
       if (out.ok) {
         setMessage(`${out.graded} items graded.`);
+        setWarnings(out.warnings);
         setText('');
         onUpdated(out.run);
       } else {
@@ -239,6 +247,9 @@ function ModelStep({ run, packet, onUpdated }: {
         <button type="button" disabled={!text.trim() || busy} onClick={submit}>{busy ? 'Importing…' : 'Import grades'}</button>
       </div>
       {message && <p className="progress ok" role="status">{message}</p>}
+      {warnings.length > 0 && (
+        <ul className="muted small" aria-label="Warnings">{warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+      )}
       {errors.length > 0 && (
         <div className="check-errors" role="alert">
           <p><strong>Not imported.</strong></p>

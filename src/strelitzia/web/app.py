@@ -403,7 +403,10 @@ def check_drafts(key: str, request: Request):
 
 @api.get("/claude/setup")
 def claude_setup(request: Request) -> dict:
-    """What the Claude setup page shows: Drive status, the Profile Docs, the rules (version and .md), the instructions."""
+    """What the Claude setup page shows: Drive status, the Profile Docs, and the project instructions with their version.
+
+    The rules aren't here: they travel in each job's packet.
+    """
     user = current_user(request)
     _owner_content(user)
     conn = db_conn(request)
@@ -412,23 +415,11 @@ def claude_setup(request: Request) -> dict:
         "drive": state == "authorized", "drive_detail": detail, "drive_source": source,
         "connect_url": f"{auth.DRIVE_PREFIX}/connect" if auth.drive_connect_available() else None,
         "rules_version": workbench.RULES_VERSION,
-        "rules_markdown": workbench.rules_markdown(),
-        "rules_url": f"{PREFIX}/api/claude/rules.md",
         "profile_docs": _profile_docs_out(conn, user.id),
-        "project_name": "Strelitzia Resumes",
-        "project_instructions": workbench.PROJECT_INSTRUCTIONS,
+        "project_name": workbench.PROJECT_NAME,
+        "project_instructions": workbench.project_instructions(),
+        "instructions_version": workbench.INSTRUCTIONS_VERSION,
     }
-
-
-def _markdown_download(text: str, name: str) -> Response:
-    return Response(text, media_type="text/markdown; charset=utf-8",
-                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
-
-
-@api.get("/claude/rules.md")
-def get_rules_markdown() -> Response:
-    """The rules for the Strelitzia Resumes project's knowledge, with the version line first."""
-    return _markdown_download(workbench.rules_markdown(), workbench.rules_file_name())
 
 
 # --- Resume panel (strelitzia.scoring.panel) ---
@@ -438,25 +429,16 @@ def get_panel(request: Request) -> dict:
     """The Panel page: whether a panel is due, how many jobs can be compared, the runs, and the project setup."""
     conn = db_conn(request)
     user = current_user(request)
-    rubric = workbench.published_static_docs(conn, user.id).get("panel_rubric") or {}
     return {
         "due": panel.panel_due(conn, user.id),
         "needed": panel.DEFAULT_ITEMS,
         "comparable": {mode: panel.comparable_count(conn, user.id, mode) for mode in panel.MODES},
         "runs": panel.list_runs(conn, user.id),
         "project_name": panel.PROJECT_NAME,
-        "project_instructions": panel.PROJECT_INSTRUCTIONS,
-        "rubric": {"name": workbench.STATIC_DOCS["panel_rubric"], "url": rubric.get("url"),
-                   "text": panel.rubric_text()},
-        "rubric_markdown": panel.rubric_markdown(),
-        "rubric_url": f"{PREFIX}/api/panel/rubric.md",
+        "project_instructions": panel.project_instructions(),
+        "instructions_version": panel.INSTRUCTIONS_VERSION,
+        "rubric_version": panel.RUBRIC_VERSION,
     }
-
-
-@api.get("/panel/rubric.md")
-def get_rubric_markdown() -> Response:
-    """The panel rubric for the Strelitzia Panel project's knowledge."""
-    return _markdown_download(panel.rubric_markdown(), panel.RUBRIC_FILE_NAME)
 
 
 class PanelRunCreate(BaseModel):
@@ -534,8 +516,9 @@ def post_panel_grades(run_id: str, body: PanelGrade, request: Request):
         return {"graded": None, "run": _panel_run(conn, user.id, run_id)}
     outcome = panel.import_grades(conn, user.id, run_id, body.grader, body.text or "")
     if not outcome.ok:
-        return JSONResponse({"detail": outcome.errors[0], "errors": outcome.errors}, status_code=422)
-    return {"graded": outcome.graded, "run": _panel_run(conn, user.id, run_id)}
+        return JSONResponse({"detail": outcome.errors[0], "errors": outcome.errors, "warnings": outcome.warnings},
+                            status_code=422)
+    return {"graded": outcome.graded, "warnings": outcome.warnings, "run": _panel_run(conn, user.id, run_id)}
 
 
 def budget_stop(conn: Connection, user_id: str, estimated_usd: float = 0.0) -> None:

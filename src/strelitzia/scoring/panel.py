@@ -8,15 +8,23 @@ called "First" and "Second" in a packet. Every grade's winner is stored in packe
 
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from strelitzia.database import Connection, job_company
 from strelitzia.scoring.targets import targets
-from strelitzia.scoring.workbench import _Doc, _obj, extract_json, posting_of, schema_errors
+from strelitzia.scoring.workbench import (
+    _Doc,
+    _obj,
+    extract_json,
+    instructions_version_warning,
+    posting_of,
+    schema_errors,
+)
 
 MODES = ("latest_vs_previous", "rules_a_vs_b")
 DEFAULT_ITEMS = 5
@@ -203,13 +211,24 @@ def _json(text: str | None, default=None):
 
 # ── Rubric ────────────────────────────────────────────────────────────────
 
+# The instructions stay short and stable; the rubric (and its JSON format) travels in every packet prompt, so it is
+# always the app's current one. Changing this text changes INSTRUCTIONS_VERSION, and the grade import then asks
+# the user to paste it again.
 PROJECT_NAME = "Strelitzia Panel"
 PROJECT_INSTRUCTIONS = (
-    "You are a strict resume screener. Each chat brings a blind panel packet: several jobs, each with two versions "
-    "of a resume called First and Second. Grade them with the Strelitzia panel rubric file in this project's "
-    "knowledge, which is binding. Quote evidence verbatim from the resume, never infer experience that isn't "
-    "written down, and end every reply with exactly one ```json block in the rubric's format."
+    "You are a strict resume screener. Each prompt starts with the Strelitzia panel rubric, then a blind panel "
+    "packet: several jobs, each with two versions of a resume called First and Second. The rubric in the prompt is "
+    "binding and always current; if anything else in this project disagrees with it (an older rubric file, say), "
+    "follow the prompt. Quote evidence verbatim from the resume, never infer experience that isn't written down, "
+    "and end every reply with exactly one ```json block in the rubric's format."
 )
+INSTRUCTIONS_VERSION = hashlib.sha256(PROJECT_INSTRUCTIONS.encode("utf-8")).hexdigest()[:8]
+
+
+def project_instructions() -> str:
+    """What the user pastes into the Panel project's instructions: the version line, then the instructions."""
+    return f"Instructions version: {INSTRUCTIONS_VERSION}\n\n{PROJECT_INSTRUCTIONS}"
+
 
 _QUAL = _obj({"text": {"type": "string"}, "kind": {"type": "string", "enum": ["required", "preferred"]},
               "status": {"type": "string", "enum": ["met", "partial", "not_met"]},
@@ -220,13 +239,17 @@ _VERSION = _obj({"qualifications": {"type": "array", "items": _QUAL},
                  "red_flags": {"type": "array", "items": {"type": "string"}}})
 REPLY_SCHEMA = _obj({
     "panel": {"type": "integer", "enum": [PANEL_VERSION]},
+    "rubric_version": {"type": "string"},
+    "instructions_version": {"type": "string"},
     "items": {"type": "array", "items": _obj({"item": {"type": "integer"}, "first": _VERSION, "second": _VERSION,
                                               "winner": {"type": "string", "enum": list(WINNERS)},
                                               "why": {"type": "string"}})},
-})
+}, required=["panel", "items"])
 
 EXAMPLE_REPLY = {
     "panel": PANEL_VERSION,
+    "rubric_version": "<the Rubric version at the top of this prompt>",
+    "instructions_version": "<the version on the first line of your project instructions>",
     "items": [{
         "item": 1,
         "first": {
@@ -268,26 +291,29 @@ def _rubric() -> _Doc:
     d.h("Output")
     d.p("Write a short comment per item if you like, then end your reply with exactly one ```json block in this "
         "format, with one entry per item in the packet, in order. Keep the qualification texts as the packet "
-        "lists them. Use only the keys shown.")
+        "lists them. Use only the keys shown. Set rubric_version to the Rubric version at the top of this prompt and "
+        "instructions_version to the version on the first line of your project instructions (empty if they have "
+        "none); never copy them from anywhere else.")
     d.pre(json.dumps(EXAMPLE_REPLY, indent=2))
     return d
 
 
-def rubric_doc() -> str:
-    """The rubric as HTML (the Google Doc in the Strelitzia Panel project)."""
-    return _rubric().html()
-
-
 def rubric_text() -> str:
+    """The rubric as text (each packet prompt starts with it)."""
     return _rubric().text()
 
 
-RUBRIC_FILE_NAME = "Strelitzia panel rubric.md"
+RUBRIC_VERSION = hashlib.sha256(rubric_text().encode("utf-8")).hexdigest()[:8]
 
 
-def rubric_markdown() -> str:
-    """The rubric as the .md file for the Strelitzia Panel project's knowledge."""
-    return rubric_text()
+def rubric_version_warning(used: str | None) -> str | None:
+    """A warning when the reply names no rubric version or an old one (a packet copied before an update)."""
+    if used == RUBRIC_VERSION:
+        return None
+    regrade = "copy this model's packet again and regrade in a new chat if the rubric changed"
+    if not used:
+        return f"Claude didn't say which rubric version it used (current: {RUBRIC_VERSION}); {regrade}"
+    return f"Claude used rubric version {used}, not the current {RUBRIC_VERSION}; {regrade}"
 
 
 # ── Packets ───────────────────────────────────────────────────────────────
@@ -331,9 +357,10 @@ def panel_packet(conn: Connection, run: dict, swapped: bool = False, items: list
 
 
 def _prompt(packet_text: str) -> str:
-    return ("Grade this blind resume panel with the \"Strelitzia panel rubric\" document in this project. "
-            "Grade each version on its own first, then pick a winner. End your reply with the JSON block.\n\n"
-            + packet_text)
+    """The text to paste: the current rubric (with its version), then the stored packet."""
+    return ("Grade this blind resume panel with the Strelitzia panel rubric below, which is binding. Grade each "
+            "version on its own first, then pick a winner. End your reply with the JSON block.\n\n"
+            f"Rubric version: {RUBRIC_VERSION}\n\n{rubric_text()}\n{packet_text}")
 
 
 def run_packets(run: dict) -> list[dict]:
@@ -352,9 +379,10 @@ class ImportOutcome:
     ok: bool
     errors: list[str]
     graded: int = 0
+    warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
-        return {"ok": self.ok, "errors": self.errors, "graded": self.graded}
+        return {"ok": self.ok, "errors": self.errors, "graded": self.graded, "warnings": self.warnings}
 
 
 def _to_packet1(winner: str, swapped: bool) -> str:
@@ -400,13 +428,14 @@ def import_grades(conn: Connection, user_id: str, run_id: str, grader: str, text
     if numbers != expected:
         return ImportOutcome(False, [f"The reply grades items {numbers}, but this panel has items {expected}."])
     swapped = GRADER_PACKET[grader] == 2
+    versions = {"rubric": data.get("rubric_version"), "instructions": data.get("instructions_version")}
     by_no = {i["item_no"]: i for i in items}
     now = datetime.now(UTC).isoformat()
     conn.execute("DELETE FROM panel_grades WHERE run_id = ? AND grader = ?", (run_id, grader))
     for g in graded:
         item = by_no[g["item"]]
         first_side, second_side = _order(item, swapped)
-        detail = {first_side: g["first"], second_side: g["second"], "why": g.get("why", "")}
+        detail = {first_side: g["first"], second_side: g["second"], "why": g.get("why", ""), "versions": versions}
         conn.execute(
             "INSERT INTO panel_grades (run_id, item_no, grader, winner, detail_json, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?)",
@@ -414,7 +443,10 @@ def import_grades(conn: Connection, user_id: str, run_id: str, grader: str, text
         )
     _update_status(conn, user_id, run_id)
     conn.commit()
-    return ImportOutcome(True, [], graded=len(graded))
+    warnings = [w for w in (rubric_version_warning(versions["rubric"]),
+                            instructions_version_warning(versions["instructions"], INSTRUCTIONS_VERSION,
+                                                         PROJECT_NAME, "Panel")) if w]
+    return ImportOutcome(True, [], graded=len(graded), warnings=warnings)
 
 
 class PicksLocked(Exception):

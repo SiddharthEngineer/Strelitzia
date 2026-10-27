@@ -1,6 +1,7 @@
 """Where a job's files go in Google Drive: Strelitzia/<Company>/<Role>/<YYYY-MM-DD>/.
 
-The Claude Project's fixed Docs (rules, content library) go in Strelitzia/_Claude/.
+The Profile Docs (content library, base resume) go in Strelitzia/Profile/. The rules and the panel rubric aren't
+Docs: they travel in each job packet and panel prompt.
 
 Pure functions with no Google imports, so the layout is easy to test and stable across machines.
 """
@@ -73,13 +74,6 @@ def job_date(job: dict, kind: str) -> str:
 
 def folder_path(job: dict, kind: str) -> list[str]:
     return [root_folder(), clean_name(job_company(job)), clean_name(job.get("title")), job_date(job, kind)]
-
-
-CLAUDE_FOLDER = "_Claude"
-
-
-def claude_folder_path() -> list[str]:
-    return [root_folder(), CLAUDE_FOLDER]
 
 
 PROFILE_FOLDER = "Profile"
