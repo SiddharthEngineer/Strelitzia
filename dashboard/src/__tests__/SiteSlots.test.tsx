@@ -122,15 +122,9 @@ describe('the narrow nav', () => {
 });
 
 describe("the nav's Users link", () => {
-  it("points a site admin at engineerfamily's Users page", async () => {
-    const usersUrl = 'https://preprod.example.net/users/';
-    vi.mocked(api.getMe).mockResolvedValue({ ...OWNER, mode: 'proxy', site_admin: true, users_url: usersUrl });
-    renderApp();
-    expect(await screen.findByRole('link', { name: 'Users' })).toHaveAttribute('href', usersUrl);
-  });
-
-  it('is absent for everyone else', async () => {
-    vi.mocked(api.getMe).mockResolvedValue({ ...OWNER, mode: 'proxy', site_admin: false, users_url: '/users/' });
+  // The site header's account menu links to engineerfamily's Users page, so the nav doesn't repeat it.
+  it('is absent even for a site admin', async () => {
+    vi.mocked(api.getMe).mockResolvedValue({ ...OWNER, mode: 'proxy', site_admin: true, users_url: '/users/' });
     renderApp();
     await screen.findByRole('link', { name: 'Jobs' });
     expect(screen.queryByRole('link', { name: 'Users' })).toBeNull();
