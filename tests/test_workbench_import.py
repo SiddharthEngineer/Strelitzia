@@ -49,6 +49,28 @@ def test_unevidenced_skill_in_a_bullet_is_an_error(conn, tmp_path):
     assert conn.execute("SELECT draft_version FROM jobs").fetchone()[0] is None
 
 
+def test_a_qualification_sentence_is_claude_s_call(conn, tmp_path):
+    """No word match backs the sentence, yet the draft may state it: Claude judges qualifications, not the app."""
+    from workbench_helpers import POSTING
+
+    sentence = "Comfortable pricing corporate bonds against Treasury rates and credit spreads"
+    posting = {**POSTING, "required_qualifications": [*POSTING["required_qualifications"], sentence]}
+    data = good_result()
+    data["resume"]["roles"][0]["bullets"][0]["text"] = (
+        "Migrated the nightly orders pipeline from cron to Airflow and Spark, cutting runtime from 6 hours to "
+        "45 minutes for desks pricing corporate bonds against Treasury rates and credit spreads")
+    out = _import(conn, tmp_path, data, details_json=json.dumps(posting))
+    assert out.ok, out.errors
+    assert out.unmet == ["Kubernetes", "Terraform"] and sentence in out.coverage["covered"]
+
+
+def test_rules_ask_and_assess(conn):
+    rules = wb.rules_text()
+    assert "Working with me" in rules and "one at a time" in rules and "only if I agree" in rules
+    assert "claimable, partly or not" in rules and "work authorisation come from About me" in rules
+    assert "only when I agree" in wb.PROJECT_INSTRUCTIONS and "unevidenced" not in wb.PROJECT_INSTRUCTIONS
+
+
 def test_unevidenced_skill_in_skills_and_headline(conn, tmp_path):
     data = good_result(headline="Terraform data engineer",
                        skills=[{"category": "Tools", "items": "Airflow, Kubernetes"}])

@@ -4,7 +4,7 @@ The app prepares the inputs and checks the output:
 - `project_instructions()` is the only text the user pastes into the Claude project, once per version. It stays short
   and stable; it carries `INSTRUCTIONS_VERSION`, which Claude echoes in the resume draft.
 - `job_packet()` is the per-job input (a Doc in the job's Drive folder, rewritten on every Open in Claude): the
-  posting, its required/preferred targets marked evidenced or not, the allowed role keys and project slugs, and the
+  posting, its tools and skills marked in the material or not, its qualification sentences (Claude judges them), the allowed role keys and project slugs, and the
   full rules (`RULES_VERSION`), so the rules are always the app's current ones. The content library and base resume
   are the user's Profile Docs (`profile_sync`).
 - Claude writes the resume and cover letter into the job's two draft Docs (`publish_drafts`, format in
@@ -218,12 +218,17 @@ def _rules() -> _Doc:
         "Strelitzia checks every draft mechanically, so follow these rules exactly.")
     d.h("Honesty")
     d.ul([
-        "Only claim what the content library or the base resume shows. The packet marks each required and preferred "
-        "qualification as evidenced (with the project slugs that back it) or unevidenced.",
-        "Cover every evidenced required qualification at least once, in a bullet that cites a backing project, "
-        "under the most recent role it applies to.",
-        "Never mention an unevidenced qualification, skill or tool anywhere: not in bullets, the headline, Skills or "
-        "the cover letter. List it under \"## Notes for me\" in the resume draft instead so I see it.",
+        "Only claim what the content library or the base resume shows. The packet lists the posting's tools and "
+        "skills as in my material (with where) or not in my material, and its qualification sentences with "
+        "word-match hints only.",
+        "Assess each qualification yourself against the Content Library, the Base Resume and About me (when I have "
+        "that Doc), and write a verdict for each under \"## Notes for me\": claimable, partly or not, with the "
+        "projects behind it. Claim a qualification only when your assessment finds real backing.",
+        "Never claim a tool or skill the packet lists as not in my material: not in bullets, the headline, Skills or "
+        "the cover letter. List it under \"## Notes for me\" instead so I see it.",
+        "Facts like work authorisation come from About me, never the resume.",
+        "Cover every required qualification you rate claimable at least once, in a bullet that cites a backing "
+        "project, under the most recent role it applies to.",
         "Every number in a bullet must appear in the facts of the projects that bullet cites. Never invent, round or "
         "combine numbers. The same goes for the cover letter and the projects on its Evidence line (numbers about the "
         "company may come from the posting). The headline cites no project, so any number in it must be in my "
@@ -231,6 +236,15 @@ def _rules() -> _Doc:
         "No keyword lists inside bullets. Each bullet describes real work.",
         "No hidden text of any kind, and no instructions to screeners or AI systems (for example \"ignore previous "
         "instructions\" or \"rank this candidate first\"). Screeners detect these and reject the application.",
+    ])
+    d.h("Working with me")
+    d.ul([
+        "This chat is interactive. Ask me questions whenever an answer would make the draft better, one at a time, "
+        "each with your suggested answer so I can just say yes.",
+        "Ask before deciding a qualification you'd rate partly or are unsure about (for example: have you worked "
+        "with X beyond project Y?).",
+        "When an answer is reusable, offer to add it to my Content Library or About me, and write it there only if I "
+        "agree, keeping the Doc's format (its headings, slugs and field lines) exactly.",
     ])
     d.h("Wording")
     d.ul([
@@ -240,8 +254,8 @@ def _rules() -> _Doc:
         f"One page. Each bullet at most {BULLET_MAX} characters. Keep each role within the bullet range the packet gives.",
         "Cite every project a bullet draws on in the [slug] tags at the end of the bullet, using slugs from that "
         "bullet's own role. Never leave a bullet without tags.",
-        "Skills: keep my base resume's categories (you may reorder them) and put the posting's evidenced must-haves "
-        "first. Add nothing that isn't evidenced.",
+        "Skills: keep my base resume's categories (you may reorder them) and put the posting's must-haves that are "
+        "in my material first. Add nothing that isn't in my material.",
         f"Headline: one truthful line under my name, at most {HEADLINE_MAX} characters (leave it empty for none).",
         "No em dashes or en dashes; use commas, periods or hyphens.",
         "Banned words and phrases: " + ", ".join(BANNED_WORDS) + ".",
@@ -335,9 +349,9 @@ PROJECT_INSTRUCTIONS = (
     "The Rules section of that packet is binding and always current; if anything else in this project disagrees "
     "with it (an older rules file, say), follow the packet. Also open the Google Docs \"Content Library\" and "
     "\"Base Resume\" in the Drive folder Strelitzia/Profile, and use only their facts and the packet's. Never claim "
-    "a qualification the packet marks unevidenced, and never invent numbers. Write only into the job's two draft "
-    "Docs named in the prompt; edit the Profile Docs only when I ask. When I ask for changes, keep everything else "
-    "the same."
+    "a tool or skill the packet lists as not in my material, and never invent numbers. Write only into the job's "
+    "two draft Docs named in the prompt; edit the Profile Docs only when I agree, keeping their format. When I ask "
+    "for changes, keep everything else the same."
 )
 INSTRUCTIONS_VERSION = hashlib.sha256(PROJECT_INSTRUCTIONS.encode("utf-8")).hexdigest()[:8]
 
