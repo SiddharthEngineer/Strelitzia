@@ -186,9 +186,9 @@ def _parse_project(lines: list[str], role_header: str) -> Project | None:
                 outcome_metrics = value
             elif normalized == "angles":
                 angles = _parse_angle_tags(value)
-            elif normalized == "responsibility":
+            elif normalized in ("responsibility", "responsibilities"):
                 responsibility = value
-            elif normalized == "detail":
+            elif normalized in ("detail", "details"):
                 detail = value
 
     for line in lines[1:]:

@@ -38,3 +38,21 @@ def test_task_splitting_across_bullets_of_one_project_warns():
 
 def test_no_base_skills_only_checks_the_rest():
     assert validate_bullet_shape(_resume((BEFORE_1, ["export"])), {}) == []
+
+
+def test_short_bullets_without_tools_are_fine():
+    assert validate_bullet_shape(_resume(("Led a team of 4 engineers on payments", ["x"])), SKILLS) == []
+
+
+def test_tool_matching_respects_case_symbols_overlap_and_acronyms():
+    skills = {"Languages": "Go, R, C, Spark SQL, Spark, SQL", "ML": "Machine Learning (ML), NLP"}
+    plain = ("Ran the go-live of the NLP and ML search in Spark for the R&D teams' C++ service, so every region "
+             "switched over in one weekend without downtime")  # 3 tools; go, R, C and C++ aren't tools here
+    assert validate_bullet_shape(_resume((plain, ["x"])), skills) == []
+    overlap = ("Rebuilt the revenue reporting layer in Spark SQL, giving finance one source of truth across 12 "
+               "regional teams every morning")
+    assert validate_bullet_shape(_resume((overlap, ["x"])), skills) == []
+    many = ("Owned the support-ticket triage model for 40 agents using machine learning and NLP in Go and Spark SQL, "
+            "cutting first response time")
+    assert any("names 4 tools" in w and "Machine Learning (ML)" in w
+               for w in validate_bullet_shape(_resume((many, ["x"])), skills))
