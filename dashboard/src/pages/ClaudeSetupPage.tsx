@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import * as api from '../api';
 import Flower from '../components/Flower';
 import ProfileDocLinks from '../components/ProfileDocLinks';
-import type { ClaudeSetup } from '../types';
+import { relativeTime } from '../labels';
+import type { ClaudeSetup, ProfileDocs } from '../types';
 
 // The ?drive= outcome the Drive connect callback (web/auth.py) redirects back with.
 const DRIVE_OUTCOMES: Record<string, { text: string; error: boolean }> = {
@@ -12,6 +13,17 @@ const DRIVE_OUTCOMES: Record<string, { text: string; error: boolean }> = {
   error: { text: "Couldn't connect Google Drive. Try again.", error: true },
   unavailable: { text: "This server can't connect Google Drive yet.", error: true },
 };
+
+/** "A", "A and B", "A, B and C". */
+function joinNames(names: string[]): string {
+  return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/** When the app last pulled the Docs (the older of the two): edits made in a Doc since then aren't in its copy. */
+function lastSynced(docs: ProfileDocs | null): string | null {
+  const times = [docs?.library?.synced_at, docs?.resume?.synced_at].filter((t): t is string => Boolean(t));
+  return times.length ? times.reduce((a, b) => (new Date(a) <= new Date(b) ? a : b)) : null;
+}
 
 /** One-time setup: Drive, the Profile Docs, and a Claude Project with the instructions (the rules come in each packet). */
 export default function ClaudeSetupPage() {
@@ -114,15 +126,26 @@ export default function ClaudeSetupPage() {
           </p>
           {setup.profile_docs && <ProfileDocLinks docs={setup.profile_docs} label="Profile Docs" />}
           {existing ? (
-            <div className="notice" role="alertdialog" aria-label="Overwrite the Profile Docs?">
-              <p>This will overwrite: {existing.join(', ')}. Continue?</p>
-              <button type="button" className="primary" disabled={busy} onClick={() => setUpDocs(true)}>Overwrite</button>{' '}
+            // setup_profile_docs rewrites the Docs from the app's last-synced copy, so newer edits in the Docs are lost.
+            <div className="notice warning" role="alertdialog" aria-label="Replace the Profile Docs?">
+              <p>
+                <strong>This replaces the text of {joinNames(existing)}.</strong> They'll be rewritten from the app's
+                last-synced copy (the example templates where that copy is empty). Edits you made in the Docs since the
+                last sync ({relativeTime(lastSynced(setup.profile_docs))}) will be lost. Use Sync now on the Profile
+                page first to keep them.
+              </p>
+              <button type="button" className="primary" disabled={busy} onClick={() => setUpDocs(true)}>Replace the Docs</button>{' '}
               <button type="button" disabled={busy} onClick={() => setExisting(null)}>Cancel</button>
             </div>
           ) : (
-            <button type="button" disabled={busy || !setup.drive} onClick={() => setUpDocs(false)}>
-              {busy ? 'Setting up…' : 'Set up Profile Docs'}
-            </button>
+            <>
+              <button type="button" disabled={busy || !setup.drive} onClick={() => setUpDocs(false)}>
+                {busy ? 'Setting up…' : 'Set up Profile Docs'}
+              </button>
+              {setup.profile_docs && (
+                <p className="muted small">Your Profile Docs already exist: setting them up again replaces their text.</p>
+              )}
+            </>
           )}
         </li>
         <li>
