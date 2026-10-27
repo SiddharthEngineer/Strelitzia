@@ -83,7 +83,14 @@ describe('ClaudeSetupPage', () => {
     renderPage();
     await user.click(await screen.findByRole('button', { name: 'Set up Profile Docs' }));
     const dialog = await screen.findByRole('alertdialog');
-    expect(dialog).toHaveTextContent('This will overwrite: Content Library, Base Resume. Continue?');
+    expect(dialog).toHaveClass('notice', 'warning');
+    expect(dialog).toHaveTextContent(
+      "This replaces the text of Content Library and Base Resume. They'll be rewritten from the app's last-synced copy "
+      + '(the example templates where that copy is empty).',
+    );
+    expect(dialog).toHaveTextContent(
+      /Edits you made in the Docs since the last sync \((\d+ \w+ ago|[^)]*\d{4}[^)]*)\) will be lost\. Use Sync now on the Profile page first to keep them\./,
+    );
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(api.setupProfileDocs).toHaveBeenCalledTimes(1);
@@ -93,10 +100,21 @@ describe('ClaudeSetupPage', () => {
     });
     vi.mocked(api.setupProfileDocs).mockResolvedValueOnce({ ok: true, profile: profile(DOCS) });
     await user.click(screen.getByRole('button', { name: 'Set up Profile Docs' }));
-    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Overwrite' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Replace the Docs' }));
     expect(api.setupProfileDocs).toHaveBeenLastCalledWith(true);
     expect(await screen.findByRole('button', { name: 'Set up Profile Docs' })).toBeInTheDocument();
     expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('hints that setting up again replaces existing Docs, only when they exist', async () => {
+    vi.mocked(api.getClaudeSetup).mockResolvedValue(setup({ profile_docs: DOCS }));
+    const { unmount } = renderPage();
+    expect(await screen.findByText(/already exist: setting them up again replaces their text/)).toHaveClass('muted');
+    unmount();
+    vi.mocked(api.getClaudeSetup).mockResolvedValue(setup());
+    renderPage();
+    await screen.findByRole('button', { name: 'Set up Profile Docs' });
+    expect(screen.queryByText(/already exist/)).toBeNull();
   });
 
   it('needs Drive before the Profile Docs', async () => {

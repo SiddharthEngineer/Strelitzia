@@ -61,7 +61,7 @@ example templates where that copy is empty). Edits you made in the Docs since th
 lost. Use Sync now on the Profile page first to keep them." The button reads "Replace the Docs". The button that opens
 the prompt also gets a one-line muted hint when Docs already exist.
 **Validate:** `npm test -- ClaudeSetupPage` → the warning text and class render when setup returns `existing`.
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (this commit)
 
 ## Validation
 - `scripts/validate.sh --full` passes.

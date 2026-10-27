@@ -65,6 +65,11 @@ h2 { font-size: 1.05rem; margin: 0 0 8px; }
 .app { min-height: 100vh; display: flex; flex-direction: column; }
 .content { width: 100%; max-width: 1400px; margin: 0 auto; padding: 16px; flex: 1; }
 .notice { color: var(--muted); padding: 24px 0; }
+.notice.warning {
+  color: var(--badge-orange-fg); background: var(--badge-orange-bg); border: 1px solid var(--accent);
+  border-left-width: 4px; border-radius: var(--radius); padding: 12px 16px; margin: 8px 0;
+}
+.notice.warning p { margin: 0 0 10px; }
 .error { color: var(--danger); }
 
 .muted { color: var(--muted); }
