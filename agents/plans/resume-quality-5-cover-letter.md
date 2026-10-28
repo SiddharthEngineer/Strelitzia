@@ -45,7 +45,7 @@ The cover rules' "Working with me" section (interactive, Claude may ask freely):
   to About me."
 **Validate:** `pytest tests/test_workbench_packet.py -q` → the resume packet has no cover rules; the cover packet has
 the notes, the About me pointer and the story-choice question.
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (this commit)
 
 ### Task 2: Letter checks
 **Runs:** unattended

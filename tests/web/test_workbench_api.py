@@ -346,7 +346,7 @@ def test_setup_shows_the_profile_docs(client, conn, the_job, drive, profile_docs
 def test_packet_creates_the_draft_docs(client, conn, the_job, drive):
     body = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet").json()
     assert body["resume_draft_url"] and body["cover_draft_url"]
-    assert "Resume draft" in body["prompt"] and "Cover letter draft" in body["prompt"]
+    assert "Resume draft" in body["prompt"] and "Cover letter draft" not in body["prompt"]
     d = client.get(f"/strelitzia/dashboard/api/jobs/{the_job}").json()
     assert d["resume_draft_url"] == body["resume_draft_url"] and d["cover_draft_url"] == body["cover_draft_url"]
     assert d["links"]["resume_draft"] == body["resume_draft_url"]
