@@ -264,7 +264,8 @@ def test_first_open_creates_seeded_drafts(drive, client, conn):
     assert not cover["content"].startswith(b"Rules version")
     row = _row(conn)
     assert row["resume_draft_doc_id"] == resume["id"] and row["cover_draft_doc_url"] == urls["cover"]
-    assert row["drafts_written_at"] == max(resume["modifiedTime"], cover["modifiedTime"])
+    assert row["drafts_written_at"] == resume["modifiedTime"]
+    assert row["cover_draft_written_at"] == cover["modifiedTime"]
 
 
 def test_drafts_seed_from_the_current_draft(drive, client, conn, tmp_path, monkeypatch):
@@ -340,3 +341,22 @@ def test_rules_make_the_summary_optional_with_a_reason():
     assert "Summary: leave it empty unless my current title doesn't match the role" in rules
     assert "no tool list" in rules and "Say why in Notes for me" in rules
     assert "Summary: \n" in rules
+
+
+def test_rewriting_the_resume_doc_keeps_an_unchecked_letter(drive, client, conn, tmp_path, monkeypatch):
+    """The two Docs are written in separate chats: reseeding the resume Doc doesn't make the letter look unedited."""
+    from strelitzia.scoring import pdf as pdf_mod
+    from workbench_helpers import fake_render_pdf
+
+    monkeypatch.setattr(pdf_mod, "render_pdf", fake_render_pdf)
+    job = add_job_row(conn)
+    assert wb.import_data(conn, job, good_result(), inputs=inputs(), out_dir=tmp_path / "out").ok
+    wb.publish_drafts(client, conn, _row(conn), inputs(), kinds=("cover",))
+    cover_id = _row(conn)["cover_draft_doc_id"]
+    drive.edit(cover_id, b"Claude's letter, not checked yet")
+    # A newer resume is accepted and its Doc reseeded, then another is accepted before the letter is opened again.
+    assert wb.import_data(conn, _row(conn), good_result(), inputs=inputs(), out_dir=tmp_path / "out").ok
+    wb.publish_drafts(client, conn, _row(conn), inputs(), kinds=("resume",))
+    assert wb.import_data(conn, _row(conn), good_result(), inputs=inputs(), out_dir=tmp_path / "out").ok
+    wb.publish_drafts(client, conn, _row(conn), inputs(), kinds=("cover",))
+    assert drive.store[cover_id]["content"] == b"Claude's letter, not checked yet"
