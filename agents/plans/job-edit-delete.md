@@ -25,7 +25,7 @@ job they no longer want, with everything that belongs to it.
 change; empty title/company → 422). Editing title or company sets a `score_stale` flag in the detail so the page offers
 Rescore. The URL is not editable (decision 1).
 **Validate:** `pytest tests/test_web_jobs.py -q -k patch` → each field saves; another user's job → 404.
-**Status:** ❌
+**Status:** ✅ 2026-10-28 (0d5939f)
 
 ### Task 2: Delete API
 **Runs:** unattended

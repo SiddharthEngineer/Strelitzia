@@ -33,8 +33,8 @@ from starlette.middleware.sessions import SessionMiddleware
 from strelitzia import __version__, intake, tracking, users, workspace
 from strelitzia import profile as profile_store
 from strelitzia.config import env
-from strelitzia.database import (Connection, backend_name, backfill_job_keys, get_connection, get_state, init_db,
-                                 job_company, set_state)
+from strelitzia.database import (Connection, backend_name, backfill_job_keys, delete_job_rows, get_connection,
+                                 get_state, init_db, job_company, set_state)
 from strelitzia.llm import LLMStopRun, check_budget, month_spend, user_month_spend
 from strelitzia.scoring import panel
 from strelitzia.scoring import preferences as prefs_mod
@@ -281,6 +281,20 @@ def patch_job(key: str, body: JobPatch, request: Request) -> dict:
                      (*updates.values(), user.id, job["url"]))
         conn.commit()
     return job_detail(conn, job_by_key(conn, user.id, key))
+
+
+@api.delete("/jobs/{key}")
+def delete_job(key: str, request: Request) -> dict:
+    """Delete the job with its status history, tasks, contact links, interviews and drafts. No undo. Its Drive folder
+    is left alone (the response links it, if there is one)."""
+    conn = db_conn(request)
+    user = current_user(request)
+    job = job_by_key(conn, user.id, key)
+    if not delete_job_rows(conn, user.id, job["url"]):
+        raise HTTPException(status_code=404, detail="Job not found")
+    folder = job.get("drive_folder_url")
+    return {"ok": True, "drive_folder": folder,
+            "message": "Deleted. Its files in Google Drive are still there." if folder else "Deleted."}
 
 
 @api.get("/jobs/{key}/files/{kind}")
