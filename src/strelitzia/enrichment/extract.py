@@ -17,7 +17,7 @@ import time
 from datetime import UTC, datetime
 from typing import Literal
 
-from strelitzia.database import PENDING_EXTRACT_WHERE, get_connection, get_jobs_by_stage
+from strelitzia.database import PENDING_EXTRACT_WHERE, get_connection, get_jobs_by_stage, keep_edited
 from strelitzia.enrichment.posting_model import EXTRACT_VERSION, JobPosting, posting_schema
 from strelitzia.enrichment.posting_prompt import build_extract_prompt, format_posting, job_id
 from strelitzia.llm import LLMStopRun, acting_for, check_budget, estimate_cost, get_client
@@ -69,10 +69,13 @@ def extract_one(job: dict, today: str | None = None) -> JobPosting:
 
 def _save_posting(conn, user_id: str, url: str, posting: JobPosting) -> None:
     loc = posting.locations[0] if posting.locations else None
+    # What the user corrected on the job page stays (web/app.py patch_job).
     conn.execute(
-        "UPDATE jobs SET details_json = ?, role_category = ?, seniority = ?, employment_type = ?, work_mode = ?, "
-        "location_city = ?, location_state = ?, location_country = ?, salary_min = ?, salary_max = ?, "
-        "salary_currency = ?, salary_period = ?, posted_date = ?, deadline = ?, "
+        "UPDATE jobs SET details_json = ?, role_category = ?, seniority = ?, employment_type = ?, "
+        f"{keep_edited('work_mode')}, {keep_edited('location', 'location_city')}, "
+        f"{keep_edited('location', 'location_state')}, {keep_edited('location', 'location_country')}, "
+        "salary_min = ?, salary_max = ?, salary_currency = ?, salary_period = ?, posted_date = ?, "
+        f"{keep_edited('deadline')}, "
         "company = COALESCE(company, ?), extracted_at = ?, extract_version = ?, extract_error = NULL, "
         "category_source = 'llm' WHERE user_id = ? AND url = ?",
         (

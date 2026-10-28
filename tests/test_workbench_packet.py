@@ -360,3 +360,22 @@ def test_rewriting_the_resume_doc_keeps_an_unchecked_letter(drive, client, conn,
     assert wb.import_data(conn, _row(conn), good_result(), inputs=inputs(), out_dir=tmp_path / "out").ok
     wb.publish_drafts(client, conn, _row(conn), inputs(), kinds=("cover",))
     assert drive.store[cover_id]["content"] == b"Claude's letter, not checked yet"
+
+
+def test_after_a_title_edit_the_drafts_are_renamed_and_moved_unedited(drive, client, conn):
+    job = add_job_row(conn)
+    wb.publish_drafts(client, conn, job, inputs())
+    ids = {k: _row(conn)[f"{k}_draft_doc_id"] for k in ("resume", "cover")}
+    conn.execute("UPDATE jobs SET title = 'Staff Data Engineer'")
+    conn.commit()
+    wb.publish_drafts(client, conn, _row(conn), inputs())
+    docs = _draft_docs(drive)
+    assert set(docs) == {"Initech - Staff Data Engineer - Resume draft",
+                         "Initech - Staff Data Engineer - Cover letter draft"}
+    assert {f["id"] for f in docs.values()} == set(ids.values())  # the same Docs, nothing new
+    resume = drive.store[ids["resume"]]
+    assert drive.path_of(resume["id"])[:3] == ["Strelitzia", "Initech", "Staff Data Engineer"]
+    # The move isn't an edit: the app's write time follows it, so a newer draft can still reseed the Doc.
+    row = _row(conn)
+    assert row["drafts_written_at"] == resume["modifiedTime"]
+    assert row["cover_draft_written_at"] == drive.store[ids["cover"]]["modifiedTime"]

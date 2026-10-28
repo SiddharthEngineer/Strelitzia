@@ -46,7 +46,7 @@ dashboard/src/components/EditJobDialog.tsx; tests
 danger zone at the bottom asks to confirm by name ("Delete {title} at {company}? Drafts, interviews and notes go too;
 files in Google Drive stay.") and returns to the Jobs list.
 **Validate:** `npm test -- JobPage` → edit saves and re-renders; delete confirms, calls the API, navigates home.
-**Status:** ❌
+**Status:** ✅ 2026-10-28 (1f26d04)
 
 ## Validation
 - `scripts/validate.sh --full` passes.
