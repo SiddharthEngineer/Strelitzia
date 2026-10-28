@@ -153,7 +153,10 @@ export default function ClaudeSetupPage() {
                 {busy ? 'Setting up…' : 'Set up Profile Docs'}
               </button>
               {setup.profile_docs && (
-                <p className="muted small">Your Profile Docs already exist: setting them up again replaces their text.</p>
+                <p className="muted small">
+                  Your Profile Docs already exist: setting them up again replaces their text (a missing About me Doc
+                  is only created; Sync now on the Profile page creates it too).
+                </p>
               )}
             </>
           )}

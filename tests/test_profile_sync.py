@@ -240,6 +240,19 @@ def test_pull_creates_a_missing_about_me_and_warns_while_it_is_empty(drive, clie
     assert ps.profile_docs(conn, owner).about["id"] == about["id"]
 
 
+def test_pull_adopts_an_about_me_whose_id_was_lost(drive, client, conn, owner):
+    _seed_db(conn, owner)
+    docs = ps.setup_profile_docs(client, conn, owner, overwrite=False)
+    drive.edit(docs.about["id"], ABOUT.encode())
+    conn.execute("DELETE FROM app_state WHERE key = ?", (f"{owner}:profile_doc:about",))
+    conn.commit()
+    result = ps.pull_profile(client, conn, owner, is_owner=True)
+    assert result.ok and result.warnings == []
+    assert ps.profile_docs(conn, owner).about["id"] == docs.about["id"]
+    assert drive.store[docs.about["id"]]["content"] == ABOUT.encode()  # the answers weren't replaced
+    assert len(_docs(drive)) == 3
+
+
 def test_about_me_trouble_is_a_warning_not_a_problem(drive, client, conn, owner):
     _seed_db(conn, owner)
     docs = ps.setup_profile_docs(client, conn, owner, overwrite=False)
@@ -258,6 +271,7 @@ def test_about_me_trouble_is_a_warning_not_a_problem(drive, client, conn, owner)
     (ps.TEMPLATE_ABOUT, False),
     ("# About me\n\nIntro only.\n\n## 1. Question\n\n\\-\n", False),
     ("## 1. Question\n\nAn answer.\n", True),
+    ("## 1. Question\n\n#1 priority was the data.\n", True),
     (ABOUT, True),
 ])
 def test_has_about_answers(text, answered):
