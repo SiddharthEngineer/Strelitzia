@@ -15,6 +15,8 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures"
 SAMPLE = (FIXTURES / "content_library_sample.md").read_text(encoding="utf-8")
 DOCS_EXPORT = (FIXTURES / "content_library_docs_export.md").read_text(encoding="utf-8")
 RESUME = "Test Person\nData Engineer, Acme\n"
+# Made-up answers (About me is personal data: never a real one here).
+ABOUT = ps.TEMPLATE_ABOUT.replace("not a summary.\n\n", "not a summary.\n\nA broken report at a summer job\\.\n\n")
 
 
 @pytest.fixture(autouse=True)
@@ -62,8 +64,9 @@ def test_setup_seeds_from_the_database(drive, client, conn, owner):
     _seed_db(conn, owner)
     docs = ps.setup_profile_docs(client, conn, owner, overwrite=False)
     found = _docs(drive)
-    assert set(found) == {"Content Library", "Base Resume"}
+    assert set(found) == {"Content Library", "Base Resume", "About me"}
     assert found["Content Library"]["content"] == SAMPLE.encode()
+    assert found["About me"]["content"] == ps.TEMPLATE_ABOUT.encode()
     assert found["Base Resume"]["content"] == RESUME.encode()
     for f in found.values():
         assert drive.path_of(f["id"])[:2] == ["Strelitzia", "Profile"]
@@ -86,9 +89,9 @@ def test_setup_refuses_without_overwrite(drive, client, conn, owner):
     ps.setup_profile_docs(client, conn, owner, overwrite=False)
     with pytest.raises(ps.ProfileDocsExist) as e:
         ps.setup_profile_docs(client, conn, owner, overwrite=False)
-    assert set(e.value.names) == {"Content Library", "Base Resume"}
+    assert set(e.value.names) == {"Content Library", "Base Resume", "About me"}
     # Another machine (no stored ids) still finds them by name in Profile/.
-    for kind in ("library", "resume"):
+    for kind in ("library", "resume", "about"):
         conn.execute("DELETE FROM app_state WHERE key = ?", (f"{owner}:profile_doc:{kind}",))
     assert set(ps.existing_docs(_client(drive), conn, owner)) == set(e.value.names)
 
@@ -98,7 +101,7 @@ def test_overwrite_updates_in_place(drive, client, conn, owner):
     _seed_db(conn, owner)
     second = ps.setup_profile_docs(client, conn, owner, overwrite=True)
     assert second.library["id"] == first.library["id"] and second.resume["id"] == first.resume["id"]
-    assert len(_docs(drive)) == 2
+    assert len(_docs(drive)) == 3
     assert drive.store[first.library["id"]]["content"] == SAMPLE.encode()
 
 
@@ -106,8 +109,10 @@ def test_pull_saves_the_database_and_the_owners_files(drive, client, conn, owner
     docs = ps.setup_profile_docs(client, conn, owner, overwrite=False)
     drive.edit(docs.library["id"], DOCS_EXPORT.encode())
     drive.edit(docs.resume["id"], RESUME.encode())
+    drive.edit(docs.about["id"], ABOUT.encode())
     result = ps.pull_profile(client, conn, owner, is_owner=True)
     assert result == ps.SyncResult(ok=True, problems=[], changed=True)
+    assert "A broken report at a summer job.\n" in ps.about_text(conn, owner)
     saved = load_profile(conn, owner)
     assert "## CURRENT ROLE — Data Engineer, Acme" in saved.content_library_md
     assert "\\" not in saved.content_library_md and saved.resume_text == RESUME
@@ -188,3 +193,72 @@ def test_a_failed_local_write_saves_nothing(drive, client, conn, owner, monkeypa
     assert ps.profile_docs(conn, owner) == docs
     assert not config.CONTENT_LIBRARY_PATH.exists()
     assert not list(config.CONTENT_LIBRARY_PATH.parent.glob("*.tmp"))
+
+
+def _drop_about(drive, conn, user_id, docs):
+    """A user who set up before About me existed: only the other two Docs."""
+    del drive.store[docs.about["id"]]
+    conn.execute("DELETE FROM app_state WHERE key = ?", (f"{user_id}:profile_doc:about",))
+    conn.commit()
+
+
+def test_setup_with_the_other_two_creates_only_about_me(drive, client, conn, owner):
+    _seed_db(conn, owner)
+    docs = ps.setup_profile_docs(client, conn, owner, overwrite=False)
+    _drop_about(drive, conn, owner, docs)
+    drive.edit(docs.library["id"], b"Edited in Drive\n")
+    before = {k: dict(drive.store[getattr(docs, k)["id"]]) for k in ("library", "resume")}
+    again = ps.setup_profile_docs(client, conn, owner, overwrite=False)
+    assert set(_docs(drive)) == {"Content Library", "Base Resume", "About me"}
+    assert {k: drive.store[getattr(docs, k)["id"]] for k in ("library", "resume")} == before
+    assert (again.library, again.resume) == (docs.library, docs.resume)
+    assert drive.store[again.about["id"]]["content"] == ps.TEMPLATE_ABOUT.encode()
+
+
+def test_setup_still_refuses_when_only_another_doc_is_missing(drive, client, conn, owner):
+    docs = ps.setup_profile_docs(client, conn, owner, overwrite=False)
+    del drive.store[docs.resume["id"]]
+    with pytest.raises(ps.ProfileDocsExist) as e:
+        ps.setup_profile_docs(client, conn, owner, overwrite=False)
+    assert set(e.value.names) == {"Content Library", "About me"}
+
+
+def test_pull_creates_a_missing_about_me_and_warns_while_it_is_empty(drive, client, conn, owner):
+    _seed_db(conn, owner)
+    docs = ps.setup_profile_docs(client, conn, owner, overwrite=False)
+    _drop_about(drive, conn, owner, docs)
+    result = ps.pull_profile(client, conn, owner, is_owner=True)
+    assert result.ok and result.problems == []
+    assert result.warnings == ["The About me Doc has no answers yet: Claude needs them for your cover letters."]
+    about = ps.profile_docs(conn, owner).about
+    assert about["url"] and drive.store[about["id"]]["content"] == ps.TEMPLATE_ABOUT.encode()
+    assert drive.path_of(about["id"])[:2] == ["Strelitzia", "Profile"]
+    assert ps.about_text(conn, owner).startswith("# About me")
+    drive.edit(about["id"], ABOUT.encode())
+    result = ps.pull_profile(client, conn, owner, is_owner=True)
+    assert result.ok and result.changed and result.warnings == []
+    assert ps.profile_docs(conn, owner).about["id"] == about["id"]
+
+
+def test_about_me_trouble_is_a_warning_not_a_problem(drive, client, conn, owner):
+    _seed_db(conn, owner)
+    docs = ps.setup_profile_docs(client, conn, owner, overwrite=False)
+    drive.edit(docs.about["id"], ABOUT.encode())
+    assert ps.pull_profile(client, conn, owner, is_owner=True).warnings == []
+    drive.edit(docs.resume["id"], b"A new resume\n")
+    drive.store[docs.about["id"]]["trashed"] = True
+    result = ps.pull_profile(client, conn, owner, is_owner=True)
+    assert result.ok and result.warnings[0].startswith("The About me Doc is in the trash")
+    assert load_profile(conn, owner).resume_text == "A new resume\n"
+    assert "summer job" in ps.about_text(conn, owner)  # the last good copy stays
+    assert len(_docs(drive)) == 2  # a trashed Doc isn't replaced behind the user's back
+
+
+@pytest.mark.parametrize("text, answered", [
+    (ps.TEMPLATE_ABOUT, False),
+    ("# About me\n\nIntro only.\n\n## 1. Question\n\n\\-\n", False),
+    ("## 1. Question\n\nAn answer.\n", True),
+    (ABOUT, True),
+])
+def test_has_about_answers(text, answered):
+    assert ps.has_about_answers(text) is answered

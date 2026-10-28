@@ -929,12 +929,12 @@ def _content_library_error(text: str) -> str | None:
 
 
 def _profile_docs_out(conn, user_id: str) -> dict | None:
-    """{library|resume: {url, synced_at} | None} for the user's Profile Docs, or None before setup."""
+    """{library|resume|about: {url, synced_at} | None} for the user's Profile Docs, or None before setup."""
     from strelitzia import profile_sync
 
     docs = profile_sync.profile_docs(conn, user_id)
     out = {kind: ({"url": d.get("url"), "synced_at": d.get("synced_at")} if (d := getattr(docs, kind)) else None)
-           for kind in ("library", "resume")}
+           for kind in ("library", "resume", "about")}
     return out if any(out.values()) else None
 
 
@@ -1038,7 +1038,8 @@ def setup_profile_docs(body: ProfileDocsSetup, request: Request):
 
 @api.post("/profile/docs/sync")
 def sync_profile_docs(request: Request) -> dict:
-    """Pull the Profile Docs now. Problems come back in the body (200): nothing was saved then."""
+    """Pull the Profile Docs now. Problems come back in the body (200): nothing was saved then. Warnings (About me)
+    don't stop the save."""
     from strelitzia import profile_sync
 
     conn = db_conn(request)
@@ -1049,7 +1050,8 @@ def sync_profile_docs(request: Request) -> dict:
     client = _require_drive(request)
     result = profile_sync.pull_profile(client, conn, user.id, is_owner=user.role == "owner")
     draft, parse_error = _resume_draft(conn, user.id) if result.ok else ({}, None)
-    return {"ok": result.ok, "problems": result.problems, "changed": result.changed, **get_profile(request),
+    return {"ok": result.ok, "problems": result.problems, "warnings": result.warnings, "changed": result.changed,
+            **get_profile(request),
             "draft": draft, "parse_error": parse_error}
 
 
