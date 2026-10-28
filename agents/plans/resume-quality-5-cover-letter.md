@@ -64,7 +64,7 @@ naming more than 2 tools and for a first sentence without the company name. The 
 checks and renders only that draft, so the resume can be accepted without a letter.
 **Validate:** `pytest tests/web/test_workbench_api.py -q` → resume check passes with an empty letter Doc; cover packet
 before a resume → 409.
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (this commit)
 
 ### Task 4: Dashboard
 **Runs:** unattended

@@ -54,8 +54,11 @@ def _fill_drafts(conn, drive, data):
     from workbench_helpers import library
 
     row = dict(conn.execute("SELECT * FROM jobs").fetchone())
-    drive.edit(row["resume_draft_doc_id"], dd.resume_draft_text(data, library(), wb.RULES_VERSION).encode())
-    drive.edit(row["cover_draft_doc_id"], dd.cover_draft_text(data["cover_letter"], wb.RULES_VERSION).encode())
+    if row["resume_draft_doc_id"]:
+        drive.edit(row["resume_draft_doc_id"], dd.resume_draft_text(data, library(), wb.RULES_VERSION).encode())
+    if row["cover_draft_doc_id"]:
+        drive.edit(row["cover_draft_doc_id"],
+                   dd.cover_draft_text(data["cover_letter"], wb.COVER_RULES_VERSION).encode())
 
 
 def _check(client, conn, drive, key, data):
@@ -76,8 +79,7 @@ def test_packet_with_drive_writes_docs_and_a_short_prompt(client, conn, the_job,
     assert len(body["prompt"]) <= wb.PROMPT_MAX and "Claude packet" in body["prompt"]
     names = sorted(f["name"] for f in drive.store.values() if f["mimeType"] == DOC_MIME)
     assert names == sorted([f"Initech – {job()['title']} – Claude packet",  # the rules are a download now
-                            f"Initech - {job()['title']} - Resume draft",
-                            f"Initech - {job()['title']} - Cover letter draft"])
+                            f"Initech - {job()['title']} - Resume draft"])  # the letter comes later
     detail = client.get(f"/strelitzia/dashboard/api/jobs/{the_job}").json()
     assert detail["packet_doc_url"] == body["doc_url"] == detail["links"]["packet"]
 
@@ -116,7 +118,7 @@ def test_good_drafts_save_and_bump_the_version(client, conn, the_job, drive):
     assert d["draft_version"] == 1 and d["draft_rules_version"] == wb.RULES_VERSION
     assert d["coverage"]["pct_required"] == 80.0 and d["unmet"] == ["Kubernetes", "Terraform"]
     assert [h["version"] for h in d["draft_history"]] == [1]
-    assert d["links"]["resume"] and d["links"]["cover_letter"]
+    assert d["links"]["resume"] and not d["links"]["cover_letter"]  # the letter has its own chat and check
     assert "resume_pdf" not in d["links"]  # moved to Drive
     assert client.get(d["links"]["resume_docx"]).content  # the DOCX stays local
 
@@ -343,27 +345,74 @@ def test_setup_shows_the_profile_docs(client, conn, the_job, drive, profile_docs
 
 # --- Draft Docs and Check & format (docs-drafts-2-api Task 2) ---
 
-def test_packet_creates_the_draft_docs(client, conn, the_job, drive):
+def test_packet_creates_the_resume_draft_doc_only(client, conn, the_job, drive):
     body = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet").json()
-    assert body["resume_draft_url"] and body["cover_draft_url"]
+    assert body["resume_draft_url"] and "cover_draft_url" not in body
     assert "Resume draft" in body["prompt"] and "Cover letter draft" not in body["prompt"]
     d = client.get(f"/strelitzia/dashboard/api/jobs/{the_job}").json()
-    assert d["resume_draft_url"] == body["resume_draft_url"] and d["cover_draft_url"] == body["cover_draft_url"]
+    assert d["resume_draft_url"] == body["resume_draft_url"] and d["cover_draft_url"] is None
     assert d["links"]["resume_draft"] == body["resume_draft_url"]
 
 
-def test_check_valid_drafts_saves_and_uploads_the_pdfs(client, conn, the_job, drive):
-    client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/packet")
+def _post(client, key, path):
+    return client.post(f"/strelitzia/dashboard/api/jobs/{key}/{path}")
+
+
+def test_cover_packet_before_a_resume_is_409(client, conn, the_job, drive):
+    assert _post(client, the_job, "packet").status_code == 200
+    r = _post(client, the_job, "cover-packet")
+    assert r.status_code == 409 and r.json()["detail"].startswith("Accept a resume draft first")
+    r = _post(client, the_job, "drafts/check?kind=cover")
+    assert r.status_code == 409 and r.json()["detail"].startswith("Accept a resume draft first")
+
+
+def test_resume_and_letter_are_checked_separately(client, conn, the_job, drive):
+    # The resume passes on its own, while the letter Doc is still empty.
+    r = _check(client, conn, drive, the_job, good_result())
+    assert r.status_code == 200, r.text
+    assert not any("rules version" in w for w in r.json()["outcome"]["warnings"])
+    assert len([f for f in drive.store.values() if f["name"].endswith(".pdf")]) == 1  # no letter PDF yet
+
+    body = _post(client, the_job, "cover-packet").json()
+    assert body["rules_version"] == wb.COVER_RULES_VERSION and body["cover_draft_url"]
+    assert "Cover letter draft" in body["prompt"] and "Resume draft" not in body["prompt"]
+    packet = next(f for f in drive.store.values() if f["name"].endswith("Cover letter packet"))
+    assert b"Accepted resume" in packet["content"] and b"Migrated the nightly orders pipeline" in packet["content"]
+    r = _post(client, the_job, "drafts/check?kind=cover")
+    assert r.status_code == 422 and "empty" in r.json()["errors"][0]  # the placeholder
+    # Seeding the cover Doc left the resume's draft alone, so it checks again without changes.
+    assert _post(client, the_job, "drafts/check?kind=resume").status_code == 200
+
     _fill_drafts(conn, drive, good_result())
-    r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/drafts/check")
+    r = _post(client, the_job, "drafts/check?kind=cover")
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["outcome"]["draft_version"] == 1
-    assert not any("rules version" in w for w in body["outcome"]["warnings"])
+    assert body["outcome"]["draft_version"] == 2 and body["outcome"]["warnings"] == []
     d = body["job"]
-    assert d["draft_version"] == 1 and d["links"]["resume"] and d["links"]["cover_letter"]
-    pdfs = [f["name"] for f in drive.store.values() if f["name"].endswith(".pdf")]
-    assert len(pdfs) == 2
+    assert d["draft_version"] == 2 and d["cover_letter_at"] and d["links"]["cover_letter"]
+    assert len([f for f in drive.store.values() if f["name"].endswith(".pdf")]) == 2
+    cover_json = conn.execute("SELECT cover_json FROM drafts WHERE version = 2").fetchone()[0]
+    assert json.loads(cover_json)["evidence_slugs"] == ["orders-pipeline", "quality-dashboard"]
+
+    # A new resume keeps the accepted letter.
+    _fill_drafts(conn, drive, good_result(headline="Data engineer for Airflow pipelines"))
+    assert _post(client, the_job, "drafts/check").status_code == 200
+    cover_json = conn.execute("SELECT cover_json FROM drafts WHERE version = 3").fetchone()[0]
+    assert json.loads(cover_json)["paragraphs"] == good_result()["cover_letter"]["paragraphs"]
+
+
+def test_a_letter_with_a_skipped_question_is_422_naming_it(client, conn, the_job, drive):
+    assert _check(client, conn, drive, the_job, good_result()).status_code == 200
+    _post(client, the_job, "cover-packet")
+    data = good_result()
+    data["cover_letter"]["paragraphs"][0] += " [NEEDS INPUT: why Initech?]"
+    _fill_drafts(conn, drive, data)
+    r = _post(client, the_job, "drafts/check?kind=cover")
+    assert r.status_code == 422
+    body = r.json()
+    assert any("still needs your input: why Initech?" in e for e in body["errors"])
+    assert body["fix_prompt"].endswith("Fix them in the draft Doc and change nothing else.")
+    assert conn.execute("SELECT cover_letter_at FROM jobs").fetchone()[0] is None
 
 
 def test_check_a_bullet_without_tags_is_422_naming_the_line(client, conn, the_job, drive):
@@ -376,7 +425,7 @@ def test_check_a_bullet_without_tags_is_422_naming_the_line(client, conn, the_jo
     assert r.status_code == 422
     body = r.json()
     assert body["errors"][0].startswith("Resume draft, line 6:") and "no [slug] tags" in body["errors"][0]
-    assert body["fix_prompt"].endswith("Fix them in the two draft Docs and change nothing else.")
+    assert body["fix_prompt"].endswith("Fix them in the draft Doc and change nothing else.")
     assert conn.execute("SELECT draft_version FROM jobs").fetchone()[0] is None
 
 

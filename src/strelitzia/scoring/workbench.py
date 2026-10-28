@@ -781,7 +781,7 @@ def fix_prompt(errors: list[str], where: str = "json") -> str:
     """What to paste back into the chat: the problems, then how to answer (the corrected JSON, or fixed draft Docs)."""
     lines = ["These problems were found:"] + [f"{i}. {e}" for i, e in enumerate(errors, 1)]
     if where == "docs":
-        lines.append("Fix them in the two draft Docs and change nothing else.")
+        lines.append("Fix them in the draft Doc and change nothing else.")
     else:
         lines.append("Keep everything else the same and reply with the corrected JSON.")
     return "\n".join(lines)
@@ -897,6 +897,64 @@ def import_drafts(conn: Connection, job: dict, resume_text: str, cover_text: str
     return import_data(conn, job, data, inputs, out_dir, cover_dir, where="docs")
 
 
+def import_cover(conn: Connection, job: dict, cover_text: str, inputs: Inputs | None = None,
+                 cover_dir: Path | None = None) -> ImportOutcome:
+    """Check the cover letter Doc alone, against the job's accepted resume; on success render the letter's PDF and
+    attach the letter to the current draft. On any error nothing is saved, and the outcome carries a fix prompt."""
+    from strelitzia.scoring.draft_docs import DraftFormatError, cover_rules_version, parse_cover_draft
+
+    current = current_result(job)
+    if not current:
+        return ImportOutcome(ok=False, errors=["Accept a resume draft first: the cover letter is checked against it"])
+    try:
+        letter = parse_cover_draft(cover_text)
+    except DraftFormatError as e:
+        return ImportOutcome(ok=False, errors=e.errors, fix_prompt=fix_prompt(e.errors, where="docs"))
+    if letter is None:
+        errors = ["The cover letter draft is empty: write the letter into it"]
+        return ImportOutcome(ok=False, errors=errors, fix_prompt=fix_prompt(errors, where="docs"))
+    inputs = inputs or Inputs.for_user(conn, job["user_id"])
+    errors, warnings = check_letter(letter, job, inputs)
+    errors = list(dict.fromkeys(errors + schema_errors(letter, result_schema(inputs.library)["properties"]
+                                                       ["cover_letter"], "$.cover_letter")))
+    version_warning = rules_version_warning(cover_rules_version(cover_text), COVER_RULES_VERSION)
+    if version_warning:
+        warnings.append(version_warning)
+    if errors:
+        return ImportOutcome(ok=False, errors=errors, warnings=warnings, fix_prompt=fix_prompt(errors, "docs"))
+
+    cover_dir = Path(cover_dir or config.COVER_LETTER_DIR)
+    cover_dir.mkdir(parents=True, exist_ok=True)
+    final = cover_dir / f"{output_prefix(job)}_CL.pdf"
+    staged = final.with_name(final.stem + ".staging.pdf")
+    try:
+        problems = _render_letter(letter, job, inputs, staged)
+    except BaseException:
+        staged.unlink(missing_ok=True)
+        raise
+    if problems:
+        staged.unlink(missing_ok=True)
+        return ImportOutcome(ok=False, errors=problems, warnings=warnings, fix_prompt=fix_prompt(problems, "docs"))
+    staged.replace(final)
+    from strelitzia.scoring import cover_letter
+
+    final.with_suffix(".txt").write_text(cover_letter.letter_text(letter["paragraphs"], inputs.profile),
+                                         encoding="utf-8")
+
+    sidecar = Path(job["tailored_resume_path"])
+    sidecar = sidecar.with_name(sidecar.stem + "_RESULT.json")
+    sidecar.write_text(json.dumps({**current, "cover_letter": letter}, indent=2, ensure_ascii=False), encoding="utf-8")
+    now = datetime.now(UTC).isoformat()
+    report = {**tailor_report(job), "cover_warnings": warnings, "cover_at": now}
+    user_id, version = job["user_id"], job.get("draft_version")
+    conn.execute("UPDATE jobs SET cover_letter_path = ?, cover_letter_at = ?, tailor_report = ? "
+                 "WHERE user_id = ? AND url = ?", (str(final), now, json.dumps(report), user_id, job["url"]))
+    conn.execute("UPDATE drafts SET cover_json = ? WHERE user_id = ? AND job_url = ? AND version = ?",
+                 (json.dumps(letter, ensure_ascii=False), user_id, job["url"], version))
+    conn.commit()
+    return ImportOutcome(ok=True, warnings=warnings, draft_version=version, files={"cover_letter": str(final)})
+
+
 def import_data(conn: Connection, job: dict, data: dict, inputs: Inputs | None = None,
                 out_dir: Path | None = None, cover_dir: Path | None = None, *, where: str = "json") -> ImportOutcome:
     """Check a parsed result; on success render the files and record a new draft version for the job's user.
@@ -933,7 +991,9 @@ def import_data(conn: Connection, job: dict, data: dict, inputs: Inputs | None =
 
     (out_dir / f"{prefix}.json").write_text(
         resume.to_json(job_url=job["url"], draft_version=version, rules_version=RULES_VERSION), encoding="utf-8")
-    (out_dir / f"{prefix}_RESULT.json").write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    # A resume checked alone keeps the last accepted letter (its PDF stays too).
+    saved = {**data, "cover_letter": data.get("cover_letter") or (current_result(job) or {}).get("cover_letter")}
+    (out_dir / f"{prefix}_RESULT.json").write_text(json.dumps(saved, indent=2, ensure_ascii=False), encoding="utf-8")
     (out_dir / f"{prefix}_REPORT.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     (out_dir / f"{prefix}.txt").write_text(resume_to_text(resume, inputs.profile, inputs.fixed), encoding="utf-8")
 
@@ -946,7 +1006,7 @@ def import_data(conn: Connection, job: dict, data: dict, inputs: Inputs | None =
         "INSERT INTO drafts (id, user_id, job_url, version, rules_version, resume_json, resume_text, cover_json, "
         "coverage_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (uuid.uuid4().hex, user_id, job["url"], version, RULES_VERSION, json.dumps(resume.to_dict(), ensure_ascii=False),
-         resume_to_text(resume, inputs.profile, inputs.fixed), json.dumps(data.get("cover_letter")),
+         resume_to_text(resume, inputs.profile, inputs.fixed), json.dumps(saved["cover_letter"]),
          json.dumps(cov.to_dict()), now),
     )
     if files.get("cover_letter"):  # a resume-only draft keeps the last letter
@@ -1009,11 +1069,7 @@ def render_outputs(resume: TailoredResume, data: dict, job: dict, inputs: Inputs
         html = render_resume(resume, inputs.profile, fixed=inputs.fixed, gap=gap)
         problems = validate_visible(html) + validate_pdf_text(staged["resume"], html)
         if letter:
-            letter_html = cover_letter.letter_html(letter["paragraphs"], inputs.profile, job, fixed=inputs.fixed)
-            cover_letter.render_pdf(letter["paragraphs"], inputs.profile, job, staged["cover_letter"],
-                                    fixed=inputs.fixed)
-            problems += [f"Cover letter: {p}" for p in
-                         validate_visible(letter_html) + validate_pdf_text(staged["cover_letter"], letter_html)]
+            problems += _render_letter(letter, job, inputs, staged["cover_letter"])
         if problems:
             raise RenderRejected(problems)
         to_docx(resume, staged["resume_docx"], inputs.profile, inputs.fixed)
@@ -1030,6 +1086,15 @@ def render_outputs(resume: TailoredResume, data: dict, job: dict, inputs: Inputs
         Path(files["cover_letter"]).with_suffix(".txt").write_text(
             cover_letter.letter_text(letter["paragraphs"], inputs.profile), encoding="utf-8")
     return files, [f"Dropped to fit one page: '{t}'" for t in dropped], fill_pct
+
+
+def _render_letter(letter: dict, job: dict, inputs: Inputs, path: Path) -> list[str]:
+    """Render the letter's PDF to `path`; returns the hidden-text and injection problems in it."""
+    from strelitzia.scoring import cover_letter
+
+    letter_html = cover_letter.letter_html(letter["paragraphs"], inputs.profile, job, fixed=inputs.fixed)
+    cover_letter.render_pdf(letter["paragraphs"], inputs.profile, job, path, fixed=inputs.fixed)
+    return [f"Cover letter: {p}" for p in validate_visible(letter_html) + validate_pdf_text(path, letter_html)]
 
 
 def _underfill_error(resume: TailoredResume, info: dict, budget, target: float) -> str:
@@ -1082,6 +1147,18 @@ def packet_for(job: dict, inputs: Inputs) -> Packet:
                       fixed_roles=inputs.fixed.get("roles") or None, profile=inputs.profile, fixed=inputs.fixed)
 
 
+def publish_cover_packet(client, job: dict, packet: Packet) -> tuple[str, str]:
+    """Write the job's cover letter packet Doc (from `cover_packet`) into its Drive folder. Returns (doc_id, url).
+
+    The Doc is found again by its name, so the job keeps one cover letter packet.
+    """
+    from strelitzia.storage.drive_layout import clean_name, packet_folder_path
+
+    folder_id = client.ensure_folder_path(packet_folder_path(job))
+    f = client.upsert_doc(folder_id, clean_name(packet.name, 160), packet.html)
+    return f.id, f.url
+
+
 def publish_packet(client, conn: Connection, job: dict, inputs: Inputs | None = None) -> tuple[str, str]:
     """Write the job's packet Doc into its Drive folder and record it on the job. Returns (doc_id, url)."""
     from strelitzia.storage.drive_layout import clean_name, packet_folder_path
@@ -1120,8 +1197,9 @@ def draft_texts(job: dict, inputs: Inputs) -> dict[str, str]:
             "cover": cover_draft_text((current or {}).get("cover_letter"), "")}
 
 
-def publish_drafts(client, conn: Connection, job: dict, inputs: Inputs | None = None) -> dict[str, str]:
-    """Create (or reuse) the job's resume and cover letter draft Docs in its Drive folder. Returns {kind: url}.
+def publish_drafts(client, conn: Connection, job: dict, inputs: Inputs | None = None,
+                   kinds: tuple[str, ...] = DRAFT_KINDS) -> dict[str, str]:
+    """Create (or reuse) the job's draft Docs of `kinds` (resume, cover) in its Drive folder. Returns {kind: url}.
 
     A Doc is (re)written only when it doesn't exist, or when nobody edited it since the app last wrote it and a
     newer draft was accepted since; so reopening a packet never wipes Claude's or the user's edits.
@@ -1135,7 +1213,7 @@ def publish_drafts(client, conn: Connection, job: dict, inputs: Inputs | None = 
     texts: dict[str, str] | None = None
     folder_id = None
     last_write = written_at
-    for kind in DRAFT_KINDS:
+    for kind in kinds:
         doc_id = job.get(f"{kind}_draft_doc_id")
         meta = client.doc_meta(doc_id) if doc_id else None
         if meta and not meta.get("trashed"):

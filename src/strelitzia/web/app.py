@@ -197,6 +197,8 @@ def _draft_fields(job: dict) -> dict:
         "packet_doc_url": job.get("packet_doc_url"),
         "resume_draft_url": job.get("resume_draft_doc_url"),
         "cover_draft_url": job.get("cover_draft_doc_url"),
+        "cover_letter_at": job.get("cover_letter_at"),
+        "cover_warnings": report.get("cover_warnings") or [],
     }
 
 
@@ -335,7 +337,7 @@ def _drive_client(request: Request):
 
 @api.post("/jobs/{key}/packet")
 def post_packet(key: str, request: Request) -> dict:
-    """Write the job's Claude packet and draft Docs to Drive and return the prompt to paste in Claude.
+    """Write the job's Claude packet and resume draft Doc to Drive and return the prompt to paste in Claude.
 
     409 when Drive isn't connected (the workbench works only through Drive) or can't be written.
     """
@@ -347,14 +349,43 @@ def post_packet(key: str, request: Request) -> dict:
     inputs = _workbench_inputs(request)
     try:
         _, url = workbench.publish_packet(client, conn, job, inputs)
-        drafts = workbench.publish_drafts(client, conn, job_by_key(conn, user.id, key), inputs)
+        drafts = workbench.publish_drafts(client, conn, job_by_key(conn, user.id, key), inputs, kinds=("resume",))
     except Exception as e:  # noqa: BLE001 -- e.g. an expired token or a Drive outage
-        log.warning("Drive packet failed for %s: %s", key, e)
-        raise HTTPException(status_code=409, detail=f"Couldn't write the packet to Google Drive ({e}). "
-                            "Reconnect Google Drive on the Claude setup page.") from e
+        raise _drive_write_failed(key, e) from e
     packet = workbench.packet_for(job, inputs)
     return {"prompt": packet.prompt, "doc_url": url, "rules_version": workbench.RULES_VERSION,
-            "resume_draft_url": drafts.get("resume"), "cover_draft_url": drafts.get("cover")}
+            "resume_draft_url": drafts.get("resume")}
+
+
+def _drive_write_failed(key: str, e: Exception) -> HTTPException:
+    log.warning("Drive packet failed for %s: %s", key, e)
+    return HTTPException(status_code=409, detail=f"Couldn't write the packet to Google Drive ({e}). "
+                         "Reconnect Google Drive on the Claude setup page.")
+
+
+@api.post("/jobs/{key}/cover-packet")
+def post_cover_packet(key: str, request: Request) -> dict:
+    """Write the job's cover letter packet and cover letter draft Doc to Drive and return the prompt for a new chat.
+
+    409 until a resume draft is accepted, and when Drive isn't connected or can't be written.
+    """
+    conn = db_conn(request)
+    user = current_user(request)
+    _owner_content(user)
+    job = job_by_key(conn, user.id, key)
+    client = _require_drive(request)
+    inputs = _workbench_inputs(request)
+    try:
+        packet = workbench.cover_packet(job, inputs)
+    except workbench.NoAcceptedResume as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    try:
+        _, url = workbench.publish_cover_packet(client, job, packet)
+        drafts = workbench.publish_drafts(client, conn, job, inputs, kinds=("cover",))
+    except Exception as e:  # noqa: BLE001 -- e.g. an expired token or a Drive outage
+        raise _drive_write_failed(key, e) from e
+    return {"prompt": packet.prompt, "doc_url": url, "rules_version": workbench.COVER_RULES_VERSION,
+            "cover_draft_url": drafts.get("cover")}
 
 
 def _import_response(request: Request, key: str, outcome: workbench.ImportOutcome, client=None):
@@ -381,25 +412,31 @@ def _import_response(request: Request, key: str, outcome: workbench.ImportOutcom
 
 
 @api.post("/jobs/{key}/drafts/check")
-def check_drafts(key: str, request: Request):
-    """Read the job's two draft Docs, run every check and, when they pass, save the draft and make the PDFs.
+def check_drafts(key: str, request: Request, kind: Literal["resume", "cover"] = "resume"):
+    """Read one of the job's draft Docs (`kind`), run its checks and, when they pass, save it and make its PDF.
 
-    409 without Drive or before the draft Docs exist; 422 with the errors and a fix prompt for Claude.
+    The resume is checked alone, so it can be accepted before any letter; the letter is checked against the accepted
+    resume. 409 without Drive, before the Doc exists or (for the letter) before a resume is accepted; 422 with the
+    errors and a fix prompt for Claude.
     """
     conn = db_conn(request)
     user = current_user(request)
     _owner_content(user)
     job = job_by_key(conn, user.id, key)
     client = _require_drive(request)
+    if kind == "cover" and not workbench.current_result(job):
+        raise HTTPException(status_code=409, detail="Accept a resume draft first: the cover letter is written from it")
+    doc_id = job.get(f"{kind}_draft_doc_id")
+    meta = client.doc_meta(doc_id) if doc_id else None
+    if not meta or meta.get("trashed"):
+        what = "the cover letter" if kind == "cover" else "the job"
+        raise HTTPException(status_code=409, detail=f"Open {what} in Claude first: its draft Doc doesn't exist yet")
     inputs = _workbench_inputs(request)  # pulls the Profile Docs first
-    texts = {}
-    for kind in workbench.DRAFT_KINDS:
-        doc_id = job.get(f"{kind}_draft_doc_id")
-        meta = client.doc_meta(doc_id) if doc_id else None
-        if not meta or meta.get("trashed"):
-            raise HTTPException(status_code=409, detail="Open the job in Claude first: its draft Docs don't exist yet")
-        texts[kind] = client.export_text(doc_id, "text/markdown")
-    outcome = workbench.import_drafts(conn, job, texts["resume"], texts["cover"], inputs)
+    text = client.export_text(doc_id, "text/markdown")
+    if kind == "cover":
+        outcome = workbench.import_cover(conn, job, text, inputs)
+    else:
+        outcome = workbench.import_drafts(conn, job, text, "", inputs)
     return _import_response(request, key, outcome, client)
 
 
