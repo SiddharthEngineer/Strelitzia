@@ -235,11 +235,14 @@ def validate_resume_model(
         present = {r.role_key: len(r.bullets) for r in resume.roles}
         for key, (lo, hi) in slots.items():
             n = present.get(key)
+            need = f"exactly {lo}" if lo == hi else f"{lo}-{hi}"
             if n is None:
                 if lo > 0:
-                    errors.append(f"Role '{key}' is required ({lo}-{hi} bullets) but missing")
+                    errors.append(f"Role '{key}' is required ({need} bullet{'' if hi == 1 else 's'}) but missing")
+            elif hi == 0:
+                errors.append(f"Role '{key}' gets 0 bullets on this page; leave it out (under Dropped roles)")
             elif not lo <= n <= hi:
-                errors.append(f"Role '{key}' has {n} bullets; it needs {lo}-{hi}")
+                errors.append(f"Role '{key}' has {n} bullets; it needs {need}")
 
     all_text = " ".join(b.text for r in resume.roles for b in r.bullets).lower()
     found_leaks = [p for p in LLM_LEAK_PHRASES if p in all_text]
@@ -558,8 +561,8 @@ def split_items(value: str) -> list[str]:
     return [i for i in items if i]
 
 
-def validate_wording(resume: "TailoredResume", bullet_max: int = 230) -> list[str]:
-    """Dashes, banned words, LLM self-talk and over-long bullets in what the model wrote."""
+def validate_wording(resume: "TailoredResume", bullet_max: int = 230, bullet_min: int = 0) -> list[str]:
+    """Dashes, banned words, LLM self-talk, and bullets outside bullet_min-bullet_max characters."""
     errors = []
     for where, text in resume_parts(resume):
         short = text if len(text) <= 60 else text[:57] + "..."
@@ -571,8 +574,12 @@ def validate_wording(resume: "TailoredResume", bullet_max: int = 230) -> list[st
         leaks = [p for p in LLM_LEAK_PHRASES if p in text.lower()]
         if leaks:
             errors.append(f"Commentary in {where}: '{leaks[0]}'")
-        if where.startswith(tuple(r.role_key for r in resume.roles)) and len(text) > bullet_max:
-            errors.append(f"{where} is {len(text)} characters; at most {bullet_max}: '{short}'")
+        if where.startswith(tuple(r.role_key for r in resume.roles)):
+            if len(text) > bullet_max:
+                errors.append(f"{where} is {len(text)} characters; at most {bullet_max}: '{short}'")
+            elif len(text) < bullet_min:
+                errors.append(f"{where} is {len(text)} characters; at least {bullet_min}, so it prints as two "
+                              f"lines: '{short}'")
     return errors
 
 

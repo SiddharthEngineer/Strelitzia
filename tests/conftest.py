@@ -74,6 +74,16 @@ def pytest_unconfigure(config: pytest.Config) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _fake_page_layout(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch):
+    """The page budget (pdf.measure_layout) from a stand-in layout, not Chromium, unless marked real_layout."""
+    if "real_layout" not in request.keywords:
+        from strelitzia.scoring import pdf
+        from workbench_helpers import fake_measure_layout
+
+        monkeypatch.setattr(pdf, "measure_layout", fake_measure_layout)
+
+
+@pytest.fixture(autouse=True)
 def _block_network(request: pytest.FixtureRequest):
     """Block non-localhost socket connections for tests not marked live/llm."""
     if "live" in request.keywords or "llm" in request.keywords:

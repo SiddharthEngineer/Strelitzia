@@ -126,6 +126,29 @@ def _role_slots(
     return slots
 
 
+def page_plan(library: ContentLibrary, base: TailoredResume | None, profile: dict,
+              fixed: dict) -> tuple[dict[str, int], Budget]:
+    """The exact bullets per role for this user's page, and the budget behind them.
+
+    The budget is measured with the base resume's role headings (resume_fixed.yaml's win) and Skills and no
+    Summary, so the packet and the checks of its draft always agree.
+    """
+    from strelitzia.scoring.template import fixed_roles_from_resume
+
+    library.ensure_keys()
+    shown = {r.role_key for r in base.roles} if base and base.roles else None
+    heads = {**(fixed_roles_from_resume(base) if base else {}), **(fixed.get("roles") or {})}
+    roles = []
+    for section in library.roles:
+        if shown is None or section.key in shown:
+            info = heads.get(section.key) or {}
+            roles.append(RoleEntry(role_key=section.key, title=info.get("title") or section.title.split(",")[0].strip(),
+                                   company=info.get("company") or "", dates=info.get("dates") or section.dates,
+                                   tagline=info.get("tagline") or None))
+    budget = line_budget(profile, fixed, roles, base.skills if base else {})
+    return bullet_plan(library, base, budget), budget
+
+
 def fit_to_one_page(
     resume: TailoredResume,
     profile: dict,
