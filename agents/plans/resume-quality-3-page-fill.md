@@ -33,7 +33,7 @@ parts and measures. `bullet_plan(library, base, budget) -> dict[role_key, int]`:
 `chars_per_line*1.6`-`chars_per_line*1.95`), most recent role 5-6, then 3-4, 2-3, 1-2 (research §3), sized so the total
 lines fill 97% ± 2%.
 **Validate:** `pytest tests/test_tailor_budget.py -q` → the base fixtures give a plan whose render is 95-100% full.
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (Task 1 commit; render_pdf now measures at the printed width, 720px with print styles)
 
 ### Task 2: Exact counts in the packet
 **Runs:** unattended

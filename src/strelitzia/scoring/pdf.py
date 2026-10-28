@@ -4,6 +4,7 @@ Parses the structured text resume format, renders via an HTML/CSS template,
 and exports to PDF using headless Chromium via Playwright.
 """
 
+import hashlib
 import logging
 import re
 from pathlib import Path
@@ -356,6 +357,18 @@ _LETTER_HEIGHT_PT = 792
 _PAGE_MARGIN_TOP_PT = 25.2
 _PAGE_MARGIN_BOTTOM_PT = 25.2
 _USABLE_HEIGHT_PT = _LETTER_HEIGHT_PT - _PAGE_MARGIN_TOP_PT - _PAGE_MARGIN_BOTTOM_PT
+USABLE_HEIGHT_PT = _USABLE_HEIGHT_PT
+
+
+# The printed width: Letter (8.5in) less the 0.5in side margins, in CSS pixels. Heights are measured at this
+# width with print styles, as the PDF lays them out (the default 1280px viewport wraps far fewer lines).
+_PRINT_WIDTH_PX = int((8.5 - 2 * 0.5) * 96)
+
+
+def _print_page(browser):
+    page = browser.new_page(viewport={"width": _PRINT_WIDTH_PX, "height": 1000})
+    page.emulate_media(media="print")
+    return page
 
 
 def render_pdf(html: str, output_path: str) -> dict:
@@ -372,7 +385,7 @@ def render_pdf(html: str, output_path: str) -> dict:
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page()
+        page = _print_page(browser)
         page.set_content(html, wait_until="networkidle")
 
         # Measure content height before rendering to PDF
@@ -401,6 +414,54 @@ def render_pdf(html: str, output_path: str) -> dict:
         "usable_height_pt": _USABLE_HEIGHT_PT,
         "pages": pages,
     }
+
+
+# Typical bullet prose, for the average character width (words, digits and spaces in usual proportions).
+_CPL_SAMPLE = ("Owned ingestion orchestration for 12 vendor feeds in Airflow, adding retries and late-data alerts "
+               "that cut missed morning loads from weekly to rare; moves about 40M rows per run for 3 teams.")
+_MEASURE_JS = """(sample) => {
+    const height = document.body.scrollHeight * (72 / 96);
+    const li = document.querySelector('#resume-experience li') || document.querySelector('li');
+    let cpl = null, line = null;
+    if (li) {
+        line = li.getBoundingClientRect().height * (72 / 96);
+        const span = document.createElement('span');
+        span.style.whiteSpace = 'nowrap';
+        span.textContent = sample;
+        li.appendChild(span);
+        const width = span.getBoundingClientRect().width;
+        span.remove();
+        if (width > 0) cpl = Math.floor(li.clientWidth / (width / sample.length));
+    }
+    return {content_height_pt: height, chars_per_line: cpl, line_pt: line};
+}"""
+_LAYOUT_CACHE: dict[str, list[dict]] = {}
+
+
+def measure_layout(htmls: list[str]) -> list[dict]:
+    """Lay out each HTML document as the PDF would, without writing a PDF; one Chromium session for all.
+
+    Results are cached by content, so the packet and the checks for the same inputs render once per process.
+
+    Returns:
+        [{"content_height_pt": float, "chars_per_line": int | None, "line_pt": float | None}], one per document. chars_per_line is how many
+        characters of typical bullet text fit one line of the first experience bullet, and line_pt is that bullet's
+        height (so give it one line); both None without a bullet.
+    """
+    key = hashlib.sha256("\0".join(htmls).encode("utf-8")).hexdigest()
+    if key not in _LAYOUT_CACHE:
+        from playwright.sync_api import sync_playwright
+
+        out = []
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = _print_page(browser)
+            for html in htmls:
+                page.set_content(html, wait_until="networkidle")
+                out.append(page.evaluate(_MEASURE_JS, _CPL_SAMPLE))
+            browser.close()
+        _LAYOUT_CACHE[key] = out
+    return [dict(m) for m in _LAYOUT_CACHE[key]]
 
 
 def _count_pdf_pages(data: object) -> int | None:
