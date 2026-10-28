@@ -16,7 +16,7 @@ type Check =
   | { state: 'idle' }
   | { state: 'checking' }
   | { state: 'failed'; errors: string[]; warnings: string[]; fixPrompt: string; copied: boolean }
-  | { state: 'saved'; version: number; warnings: string[] };
+  | { state: 'saved'; version: number; warnings: string[]; fill: number | null };
 
 /** An API failure as the panel shows it: Drive not connected (a pointer to Claude setup, not an error), else the
  * message with any Profile Docs problems. */
@@ -70,7 +70,8 @@ export default function WorkbenchPanel({ job, onSaved }: Props) {
     try {
       const out = await api.checkDrafts(job.key);
       if (out.ok) {
-        setCheck({ state: 'saved', version: out.outcome.draft_version, warnings: out.outcome.warnings });
+        setCheck({ state: 'saved', version: out.outcome.draft_version, warnings: out.outcome.warnings,
+                   fill: out.outcome.fill_pct ?? null });
         onSaved(out.job);
       } else {
         setCheck({ state: 'failed', errors: out.errors, warnings: out.warnings, fixPrompt: out.fix_prompt, copied: false });
@@ -168,7 +169,9 @@ export default function WorkbenchPanel({ job, onSaved }: Props) {
         </div>
       )}
       {check.state === 'saved' && (
-        <p className="progress ok" role="status">Saved draft v{check.version}.</p>
+        <p className="progress ok" role="status">
+          Saved draft v{check.version}.{check.fill != null && ` The resume fills ${check.fill}% of the page.`}
+        </p>
       )}
       {(check.state === 'saved' || check.state === 'failed') && check.warnings.length > 0 && (
         <ul className="muted small" aria-label="Warnings">{check.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>

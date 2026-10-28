@@ -270,6 +270,7 @@ def render_resume(
     profile: dict,
     template_path: Path | None = None,
     fixed: dict | None = None,
+    gap: float = 0.0,
 ) -> str:
     """Render a TailoredResume to a complete HTML document.
 
@@ -278,6 +279,7 @@ def render_resume(
         profile: profile.json contents; supplies the name and contact line.
         template_path: Override the template; default is the user's template, then the packaged one.
         fixed: Pre-loaded fixed blocks (see load_fixed); loaded from disk when None.
+        gap: Extra spacing in CSS pixels, set as the `--gap` variable the template's spacing uses (0 = none).
 
     Returns:
         HTML string ready for pdf.render_pdf().
@@ -286,7 +288,7 @@ def render_resume(
     header = fixed.get("header") or {}
     env = Environment(autoescape=True, undefined=StrictUndefined, trim_blocks=True, lstrip_blocks=True)
     template = env.from_string(_template_source(template_path))
-    return template.render(
+    html = template.render(
         name=header.get("name") or profile.get("personal", {}).get("full_name", ""),
         summary=resume.headline,
         headline=resume.headline,  # the old name, for custom templates
@@ -295,6 +297,10 @@ def render_resume(
         skills=list(resume.skills.items()),
         education=fixed["education"],
     )
+    if gap > 0:
+        style = f"<style>:root {{ --gap: {gap:.2f}px; }}</style>"
+        html = html.replace("</head>", style + "</head>", 1) if "</head>" in html else style + html
+    return html
 
 
 def write_fixed_yaml(

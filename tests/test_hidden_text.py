@@ -104,7 +104,12 @@ def test_default_template_pdf_has_only_visible_text(tmp_path):
     assert validate_pdf_text(tmp_path / "ok.pdf", html) == []
 
 
-def test_import_rejects_injection_and_keeps_the_last_draft(tmp_path):
+def test_import_rejects_injection_and_keeps_the_last_draft(tmp_path, monkeypatch):
+    from strelitzia.scoring import tailor
+
+    # Real Chromium renders the small fixture page well under the fill the stand-in budget plans; fill isn't the
+    # point here.
+    monkeypatch.setattr(tailor, "FILL_REJECT", 0.0)
     conn = init_db(tmp_path / "wb.db")
     job = add_job_row(conn)
     out_dir = tmp_path / "out"

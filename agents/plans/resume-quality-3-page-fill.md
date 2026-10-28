@@ -53,7 +53,7 @@ and never split one project into task bullets to hit a count."
 bounded) and re-render until ≥95%. Below 90%: error with a fix prompt naming how many lines to add and where. Store
 `fill_pct` in the draft report and show it with the warnings.
 **Validate:** `pytest tests/test_workbench_import.py -q` → a 92% draft renders at ≥95% after spacing; an 80% draft errors.
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (Task 3 commit; Check & format shows "The resume fills N% of the page")
 
 ## Validation
 - `scripts/validate.sh --full` passes.

@@ -191,6 +191,7 @@ def _draft_fields(job: dict) -> dict:
         "coverage": report.get("coverage"),
         "unmet": report.get("unmet") or [],
         "warnings": report.get("warnings") or [],
+        "fill_pct": report.get("fill_pct"),
         "notes_for_user": report.get("notes_for_user") or "",
         "draft_history": workbench.draft_history(job),
         "packet_doc_url": job.get("packet_doc_url"),
@@ -375,7 +376,7 @@ def _import_response(request: Request, key: str, outcome: workbench.ImportOutcom
         log.warning("Drive upload failed for %s: %s", key, e)
         warnings.append(f"Saved, but the Drive upload failed: {e}")
     return {"outcome": {"draft_version": outcome.draft_version, "warnings": warnings,
-                        "coverage": outcome.coverage, "unmet": outcome.unmet},
+                        "coverage": outcome.coverage, "unmet": outcome.unmet, "fill_pct": outcome.fill_pct},
             "job": job_detail(conn, job_by_key(conn, user.id, key))}
 
 

@@ -337,3 +337,65 @@ def test_import_drafts_warns_when_the_instructions_are_old(conn, tmp_path):
 def test_the_rules_ask_for_the_version_line_at_the_top_of_the_resume_draft():
     text = wb.rules_text()
     assert "The first line of the resume draft is \"Rules version: \"" in text
+
+
+# ── page fill ──
+
+def _fill_render(fill: float, per_px: float = 6.0):
+    """A render_pdf stand-in whose page is `fill` full, plus per_px points per pixel of --gap."""
+    import re as re_mod
+
+    def render(html, output_path):
+        m = re_mod.search(r"--gap: ([\d.]+)px", html)
+        height = fill * 741.6 + per_px * (float(m.group(1)) if m else 0.0)
+        return {**fake_render_pdf(html, output_path), "content_height_pt": round(height, 1)}
+    return render
+
+
+def test_a_short_page_is_filled_by_spacing(conn, tmp_path, monkeypatch):
+    monkeypatch.setattr(pdf_mod, "render_pdf", _fill_render(0.92))
+    out = _import(conn, tmp_path, good_result())
+    assert out.ok, out.errors
+    assert 95 <= out.fill_pct <= 100
+    row = dict(conn.execute("SELECT * FROM jobs").fetchone())
+    assert json.loads(row["tailor_report"])["fill_pct"] == out.fill_pct
+
+
+def test_a_full_page_gets_no_extra_spacing(conn, tmp_path, monkeypatch):
+    htmls = []
+
+    def render(html, output_path):
+        htmls.append(html)
+        return _fill_render(0.97)(html, output_path)
+
+    monkeypatch.setattr(pdf_mod, "render_pdf", render)
+    out = _import(conn, tmp_path, good_result())
+    assert out.ok and out.fill_pct == 97
+    assert not any("--gap:" in h for h in htmls)
+
+
+def test_spacing_stops_at_its_bound(conn, tmp_path, monkeypatch):
+    monkeypatch.setattr(pdf_mod, "render_pdf", _fill_render(0.91, per_px=1.0))
+    out = _import(conn, tmp_path, good_result())
+    assert out.ok and out.fill_pct == 92  # 4px of spacing adds 4pt: the best it can do
+
+
+def test_a_much_too_short_page_is_an_error(conn, tmp_path, monkeypatch):
+    monkeypatch.setattr(pdf_mod, "render_pdf", _fill_render(0.80))
+    out = _import(conn, tmp_path, good_result())
+    assert not out.ok
+    assert "The resume fills 80% of the page; it needs 95-100%. Add about 10 printed lines" in out.errors[0]
+    assert "lengthen the bullets toward 111 characters, starting with data-engineer-acme" in out.errors[0]
+    assert out.fix_prompt and not list((tmp_path / "out").glob("*.pdf"))
+
+
+@pytest.mark.real_layout
+def test_the_default_template_spreads_out_with_the_gap():
+    from strelitzia.scoring.resume_model import TailoredResume
+    from strelitzia.scoring.template import DEFAULT_TEMPLATE_PATH, render_resume
+    from workbench_helpers import FIXED, PROFILE, library
+
+    resume = TailoredResume.from_llm_json(good_result()["resume"], library())
+    tight, spaced = pdf_mod.measure_layout([
+        render_resume(resume, PROFILE, template_path=DEFAULT_TEMPLATE_PATH, fixed=FIXED, gap=g) for g in (0, 3)])
+    assert spaced["content_height_pt"] > tight["content_height_pt"] + 10
