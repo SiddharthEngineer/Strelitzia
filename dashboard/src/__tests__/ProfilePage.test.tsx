@@ -9,7 +9,10 @@ import type { ProfileDocs, ProfileFields, ProfileResponse } from '../types';
 
 vi.mock('../api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api')>();
-  return { ...actual, getProfile: vi.fn(), saveProfile: vi.fn(), syncProfileDocs: vi.fn() };
+  return {
+    ...actual, getProfile: vi.fn(), saveProfile: vi.fn(), syncProfileDocs: vi.fn(), getClaudeSetup: vi.fn(),
+    copyText: vi.fn(),
+  };
 });
 
 // Synthetic profile, no real person.
@@ -37,6 +40,7 @@ function renderPage() {
 beforeEach(() => {
   vi.mocked(api.getProfile).mockResolvedValue(structuredClone(RESPONSE));
   vi.mocked(api.saveProfile).mockImplementation(async (profile) => ({ ...RESPONSE, profile }));
+  vi.mocked(api.getClaudeSetup).mockRejectedValue(new ApiError(403, 'Not for your account'));
 });
 
 describe('ProfilePage', () => {
@@ -104,6 +108,29 @@ describe('ProfilePage', () => {
     expect(await screen.findByText(/Last synced just now/)).toBeInTheDocument();
     expect(screen.getByText('Synced: your changes are in.')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('shows the interview prompts with Copy buttons', async () => {
+    vi.mocked(api.getClaudeSetup).mockResolvedValue({
+      drive: true, drive_detail: '', drive_source: 'user', connect_url: null, rules_version: 'r1', profile_docs: null,
+      project_name: 'Strelitzia Resumes', project_instructions: '', instructions_version: 'i1',
+      interview_prompts: { about_me: 'Interview me to fill my About me Doc.', library: 'Go through my Content Library.' },
+    });
+    vi.mocked(api.copyText).mockResolvedValue(undefined);
+    const user = renderPage();
+    expect(await screen.findByText('Interview me to fill my About me Doc.')).toBeInTheDocument();
+    expect(screen.getByText('Go through my Content Library.')).toBeInTheDocument();
+    expect(screen.getByText(/new chat in the Strelitzia Resumes project/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Copy the prompt: Revise your Content Library' }));
+    expect(api.copyText).toHaveBeenCalledWith('Go through my Content Library.');
+    expect(screen.getByRole('button', { name: 'Copy the prompt: Revise your Content Library' })).toHaveTextContent('Copied');
+  });
+
+  it('leaves the interview prompts out when the Claude setup is unavailable', async () => {
+    renderPage();
+    await screen.findByLabelText('First name');
+    await waitFor(() => expect(api.getClaudeSetup).toHaveBeenCalled());
+    expect(screen.queryByText('Interviews with Claude')).toBeNull();
   });
 
   it('shows About me warnings after a sync that saved', async () => {

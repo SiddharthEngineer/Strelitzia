@@ -379,7 +379,8 @@ def rules_version_warning(used: str | None) -> str | None:
 
 # ── Project instructions (pasted into the "Strelitzia Resumes" Claude project) ──
 # Keep them short and stable: everything that changes with the app (the rules, the draft format) goes in the
-# packet. Changing this text changes INSTRUCTIONS_VERSION, and Check & format then asks the user to paste it again.
+# packet. Changing this text (or an interview prompt) changes INSTRUCTIONS_VERSION, and Check & format then asks the
+# user to paste it again.
 
 PROJECT_NAME = "Strelitzia Resumes"
 PROJECT_INSTRUCTIONS = (
@@ -392,7 +393,21 @@ PROJECT_INSTRUCTIONS = (
     "two draft Docs named in the prompt; edit the Profile Docs only when I agree, keeping their format. When I ask "
     "for changes, keep everything else the same."
 )
-INSTRUCTIONS_VERSION = hashlib.sha256(PROJECT_INSTRUCTIONS.encode("utf-8")).hexdigest()[:8]
+# Prompts the user copies from the Profile page into a new chat in the project. They are versioned with the
+# instructions (they lean on them: the Profile Docs' location, editing only when the user agrees).
+ABOUT_ME_INTERVIEW = (
+    "Interview me to fill my About me Doc (the Google Doc \"About me\" in the Drive folder Strelitzia/Profile): one "
+    "question at a time, in the Doc's order, skipping ones already answered; ask follow-ups until the answer has a "
+    "specific moment or example; write each answer into the Doc in my words, and show me before you write."
+)
+LIBRARY_INTERVIEW = (
+    "Go through my Content Library (the Google Doc \"Content Library\" in the Drive folder Strelitzia/Profile) one "
+    "project at a time: propose a one-line Responsibility, move code-level facts into Detail, and ask me for the "
+    "outcome, who relied on it and any number when they're missing. Write each project back only after I agree."
+)
+INTERVIEW_PROMPTS = {"about_me": ABOUT_ME_INTERVIEW, "library": LIBRARY_INTERVIEW}
+INSTRUCTIONS_VERSION = hashlib.sha256(
+    "\n\n".join((PROJECT_INSTRUCTIONS, *INTERVIEW_PROMPTS.values())).encode("utf-8")).hexdigest()[:8]
 
 
 def project_instructions() -> str:

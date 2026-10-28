@@ -163,6 +163,9 @@ a.button:hover { filter: brightness(1.08); }
 .job-title p { margin: 0; }
 .job-meta { display: flex; align-items: center; gap: 10px; }
 .pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; }
+.interview-prompt { margin-bottom: 14px; }
+.interview-prompt h3 { margin: 0; font-size: 14px; }
+.interview-prompt .pre { margin-bottom: 6px; }
 .link-row { display: flex; flex-wrap: wrap; gap: 6px 16px; }
 .action-bar { display: flex; flex-wrap: wrap; gap: 10px 24px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .action-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }

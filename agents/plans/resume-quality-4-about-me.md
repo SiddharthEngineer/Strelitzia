@@ -66,7 +66,7 @@ on the Profile page.
   they're missing. Write each project back only after I agree."
 Both are served with the project instructions (`GET /claude-setup`, existing) so the version check covers them.
 **Validate:** `pytest tests/test_workbench_packet.py -q` and `scripts/validate.sh --full` → both prompts render with Copy buttons.
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (this commit)
 
 ## Validation
 - `scripts/validate.sh --full` passes.

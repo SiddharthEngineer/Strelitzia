@@ -22,6 +22,7 @@ function setup(extra: Partial<ClaudeSetup> = {}): ClaudeSetup {
     profile_docs: null,
     project_name: 'Strelitzia Resumes',
     project_instructions: 'Instructions version: i7654321\n\nYou tailor my resume and cover letter for one job per chat.',
+    interview_prompts: { about_me: 'Interview me.', library: 'Go through my library.' },
     ...extra,
   };
 }

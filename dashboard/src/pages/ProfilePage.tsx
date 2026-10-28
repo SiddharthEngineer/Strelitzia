@@ -5,10 +5,45 @@ import Flower from '../components/Flower';
 import ProfileDocLinks from '../components/ProfileDocLinks';
 import { Group, TagInput } from '../components/FormParts';
 import { humanize, relativeTime } from '../labels';
-import type { ProfileFields, ProfileResponse } from '../types';
+import type { InterviewPrompts, ProfileFields, ProfileResponse } from '../types';
 
 type FieldKey = keyof ProfileFields;
 type TextKey = { [K in FieldKey]: ProfileFields[K] extends string ? K : never }[FieldKey];
+
+const INTERVIEWS: { kind: keyof InterviewPrompts; title: string }[] = [
+  { kind: 'about_me', title: 'Fill your About me Doc' },
+  { kind: 'library', title: 'Revise your Content Library' },
+];
+
+/** The interview prompts from the Claude setup (absent until it loads, or for an account without the workbench). */
+function InterviewPromptsGroup({ prompts, project }: { prompts: InterviewPrompts; project: string }) {
+  const [copied, setCopied] = useState<keyof InterviewPrompts | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  async function copy(kind: keyof InterviewPrompts) {
+    setError(null);
+    try {
+      await api.copyText(prompts[kind]);
+      setCopied(kind);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+  return (
+    <Group title="Interviews with Claude" hint={`Start a new chat in the ${project} project on claude.ai and paste one
+      of these. Claude asks you questions and writes the answers into your Docs once you agree; Sync now afterwards.`}>
+      {INTERVIEWS.map(({ kind, title }) => (
+        <div key={kind} className="interview-prompt">
+          <h3>{title}</h3>
+          <p className="pre card">{prompts[kind]}</p>
+          <button type="button" aria-label={`Copy the prompt: ${title}`} onClick={() => copy(kind)}>
+            {copied === kind ? 'Copied' : 'Copy'}
+          </button>
+        </div>
+      ))}
+      {error && <p className="error" role="alert">{error}</p>}
+    </Group>
+  );
+}
 
 const isEmpty = (v: unknown) => v === null || v === '' || (Array.isArray(v) && v.length === 0);
 
@@ -35,6 +70,7 @@ export default function ProfilePage() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [interviews, setInterviews] = useState<{ prompts: InterviewPrompts; project: string } | null>(null);
 
   function load(res: ProfileResponse) {
     setData(res);
@@ -47,6 +83,10 @@ export default function ProfilePage() {
     api.getProfile(ctrl.signal).then(load).catch((err) => {
       if (!ctrl.signal.aborted) setError(err.message || String(err));
     });
+    // Only to show the interview prompts: without them (e.g. no workbench for the account) the page still works.
+    api.getClaudeSetup(ctrl.signal)
+      .then((s) => setInterviews({ prompts: s.interview_prompts, project: s.project_name }))
+      .catch(() => {});
     return () => ctrl.abort();
   }, []);
 
@@ -195,6 +235,8 @@ export default function ProfilePage() {
           </p>
         )}
       </Group>
+
+      {interviews && <InterviewPromptsGroup prompts={interviews.prompts} project={interviews.project} />}
 
       <div className="save-bar">
         <button type="button" className="primary" disabled={!dirty || busy} onClick={onSave}>Save</button>
