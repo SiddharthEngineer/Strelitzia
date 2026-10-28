@@ -180,6 +180,9 @@ function Step({ job, kind, onSaved, blocked }: StepProps) {
       {(check.state === 'saved' || check.state === 'failed') && check.warnings.length > 0 && (
         <ul className="muted small" aria-label="Warnings">{check.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
       )}
+      {!resume && check.state === 'idle' && job.cover_letter_at && (job.cover_warnings ?? []).length > 0 && (
+        <ul className="muted small" aria-label="Warnings">{job.cover_warnings!.map((w, i) => <li key={i}>{w}</li>)}</ul>
+      )}
     </section>
   );
 }
@@ -208,7 +211,8 @@ export default function WorkbenchPanel({ job, onSaved, coverNotes }: Props) {
 
       <Step job={job} kind="resume" onSaved={onSaved} blocked={null} />
       {coverNotes}
-      <Step job={job} kind="cover" onSaved={onSaved}
+      {/* A newly accepted resume resets the cover step: its last check was against the previous draft. */}
+      <Step key={job.draft_version ?? 0} job={job} kind="cover" onSaved={onSaved}
         blocked={job.draft_version ? null : 'Check & format a resume draft first: the letter is written from it.'} />
 
       {shownFiles.length > 0 && (

@@ -988,6 +988,8 @@ def import_data(conn: Connection, job: dict, data: dict, inputs: Inputs | None =
     report = {"draft_version": version, "rules_version": RULES_VERSION, "at": now, "coverage": cov.to_dict(),
               "unmet": unmet, "warnings": warnings, "fill_pct": fill_pct, "notes_for_user": data.get("notes_for_user") or "",
               "history": history}
+    if not data.get("cover_letter"):  # the kept letter keeps its own check's warnings
+        report.update({k: v for k, v in tailor_report(job).items() if k in ("cover_warnings", "cover_at")})
 
     (out_dir / f"{prefix}.json").write_text(
         resume.to_json(job_url=job["url"], draft_version=version, rules_version=RULES_VERSION), encoding="utf-8")
@@ -1197,41 +1199,46 @@ def draft_texts(job: dict, inputs: Inputs) -> dict[str, str]:
             "cover": cover_draft_text((current or {}).get("cover_letter"), "")}
 
 
+# The column holding when the app last wrote each draft Doc. Rows from before the cover letter got its own chat have
+# only drafts_written_at, for both Docs.
+_WRITTEN_AT = {"resume": "drafts_written_at", "cover": "cover_draft_written_at"}
+
+
 def publish_drafts(client, conn: Connection, job: dict, inputs: Inputs | None = None,
                    kinds: tuple[str, ...] = DRAFT_KINDS) -> dict[str, str]:
     """Create (or reuse) the job's draft Docs of `kinds` (resume, cover) in its Drive folder. Returns {kind: url}.
 
     A Doc is (re)written only when it doesn't exist, or when nobody edited it since the app last wrote it and a
-    newer draft was accepted since; so reopening a packet never wipes Claude's or the user's edits.
+    newer draft was accepted since; so reopening a packet never wipes Claude's or the user's edits. Each Doc keeps its
+    own write time, since the resume and the letter are written in separate chats.
     """
     from strelitzia.storage.drive_layout import draft_name, packet_folder_path
 
     inputs = inputs or Inputs.for_user(conn, job["user_id"])
-    written_at = job.get("drafts_written_at")
-    newer_draft = bool(current_result(job)) and _after(job.get("tailored_at"), written_at)
+    has_draft = bool(current_result(job))
     urls: dict[str, str] = {}
     texts: dict[str, str] | None = None
     folder_id = None
-    last_write = written_at
     for kind in kinds:
+        written_at = job.get(_WRITTEN_AT[kind]) or job.get("drafts_written_at")
         doc_id = job.get(f"{kind}_draft_doc_id")
         meta = client.doc_meta(doc_id) if doc_id else None
         if meta and not meta.get("trashed"):
             edited = not written_at or _after(meta.get("modifiedTime"), written_at)
-            if edited or not newer_draft:
+            if edited or not (has_draft and _after(job.get("tailored_at"), written_at)):
                 urls[kind] = meta.get("webViewLink") or job.get(f"{kind}_draft_doc_url") or ""
                 continue
         texts = texts or draft_texts(job, inputs)
         folder_id = folder_id or client.ensure_folder_path(packet_folder_path(job))
         known = doc_id if meta and not meta.get("trashed") else None
         f = client.create_doc_from_text(folder_id, draft_name(job, kind), texts[kind], "text/markdown", known_id=known)
-        conn.execute(f"UPDATE jobs SET {kind}_draft_doc_id = ?, {kind}_draft_doc_url = ? WHERE user_id = ? AND url = ?",
-                     (f.id, f.url, job["user_id"], job["url"]))
+        conn.execute(f"UPDATE jobs SET {kind}_draft_doc_id = ?, {kind}_draft_doc_url = ?, {_WRITTEN_AT[kind]} = ? "
+                     "WHERE user_id = ? AND url = ?",
+                     (f.id, f.url, f.modified or written_at, job["user_id"], job["url"]))
         urls[kind] = f.url
-        if f.modified and (not last_write or _after(f.modified, last_write)):
-            last_write = f.modified
-    if last_write != written_at:
-        conn.execute("UPDATE jobs SET drafts_written_at = ? WHERE user_id = ? AND url = ?",
-                     (last_write, job["user_id"], job["url"]))
+        if kind == "resume" and job.get("cover_draft_doc_id") and not job.get("cover_draft_written_at"):
+            # An older row: the shared time it had stays the cover Doc's.
+            conn.execute("UPDATE jobs SET cover_draft_written_at = ? WHERE user_id = ? AND url = ?",
+                         (job.get("drafts_written_at"), job["user_id"], job["url"]))
     conn.commit()
     return urls

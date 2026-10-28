@@ -125,3 +125,30 @@ def test_paragraph_and_word_bounds():
     errors, _ = _letter_check(paragraphs + [paragraphs[1]] * 2)
     assert any("has 6 paragraphs" in e for e in errors) and any("at most 380" in e for e in errors)
     assert _letter_check(paragraphs[:3] + [paragraphs[3] + " " + paragraphs[2]])[0] == []
+
+
+def test_an_unclosed_needs_input_marker_quotes_only_its_line():
+    from workbench_helpers import good_result
+
+    paragraphs = good_result()["cover_letter"]["paragraphs"]
+    paragraphs[1] += " [NEEDS INPUT: why Initech"
+    errors, _ = _letter_check(paragraphs)
+    needs = next(e for e in errors if "still needs your input" in e)
+    assert "why Initech." in needs and paragraphs[2][:30] not in needs, needs
+
+
+def test_the_company_check_ignores_a_legal_suffix_and_a_placeholder_name():
+    from workbench_helpers import good_result
+
+    paragraphs = good_result()["cover_letter"]["paragraphs"]
+    assert _letter_check(paragraphs, company="Initech, Inc.") == ([], [])
+    assert _letter_check(paragraphs, company="Unknown company") == ([], [])
+
+
+def test_dynamic_as_a_technical_word_is_not_a_stock_phrase():
+    from workbench_helpers import good_result
+
+    paragraphs = good_result()["cover_letter"]["paragraphs"]
+    paragraphs[1] += " I used dynamic partitioning for the backfills."
+    errors, _ = _letter_check(paragraphs)
+    assert not any("stock phrases" in e for e in errors), errors

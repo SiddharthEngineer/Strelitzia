@@ -554,7 +554,8 @@ _ALL_COLUMNS: dict[str, str] = {
     "resume_draft_doc_url": "TEXT",
     "cover_draft_doc_id": "TEXT",
     "cover_draft_doc_url": "TEXT",
-    "drafts_written_at": "TEXT",  # Drive's modifiedTime of the app's last write to them
+    "drafts_written_at": "TEXT",  # Drive's modifiedTime of the app's last write to the resume draft (both, before R60)
+    "cover_draft_written_at": "TEXT",  # ...and to the cover letter draft, which is written in its own chat
     # The user's notes for the cover letter (resume-quality-4): why this company, referrals, what to stress
     "cover_notes": "TEXT",
     # Google Drive (the PDFs are moved there; see strelitzia.storage)

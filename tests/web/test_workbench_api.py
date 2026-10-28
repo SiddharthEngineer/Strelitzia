@@ -437,3 +437,18 @@ def test_check_before_the_drafts_exist_is_409(client, the_job, drive):
 def test_check_needs_drive(client, the_job):
     r = client.post(f"/strelitzia/dashboard/api/jobs/{the_job}/drafts/check")
     assert r.status_code == 409 and r.json()["detail"] == "Connect Google Drive on the Claude setup page"
+
+
+def test_a_kept_letter_keeps_its_check_warnings(client, conn, the_job, drive):
+    assert _check(client, conn, drive, the_job, good_result()).status_code == 200
+    _post(client, the_job, "cover-packet")
+    data = good_result()
+    data["cover_letter"]["paragraphs"][0] = data["cover_letter"]["paragraphs"][0].replace("Initech's", "Your")
+    _fill_drafts(conn, drive, data)
+    r = _post(client, the_job, "drafts/check?kind=cover")
+    assert r.status_code == 200, r.text
+    assert any("doesn't name Initech" in w for w in r.json()["job"]["cover_warnings"])
+    # Re-checking the resume keeps the letter, and with it that letter's warnings.
+    assert _post(client, the_job, "drafts/check").status_code == 200
+    d = client.get(f"/strelitzia/dashboard/api/jobs/{the_job}").json()
+    assert any("doesn't name Initech" in w for w in d["cover_warnings"]) and d["cover_letter_at"]

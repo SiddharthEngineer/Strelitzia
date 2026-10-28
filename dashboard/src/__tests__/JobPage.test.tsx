@@ -227,6 +227,26 @@ describe('JobPage Claude workbench', () => {
     expect(cover.getByRole('list', { name: 'Warnings' })).toHaveTextContent("doesn't name Acme");
   });
 
+  it('a newly accepted resume clears the cover step and shows the saved letter\'s warnings', async () => {
+    const user = userEvent.setup();
+    const coverJob = { ...saved, resume_draft_url: PACKET.resume_draft_url, cover_draft_url: COVER_PACKET.cover_draft_url,
+      cover_letter_at: '2026-10-15T11:00:00+00:00', cover_warnings: ["The cover letter's first sentence doesn't name Acme"] };
+    vi.mocked(api.getJob).mockResolvedValue(jobDetail(coverJob));
+    vi.mocked(api.checkDrafts)
+      .mockResolvedValueOnce({ ok: true, outcome: { draft_version: 1, warnings: [], coverage: saved.coverage, unmet: saved.unmet },
+        job: jobDetail({ ...coverJob, cover_warnings: [] }) })
+      .mockResolvedValueOnce({ ok: true, outcome: { draft_version: 2, warnings: [], coverage: saved.coverage, unmet: saved.unmet },
+        job: jobDetail({ ...coverJob, cover_warnings: [], draft_version: 2 }) });
+    renderJob();
+    const cover = await step('Cover letter');
+    expect(cover.getByRole('list', { name: 'Warnings' })).toHaveTextContent("doesn't name Acme");
+    await user.click(cover.getByRole('button', { name: 'Check & format' }));
+    expect(await cover.findByText('Saved the cover letter with draft v1.')).toBeInTheDocument();
+    await user.click((await step('Resume')).getByRole('button', { name: 'Check & format' }));
+    expect(await screen.findByText('Saved draft v2.')).toBeInTheDocument();
+    expect((await step('Cover letter')).queryByText(/Saved the cover letter/)).toBeNull();
+  });
+
   it('a cover check that needs input lists the question and copies the fix prompt', async () => {
     const user = userEvent.setup();
     vi.mocked(api.getJob).mockResolvedValue(jobDetail({ ...saved, cover_draft_url: COVER_PACKET.cover_draft_url }));

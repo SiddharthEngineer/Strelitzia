@@ -424,8 +424,8 @@ def validate_tailored_resume(
 # Stock letter phrases (agents/research/cover-letter.md §4): the cover rules list them and Check & format rejects them.
 LETTER_BANNED_PHRASES: list[str] = [
     "I am writing to express", "I'm excited to apply for", "esteemed organization", "passionate",
-    "proven track record", "detail-oriented", "hard worker", "great problem solver", "results-driven", "dynamic",
-    "leverage", "synergy", "delve", "tapestry", "fast-paced environment", "I am confident that",
+    "proven track record", "detail-oriented", "hard worker", "great problem solver", "results-driven", "dynamic team",
+    "dynamic environment", "leverage", "synergy", "delve", "tapestry", "fast-paced environment", "I am confident that",
     "I would welcome the opportunity", "unique blend of", "In today's data-driven world",
 ]
 
@@ -633,7 +633,8 @@ def validate_bullet_shape(resume: "TailoredResume", skills: dict[str, str], max_
     return warnings
 
 
-_NEEDS_INPUT = re.compile(r"\[\s*NEEDS INPUT\s*:?\s*([^\]]*)\]?", re.I)
+# An unclosed marker stops at the end of its line, so the question doesn't swallow the rest of the letter.
+_NEEDS_INPUT = re.compile(r"\[\s*NEEDS INPUT\s*:?\s*([^\]\n]*)\]?", re.I)
 _NOT_ONLY = re.compile(r"\bnot only\b[^.!?]*\bbut also\b", re.I)
 _SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"'(\[])")
 
@@ -705,8 +706,10 @@ def validate_letter(paragraphs: list[str], evidence_slugs: list[str], library: "
             short = sentence if len(sentence) <= 60 else sentence[:57] + "..."
             warnings.append(f"Cover letter sentence {i} names {len(named)} tools ({', '.join(named)}): '{short}'; "
                             f"keep at most {max_tools} per story and tell what you decided instead")
-    if company.strip() and sentences and company.strip().lower() not in sentences[0].lower():
-        warnings.append(f"The cover letter's first sentence doesn't name {company.strip()}; open with the role and "
+    # Match the name without a legal suffix ("Acme Corp, Inc." is named by "Acme Corp"); skip a placeholder name.
+    name = re.sub(r"[\s,]+(inc|llc|ltd|limited|corp|corporation|co|gmbh|plc|s\.?a)\.?$", "", company.strip(), flags=re.I)
+    if name and name != "Unknown company" and sentences and name.lower() not in sentences[0].lower():
+        warnings.append(f"The cover letter's first sentence doesn't name {name}; open with the role and "
                         "one specific reason for this company")
     return errors, list(dict.fromkeys(warnings))
 
