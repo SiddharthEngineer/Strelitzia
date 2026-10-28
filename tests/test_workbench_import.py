@@ -292,7 +292,7 @@ def test_import_drafts_rejects_a_broken_draft_and_saves_nothing(conn, tmp_path):
     outcome = wb.import_drafts(conn, job, resume_text.replace(" [orders-pipeline]", ""), cover_text,
                                inputs=inputs(), out_dir=tmp_path / "out")
     assert not outcome.ok and outcome.errors[0].startswith("Resume draft, line")
-    assert outcome.fix_prompt.endswith("Fix them in the two draft Docs and change nothing else.")
+    assert outcome.fix_prompt.endswith("Fix them in the draft Doc and change nothing else.")
     assert "JSON" not in outcome.fix_prompt
     assert conn.execute("SELECT draft_version FROM jobs").fetchone()[0] is None
 
@@ -303,7 +303,7 @@ def test_import_drafts_check_errors_ask_for_doc_fixes(conn, tmp_path):
     data["resume"]["skills"].append({"category": "Cloud", "items": "Kubernetes"})
     outcome = wb.import_drafts(conn, job, *_draft_texts(data), inputs=inputs(), out_dir=tmp_path / "out")
     assert not outcome.ok and any("Kubernetes" in e for e in outcome.errors)
-    assert "draft Docs" in outcome.fix_prompt
+    assert "draft Doc and change nothing else" in outcome.fix_prompt
 
 
 def test_import_data_is_the_paste_path_without_extraction(conn, tmp_path):

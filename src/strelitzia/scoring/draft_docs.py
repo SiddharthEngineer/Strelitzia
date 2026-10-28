@@ -213,6 +213,11 @@ def _cover_lines(text: str) -> tuple[list[str], str | None]:
     return lines, version
 
 
+def cover_rules_version(text: str) -> str | None:
+    """The Rules version line Claude wrote at the top of the cover letter Doc, if any."""
+    return _cover_lines(text)[1]
+
+
 def parse_cover_draft(text: str) -> dict | None:
     """{"paragraphs", "evidence_slugs"} from the cover letter Doc, or None when it's empty (or the placeholder).
 
