@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import * as api from '../api';
 import { day } from '../labels';
-import type { JobDetail, PacketResult } from '../types';
+import type { CoverPacketResult, DraftKind, JobDetail, PacketResult } from '../types';
 import CoveragePanel from './CoveragePanel';
 
 const CLAUDE_URL = 'https://claude.ai/projects';
@@ -10,6 +10,8 @@ const CLAUDE_URL = 'https://claude.ai/projects';
 interface Props {
   job: JobDetail;
   onSaved: (job: JobDetail) => void;
+  /** Shown above the cover letter step (the job's cover notes box). */
+  coverNotes?: ReactNode;
 }
 
 type Check =
@@ -31,14 +33,23 @@ function failure(err: unknown): Failure {
   return { kind: 'error', message: err instanceof Error ? err.message : String(err), problems: [] };
 }
 
-/** Resume & cover letter: open the job in Claude (the packet and two draft Docs), Check & format the drafts, and
- * see the saved files and coverage. */
-export default function WorkbenchPanel({ job, onSaved }: Props) {
-  const [packet, setPacket] = useState<PacketResult | null>(null);
+interface StepProps {
+  job: JobDetail;
+  kind: DraftKind;
+  onSaved: (job: JobDetail) => void;
+  /** Why the step can't start yet, or null when it can. */
+  blocked: string | null;
+}
+
+/** One Claude step: Open in Claude (its packet, draft Doc and prompt), then Check & format that draft Doc. */
+function Step({ job, kind, onSaved, blocked }: StepProps) {
+  const [packet, setPacket] = useState<PacketResult | CoverPacketResult | null>(null);
   const [copied, setCopied] = useState<'ok' | 'failed' | null>(null);
   const [opening, setOpening] = useState(false);
   const [problem, setProblem] = useState<Failure | null>(null);
   const [check, setCheck] = useState<Check>({ state: 'idle' });
+  const resume = kind === 'resume';
+  const title = resume ? 'Resume' : 'Cover letter';
 
   async function copyPrompt(prompt: string) {
     try {
@@ -54,7 +65,7 @@ export default function WorkbenchPanel({ job, onSaved }: Props) {
     setProblem(null);
     setCopied(null);
     try {
-      const p = await api.openPacket(job.key);
+      const p = resume ? await api.openPacket(job.key) : await api.openCoverPacket(job.key);
       setPacket(p);
       await copyPrompt(p.prompt);
     } catch (err) {
@@ -68,7 +79,7 @@ export default function WorkbenchPanel({ job, onSaved }: Props) {
     setCheck({ state: 'checking' });
     setProblem(null);
     try {
-      const out = await api.checkDrafts(job.key);
+      const out = await api.checkDrafts(job.key, kind);
       if (out.ok) {
         setCheck({ state: 'saved', version: out.outcome.draft_version, warnings: out.outcome.warnings,
                    fill: out.outcome.fill_pct ?? null });
@@ -92,37 +103,27 @@ export default function WorkbenchPanel({ job, onSaved }: Props) {
     }
   }
 
+  const draftUrl = resume
+    ? (packet as PacketResult | null)?.resume_draft_url ?? job.resume_draft_url
+    : (packet as CoverPacketResult | null)?.cover_draft_url ?? job.cover_draft_url;
+  // The resume packet's URL is stored on the job; the cover letter packet is only known once it's opened here.
   const docs: [string, string | null | undefined][] = [
-    ['Packet', packet?.doc_url ?? job.packet_doc_url],
-    ['Resume draft', packet?.resume_draft_url ?? job.resume_draft_url],
-    ['Cover letter draft', packet?.cover_draft_url ?? job.cover_draft_url],
+    [resume ? 'Packet' : 'Cover letter packet', packet?.doc_url ?? (resume ? job.packet_doc_url : null)],
+    [resume ? 'Resume draft' : 'Cover letter draft', draftUrl],
   ];
-  const hasDrafts = Boolean(packet?.resume_draft_url ?? job.resume_draft_url);
-  // A PDF still on the server is the newest draft (a successful Drive upload removes it), so it wins over Drive.
-  const files: [string, string | null | undefined][] = [
-    ['Resume PDF', job.links.resume_pdf || job.links.resume],
-    ['Resume DOCX', job.links.resume_docx],
-    ['Cover letter PDF', job.links.cover_letter_pdf || job.links.cover_letter],
-  ];
-  const shownFiles = files.filter(([, href]) => href);
-  const history = job.draft_history ?? [];
+  const hasDraft = Boolean(draftUrl);
 
   return (
-    <section className="card workbench" aria-label="Resume & cover letter">
-      <div className="card-head">
-        <h2>Resume &amp; cover letter</h2>
-        {job.draft_version ? <span className="muted">Draft v{job.draft_version}</span> : null}
-      </div>
-      <p className="muted small">
-        Resumes are written in your Claude project. Not set up yet? See <Link to="/claude-setup">Claude setup</Link>.
-      </p>
-
+    <section className="workbench-step" aria-label={title}>
+      <h3>{title}</h3>
+      {blocked && <p className="muted small">{blocked}</p>}
       <div className="action-group">
-        <button type="button" className="primary" disabled={opening} onClick={openInClaude}>
+        <button type="button" className="primary" disabled={opening || Boolean(blocked)} onClick={openInClaude}>
           {opening ? 'Preparing…' : 'Open in Claude'}
         </button>
-        <button type="button" disabled={!hasDrafts || check.state === 'checking'} onClick={checkAndFormat}
-          title={hasDrafts ? undefined : 'Open in Claude first: it creates the draft Docs'}>
+        <button type="button" disabled={Boolean(blocked) || !hasDraft || check.state === 'checking'}
+          onClick={checkAndFormat}
+          title={hasDraft ? undefined : 'Open in Claude first: it creates the draft Doc'}>
           {check.state === 'checking' ? 'Checking…' : 'Check & format'}
         </button>
       </div>
@@ -136,13 +137,14 @@ export default function WorkbenchPanel({ job, onSaved }: Props) {
         <div className="progress ok" role="status">
           <span>
             {copied === 'failed' ? 'Couldn\'t copy: select the prompt below and copy it. ' : 'Copied the prompt. '}
-            Paste it into a new chat in your project; Claude writes the two draft Docs, then press Check &amp; format.
+            Paste it into a new chat in your project; Claude writes the {resume ? 'resume' : 'cover letter'} draft
+            Doc, then press Check &amp; format.
             {' · '}rules {packet.rules_version}
           </span>
         </div>
       )}
       {docs.some(([, href]) => href) && (
-        <nav className="link-row" aria-label="Claude Docs">
+        <nav className="link-row" aria-label={`${title} Docs`}>
           {docs.filter(([, href]) => href).map(([label, href]) => (
             <a key={label} href={href!} target="_blank" rel="noreferrer noopener">{label} ↗</a>
           ))}
@@ -163,19 +165,51 @@ export default function WorkbenchPanel({ job, onSaved }: Props) {
       )}
       {check.state === 'failed' && (
         <div className="check-errors" role="alert">
-          <p><strong>Not saved.</strong> Copy the fix prompt into the same chat; Claude fixes the Docs.</p>
+          <p><strong>Not saved.</strong> Copy the fix prompt into the same chat; Claude fixes the Doc.</p>
           <ol aria-label="Problems">{check.errors.map((e, i) => <li key={i}>{e}</li>)}</ol>
           <button type="button" onClick={copyFix}>{check.copied ? 'Copied fix prompt' : 'Copy fix prompt'}</button>
         </div>
       )}
       {check.state === 'saved' && (
         <p className="progress ok" role="status">
-          Saved draft v{check.version}.{check.fill != null && ` The resume fills ${check.fill}% of the page.`}
+          {resume
+            ? <>Saved draft v{check.version}.{check.fill != null && ` The resume fills ${check.fill}% of the page.`}</>
+            : <>Saved the cover letter with draft v{check.version}.</>}
         </p>
       )}
       {(check.state === 'saved' || check.state === 'failed') && check.warnings.length > 0 && (
         <ul className="muted small" aria-label="Warnings">{check.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
       )}
+    </section>
+  );
+}
+
+/** Resume & cover letter: two Claude steps (the resume, then the cover letter from the accepted resume), the saved
+ * files and coverage. */
+export default function WorkbenchPanel({ job, onSaved, coverNotes }: Props) {
+  // A PDF still on the server is the newest draft (a successful Drive upload removes it), so it wins over Drive.
+  const files: [string, string | null | undefined][] = [
+    ['Resume PDF', job.links.resume_pdf || job.links.resume],
+    ['Resume DOCX', job.links.resume_docx],
+    ['Cover letter PDF', job.links.cover_letter_pdf || job.links.cover_letter],
+  ];
+  const shownFiles = files.filter(([, href]) => href);
+  const history = job.draft_history ?? [];
+
+  return (
+    <section className="card workbench" aria-label="Resume & cover letter">
+      <div className="card-head">
+        <h2>Resume &amp; cover letter</h2>
+        {job.draft_version ? <span className="muted">Draft v{job.draft_version}</span> : null}
+      </div>
+      <p className="muted small">
+        Resumes are written in your Claude project. Not set up yet? See <Link to="/claude-setup">Claude setup</Link>.
+      </p>
+
+      <Step job={job} kind="resume" onSaved={onSaved} blocked={null} />
+      {coverNotes}
+      <Step job={job} kind="cover" onSaved={onSaved}
+        blocked={job.draft_version ? null : 'Check & format a resume draft first: the letter is written from it.'} />
 
       {shownFiles.length > 0 && (
         <nav className="link-row" aria-label="Files">

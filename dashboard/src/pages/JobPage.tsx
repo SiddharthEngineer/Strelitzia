@@ -282,10 +282,11 @@ export default function JobPage() {
 
       <ContactsPanel job={job} onChange={setJob} />
       <InterviewsPanel job={job} onChange={setJob} />
-      <BlurField label="Why this company, referrals, anything to stress" className="notes cover-notes" multiline rows={4}
-        maxLength={COVER_NOTES_MAX} placeholder={COVER_NOTES_PLACEHOLDER} value={job.cover_notes}
-        onSave={(value) => act(() => api.putCoverNotes(key, value))} />
-      <WorkbenchPanel job={job} onSaved={setJob} />
+      <WorkbenchPanel job={job} onSaved={setJob} coverNotes={
+        <BlurField label="Why this company, referrals, anything to stress" className="notes cover-notes" multiline
+          rows={4} maxLength={COVER_NOTES_MAX} placeholder={COVER_NOTES_PLACEHOLDER} value={job.cover_notes}
+          onSave={(value) => act(() => api.putCoverNotes(key, value))} />
+      } />
 
       <div className="sections">
         {d ? (

@@ -153,33 +153,94 @@ const saved = {
 
 describe('JobPage Claude workbench', () => {
   const PACKET = {
-    prompt: "Tailor my resume and cover letter for the job in 'Acme'.", rules_version: 'r1234567',
+    prompt: "Tailor my resume (the resume only) for the job in 'Acme'.", rules_version: 'r1234567',
     doc_url: 'https://docs.google.com/document/d/P/edit',
     resume_draft_url: 'https://docs.google.com/document/d/R/edit',
+  };
+  const COVER_PACKET = {
+    prompt: "Write my cover letter for the job in 'Acme'.", rules_version: 'c7654321',
+    doc_url: 'https://docs.google.com/document/d/CP/edit',
     cover_draft_url: 'https://docs.google.com/document/d/C/edit',
   };
+  const step = async (name: 'Resume' | 'Cover letter') => within(await screen.findByRole('region', { name }));
   const apiError = (status: number, message: string, body: unknown = null) =>
     Object.assign(Object.create(api.ApiError.prototype), { status, message, body });
 
-  it('Open in Claude copies the prompt and links the packet and both draft Docs; no paste box', async () => {
+  it('Resume: Open in Claude copies the prompt and links the packet and the resume draft Doc; no paste box', async () => {
     const user = userEvent.setup();
     vi.mocked(api.openPacket).mockResolvedValue(PACKET);
     renderJob();
-    expect(await screen.findByRole('button', { name: 'Check & format' })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: 'Open in Claude' }));
+    const resume = await step('Resume');
+    expect(resume.getByRole('button', { name: 'Check & format' })).toBeDisabled();
+    await user.click(resume.getByRole('button', { name: 'Open in Claude' }));
     expect(api.openPacket).toHaveBeenCalledWith('abc123');
     expect(api.copyText).toHaveBeenCalledWith(PACKET.prompt);
-    expect(await screen.findByRole('status')).toHaveTextContent('Copied the prompt');
-    expect(screen.getByRole('status')).toHaveTextContent('rules r1234567');
-    const docs = screen.getByRole('navigation', { name: 'Claude Docs' });
+    expect(await resume.findByRole('status')).toHaveTextContent('Copied the prompt');
+    expect(resume.getByRole('status')).toHaveTextContent('rules r1234567');
+    const docs = resume.getByRole('navigation', { name: 'Resume Docs' });
     expect(within(docs).getByRole('link', { name: /Packet/ })).toHaveAttribute('href', PACKET.doc_url);
     expect(within(docs).getByRole('link', { name: /Resume draft/ })).toHaveAttribute('href', PACKET.resume_draft_url);
-    expect(within(docs).getByRole('link', { name: /Cover letter draft/ })).toHaveAttribute('href', PACKET.cover_draft_url);
+    expect(within(docs).queryByRole('link', { name: /Cover letter/ })).toBeNull();
     expect(within(docs).getByRole('link', { name: /claude.ai/ })).toBeInTheDocument();
     await user.click(within(docs).getByRole('button', { name: 'Copied prompt' }));
     expect(api.copyText).toHaveBeenCalledTimes(2);
-    expect(screen.getByRole('button', { name: 'Check & format' })).toBeEnabled();
-    expect(within(screen.getByRole('region', { name: 'Resume & cover letter' })).queryByRole('textbox')).toBeNull();
+    expect(resume.getByRole('button', { name: 'Check & format' })).toBeEnabled();
+    expect(resume.queryByRole('textbox')).toBeNull();
+  });
+
+  it('the cover letter step waits for an accepted resume, with the cover notes box above it', async () => {
+    renderJob();
+    const cover = await step('Cover letter');
+    expect(cover.getByRole('button', { name: 'Open in Claude' })).toBeDisabled();
+    expect(cover.getByRole('button', { name: 'Check & format' })).toBeDisabled();
+    expect(cover.getByText(/Check & format a resume draft first/)).toBeInTheDocument();
+    const notes = screen.getByRole('textbox', { name: 'Why this company, referrals, anything to stress' });
+    const region = screen.getByRole('region', { name: 'Cover letter' });
+    expect(notes.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Resume' }).compareDocumentPosition(notes)
+      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('Cover letter: opens its own packet, then checks only the cover letter Doc', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getJob).mockResolvedValue(jobDetail({ ...saved, resume_draft_url: PACKET.resume_draft_url }));
+    vi.mocked(api.openCoverPacket).mockResolvedValue(COVER_PACKET);
+    vi.mocked(api.checkDrafts).mockResolvedValue({
+      ok: true, outcome: { draft_version: 1, warnings: ["The cover letter's first sentence doesn't name Acme"],
+        coverage: saved.coverage, unmet: saved.unmet },
+      job: jobDetail({ ...saved, resume_draft_url: PACKET.resume_draft_url, cover_draft_url: COVER_PACKET.cover_draft_url }),
+    });
+    renderJob();
+    const cover = await step('Cover letter');
+    expect(cover.getByRole('button', { name: 'Check & format' })).toBeDisabled();
+    await user.click(cover.getByRole('button', { name: 'Open in Claude' }));
+    expect(api.openCoverPacket).toHaveBeenCalledWith('abc123');
+    expect(api.openPacket).not.toHaveBeenCalled();
+    expect(api.copyText).toHaveBeenCalledWith(COVER_PACKET.prompt);
+    expect(await cover.findByRole('status')).toHaveTextContent('rules c7654321');
+    const docs = cover.getByRole('navigation', { name: 'Cover letter Docs' });
+    expect(within(docs).getByRole('link', { name: /Cover letter packet/ })).toHaveAttribute('href', COVER_PACKET.doc_url);
+    expect(within(docs).getByRole('link', { name: /Cover letter draft/ })).toHaveAttribute('href', COVER_PACKET.cover_draft_url);
+    await user.click(cover.getByRole('button', { name: 'Check & format' }));
+    expect(api.checkDrafts).toHaveBeenCalledWith('abc123', 'cover');
+    expect(await cover.findByText('Saved the cover letter with draft v1.')).toBeInTheDocument();
+    expect(cover.getByRole('list', { name: 'Warnings' })).toHaveTextContent("doesn't name Acme");
+  });
+
+  it('a cover check that needs input lists the question and copies the fix prompt', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getJob).mockResolvedValue(jobDetail({ ...saved, cover_draft_url: COVER_PACKET.cover_draft_url }));
+    vi.mocked(api.checkDrafts).mockResolvedValue({
+      ok: false, errors: ['The cover letter still needs your input: why Acme?. Answer it in the chat'], warnings: [],
+      fix_prompt: 'These problems were found:\n1. The cover letter still needs your input: why Acme?',
+    });
+    renderJob();
+    const cover = await step('Cover letter');
+    await user.click(cover.getByRole('button', { name: 'Check & format' }));
+    const alert = await cover.findByRole('alert');
+    expect(within(alert).getByRole('list', { name: 'Problems' })).toHaveTextContent('needs your input: why Acme?');
+    await user.click(within(alert).getByRole('button', { name: 'Copy fix prompt' }));
+    expect(api.copyText).toHaveBeenCalledWith(expect.stringContaining('why Acme?'));
   });
 
   it('a failed copy shows the prompt to copy by hand', async () => {
@@ -187,7 +248,7 @@ describe('JobPage Claude workbench', () => {
     vi.mocked(api.openPacket).mockResolvedValue(PACKET);
     vi.mocked(api.copyText).mockRejectedValueOnce(new Error('denied'));
     renderJob();
-    await user.click(await screen.findByRole('button', { name: 'Open in Claude' }));
+    await user.click((await step('Resume')).getByRole('button', { name: 'Open in Claude' }));
     expect(await screen.findByRole('status')).toHaveTextContent("Couldn't copy: select the prompt below");
     expect(screen.getByRole('textbox', { name: 'Prompt' })).toHaveValue(PACKET.prompt);
   });
@@ -196,7 +257,7 @@ describe('JobPage Claude workbench', () => {
     const user = userEvent.setup();
     vi.mocked(api.openPacket).mockRejectedValue(apiError(409, 'Connect Google Drive on the Claude setup page'));
     renderJob();
-    await user.click(await screen.findByRole('button', { name: 'Open in Claude' }));
+    await user.click((await step('Resume')).getByRole('button', { name: 'Open in Claude' }));
     const note = await screen.findByRole('status');
     expect(note).toHaveTextContent('Connect Google Drive on the Claude setup page');
     expect(within(note).getByRole('link', { name: 'Claude setup page' })).toHaveAttribute('href', '/claude-setup');
@@ -208,7 +269,7 @@ describe('JobPage Claude workbench', () => {
     vi.mocked(api.openPacket).mockRejectedValue(apiError(409, 'Your Profile Docs have problems',
       { detail: 'Your Profile Docs have problems', problems: ['The Content Library Doc has no projects.'] }));
     renderJob();
-    await user.click(await screen.findByRole('button', { name: 'Open in Claude' }));
+    await user.click((await step('Resume')).getByRole('button', { name: 'Open in Claude' }));
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Your Profile Docs have problems');
     expect(alert).toHaveTextContent('has no projects');
@@ -222,8 +283,8 @@ describe('JobPage Claude workbench', () => {
       fix_prompt: 'These problems were found:\n1. Resume draft, line 5: bullet has no [slug] tags at the end',
     });
     renderJob();
-    await user.click(await screen.findByRole('button', { name: 'Check & format' }));
-    expect(api.checkDrafts).toHaveBeenCalledWith('abc123');
+    await user.click((await step('Resume')).getByRole('button', { name: 'Check & format' }));
+    expect(api.checkDrafts).toHaveBeenCalledWith('abc123', 'resume');
     const alert = await screen.findByRole('alert');
     expect(within(alert).getByRole('list', { name: 'Problems' })).toHaveTextContent('line 5: bullet has no [slug] tags');
     await user.click(within(alert).getByRole('button', { name: 'Copy fix prompt' }));
@@ -243,7 +304,7 @@ describe('JobPage Claude workbench', () => {
       job: jobDetail({ ...saved, links, resume_draft_url: PACKET.resume_draft_url }),
     });
     renderJob();
-    await user.click(await screen.findByRole('button', { name: 'Check & format' }));
+    await user.click((await step('Resume')).getByRole('button', { name: 'Check & format' }));
     expect(await screen.findByText('Saved draft v1. The resume fills 97% of the page.')).toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Warnings' })).toHaveTextContent('Dropped to fit one page');
     const files = screen.getByRole('navigation', { name: 'Files' });
@@ -269,7 +330,7 @@ describe('JobPage Claude workbench', () => {
 
   it('a job without a draft shows no coverage', async () => {
     renderJob();
-    await screen.findByRole('button', { name: 'Open in Claude' });
+    await step('Resume');
     expect(screen.queryByRole('region', { name: 'Resume targeting' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Generate/ })).toBeNull();
   });

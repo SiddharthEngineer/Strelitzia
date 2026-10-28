@@ -72,7 +72,7 @@ before a resume → 409.
 **What:** Two steps on the job page: "Resume: Open in Claude / Check & format", then "Cover letter: Open in Claude /
 Check & format" (enabled after the resume is accepted, with the cover notes box from plan 4 above it).
 **Validate:** `scripts/validate.sh --full` → dashboard tests pass.
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (this commit)
 
 ## Validation
 - `scripts/validate.sh --full` passes.

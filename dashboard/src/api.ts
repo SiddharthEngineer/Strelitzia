@@ -1,6 +1,6 @@
 // Typed fetch helpers for the dashboard API (<base>/api, e.g. /strelitzia/dashboard/api). Mutating calls send `X-Strelitzia: 1` (the server's CSRF check).
 import type {
-  AddJobInput, AddJobResult, AuthMe, ClaudeSetup, Contact, DraftCheckOutcome, ContactFields, ContactListItem, ContactWithJobs,
+  AddJobInput, AddJobResult, AuthMe, ClaudeSetup, Contact, CoverPacketResult, DraftCheckOutcome, DraftKind, ContactFields, ContactListItem, ContactWithJobs,
   Facets, Interview, ImportResult, InterviewFields, JobDetail, JobList, JobQuery, PacketResult, PanelGradeOutcome,
   PanelMode, PanelOverview, PanelRun, PanelWinner, Preferences, PreferencesResponse, ProfileDocsSetupOutcome,
   ProfileResponse, ProfileSave, ProfileSyncResult, ReassessPreview, ReassessScope, Relation, RescoreAllResult,
@@ -100,14 +100,21 @@ export function patchJob(key: string, patch: { submitted_at?: string; notes?: st
   return request<JobDetail>(`/jobs/${encodeURIComponent(key)}`, { method: 'PATCH', body: JSON.stringify(patch) });
 }
 
-/** Write the job's Claude packet and draft Docs to Drive and get the prompt to paste in Claude (409 without Drive). */
+/** Write the job's Claude packet and resume draft Doc to Drive and get the prompt to paste in Claude (409 without
+ * Drive). */
 export function openPacket(key: string): Promise<PacketResult> {
   return request<PacketResult>(`/jobs/${encodeURIComponent(key)}/packet`, { method: 'POST' });
 }
 
-/** Check & format the job's draft Docs: ok with the saved draft, or not ok with the errors and a fix prompt. */
-export async function checkDrafts(key: string): Promise<DraftCheckOutcome> {
-  const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(key)}/drafts/check`, {
+/** Write the job's cover letter packet and draft Doc to Drive and get the prompt for a new chat (409 until a resume
+ * draft is accepted, or without Drive). */
+export function openCoverPacket(key: string): Promise<CoverPacketResult> {
+  return request<CoverPacketResult>(`/jobs/${encodeURIComponent(key)}/cover-packet`, { method: 'POST' });
+}
+
+/** Check & format one of the job's draft Docs: ok with the saved draft, or not ok with the errors and a fix prompt. */
+export async function checkDrafts(key: string, kind: DraftKind = 'resume'): Promise<DraftCheckOutcome> {
+  const res = await fetch(`${API_BASE}/jobs/${encodeURIComponent(key)}/drafts/check?kind=${kind}`, {
     method: 'POST',
     headers: { Accept: 'application/json', 'X-Strelitzia': '1' },
   });
