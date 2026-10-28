@@ -405,7 +405,8 @@ def check_drafts(key: str, request: Request):
 
 @api.get("/claude/setup")
 def claude_setup(request: Request) -> dict:
-    """What the Claude setup page shows: Drive status, the Profile Docs, and the project instructions with their version.
+    """What the Claude setup page shows: Drive status, the Profile Docs, and the project instructions with their version
+    (and the Profile page's interview prompts, versioned with them).
 
     The rules aren't here: they travel in each job's packet.
     """
@@ -421,6 +422,7 @@ def claude_setup(request: Request) -> dict:
         "project_name": workbench.PROJECT_NAME,
         "project_instructions": workbench.project_instructions(),
         "instructions_version": workbench.INSTRUCTIONS_VERSION,
+        "interview_prompts": workbench.INTERVIEW_PROMPTS,
     }
 
 

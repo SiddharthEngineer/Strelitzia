@@ -144,6 +144,7 @@ def test_setup_without_drive(client):
     assert "rules_markdown" not in s and "rules_url" not in s  # the rules travel in each packet
     assert s["project_instructions"] == wb.project_instructions() and s["project_name"] == "Strelitzia Resumes"
     assert s["instructions_version"] == wb.INSTRUCTIONS_VERSION
+    assert s["interview_prompts"] == {"about_me": wb.ABOUT_ME_INTERVIEW, "library": wb.LIBRARY_INTERVIEW}
     assert client.post("/strelitzia/dashboard/api/claude/docs").status_code in (404, 405)  # removed
 
 

@@ -213,6 +213,15 @@ export interface ClaudeSetup {
   /** What to paste into the project's instructions; its first line is "Instructions version: <v>". */
   project_instructions: string;
   instructions_version: string;
+  /** Prompts for a new chat in the project (shown on the Profile page), versioned with the instructions. */
+  interview_prompts: InterviewPrompts;
+}
+
+export interface InterviewPrompts {
+  /** Claude interviews the user to fill the About me Doc. */
+  about_me: string;
+  /** Claude revises the Content Library one project at a time (Responsibility, Detail, outcomes). */
+  library: string;
 }
 
 /** One Profile Doc in Drive (Strelitzia/Profile/) and when the app last pulled it. */

@@ -1,6 +1,7 @@
 """The workbench's output contract, the fixed docs and the per-job packet."""
 
 import copy
+import hashlib
 import json
 
 import pytest
@@ -76,6 +77,17 @@ def test_project_instructions_are_versioned_and_point_at_the_packet():
     assert "didn't say" in wb.instructions_version_warning(None)
     old = wb.instructions_version_warning("0ld0ld00")
     assert "0ld0ld00" in old and wb.INSTRUCTIONS_VERSION in old and "Claude setup" in old
+
+
+def test_interview_prompts_are_versioned_with_the_instructions():
+    about, library = wb.INTERVIEW_PROMPTS["about_me"], wb.INTERVIEW_PROMPTS["library"]
+    assert "About me" in about and "one question at a time" in about and "show me before you write" in about
+    assert "Responsibility" in library and "Detail" in library and "only after I agree" in library
+    for prompt in (about, library):
+        assert "Strelitzia/Profile" in prompt
+    # The version is a hash over the instructions and both prompts, so changing a prompt changes it.
+    joined = "\n\n".join((wb.PROJECT_INSTRUCTIONS, about, library))
+    assert wb.INSTRUCTIONS_VERSION == hashlib.sha256(joined.encode("utf-8")).hexdigest()[:8]
 
 
 def test_packet_lists_terms_and_qualifications():
