@@ -76,3 +76,17 @@ def test_base_fixture_plan_fills_the_page(tmp_path):
                       str(tmp_path / "plan.pdf"))
     fill = info["content_height_pt"] / info["usable_height_pt"]
     assert info["pages"] == 1 and 0.95 <= fill <= 1.0, fill
+
+
+def test_page_plan_keeps_every_role_at_zero_when_nothing_fits(monkeypatch):
+    from strelitzia.scoring import tailor
+
+    lib = _lib(3)
+    base = TailoredResume(roles=[RoleEntry(role_key=lib.roles[0].key, title="t", company="c", dates="d",
+                                           tagline=None),
+                                 RoleEntry(role_key=lib.roles[2].key, title="t", company="c", dates="d",
+                                           tagline=None)])
+    budgets = iter([_budget(0), _budget(5)])  # an empty page would measure roomier
+    monkeypatch.setattr(tailor, "line_budget", lambda *a, **k: next(budgets))
+    plan, _ = tailor.page_plan(lib, base, PROFILE, FIXED)
+    assert not any(plan.values()), plan  # not bullets for the library roles the base left out

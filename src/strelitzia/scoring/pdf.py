@@ -449,7 +449,8 @@ def measure_layout(htmls: list[str]) -> list[dict]:
         height (so give it one line); both None without a bullet.
     """
     key = hashlib.sha256("\0".join(htmls).encode("utf-8")).hexdigest()
-    if key not in _LAYOUT_CACHE:
+    out = _LAYOUT_CACHE.get(key)
+    if out is None:
         from playwright.sync_api import sync_playwright
 
         out = []
@@ -463,7 +464,7 @@ def measure_layout(htmls: list[str]) -> list[dict]:
         if len(_LAYOUT_CACHE) >= 128:
             _LAYOUT_CACHE.clear()
         _LAYOUT_CACHE[key] = out
-    return [dict(m) for m in _LAYOUT_CACHE[key]]
+    return [dict(m) for m in out]
 
 
 def _count_pdf_pages(data: object) -> int | None:
