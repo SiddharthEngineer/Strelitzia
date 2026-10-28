@@ -35,6 +35,7 @@ from strelitzia import profile as profile_store
 from strelitzia.config import env
 from strelitzia.database import (Connection, backend_name, backfill_job_keys, delete_job_rows, get_connection,
                                  get_state, init_db, job_company, set_state)
+from strelitzia.enrichment.classify import parse_location
 from strelitzia.llm import LLMStopRun, check_budget, month_spend, user_month_spend
 from strelitzia.scoring import panel
 from strelitzia.scoring import preferences as prefs_mod
@@ -269,6 +270,12 @@ def patch_job(key: str, body: JobPatch, request: Request) -> dict:
             updates[name] = value
     if "deadline" in sent:
         updates["deadline"] = body.deadline.isoformat() if body.deadline else None
+    edited = [name for name in (*_EDITABLE_FIELDS, "deadline") if name in updates]
+    if "location" in updates:  # the Jobs filter also matches the parsed parts
+        loc = parse_location(updates["location"])
+        updates.update(location_city=loc.city, location_state=loc.state, location_country=loc.country)
+    if edited:  # so a later extraction keeps them (database.keep_edited)
+        updates["edited_fields"] = json.dumps(sorted({*queries._json(job.get("edited_fields"), []), *edited}))
     if "notes" in sent:
         updates["notes"] = body.notes
     if any(updates.get(name) != job.get(name) for name in _SCORED_FIELDS if name in updates):
@@ -285,13 +292,22 @@ def patch_job(key: str, body: JobPatch, request: Request) -> dict:
 
 @api.delete("/jobs/{key}")
 def delete_job(key: str, request: Request) -> dict:
-    """Delete the job with its status history, tasks, contact links, interviews and drafts. No undo. Its Drive folder
-    is left alone (the response links it, if there is one)."""
+    """Delete the job with its status history, tasks, contact links, interviews and drafts (rows and local files).
+    No undo. Its Drive folder is left alone (the response links it, if there is one)."""
     conn = db_conn(request)
     user = current_user(request)
     job = job_by_key(conn, user.id, key)
+    # Draft file names don't include the user, so another user's row for the same posting can share them.
+    others = conn.execute("SELECT * FROM jobs WHERE url = ? AND user_id != ?", (job["url"], user.id)).fetchall()
+    shared = {p for row in others for p in workbench.draft_files(dict(row))}
+    files = [p for p in workbench.draft_files(job) if p not in shared]
     if not delete_job_rows(conn, user.id, job["url"]):
         raise HTTPException(status_code=404, detail="Job not found")
+    for path in files:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as e:  # the rows are gone; a file left behind is only logged
+            log.warning("Could not delete %s: %s", path, e)
     folder = job.get("drive_folder_url")
     return {"ok": True, "drive_folder": folder,
             "message": "Deleted. Its files in Google Drive are still there." if folder else "Deleted."}

@@ -1128,6 +1128,21 @@ def draft_history(job: dict) -> list[dict]:
     return list(tailor_report(job).get("history") or [])
 
 
+def draft_files(job: dict) -> list[Path]:
+    """The job's local draft files that exist: the resume in each format with its sidecars, and the cover letter."""
+    paths: list[Path] = []
+    if job.get("tailored_resume_path"):
+        p = Path(job["tailored_resume_path"])
+        paths += [p.with_suffix(s) for s in (".txt", ".pdf", ".docx", ".json")]
+        paths += [p.with_name(p.stem + s) for s in ("_RESULT.json", "_REPORT.json")]
+    if job.get("resume_docx_path"):
+        paths.append(Path(job["resume_docx_path"]).with_suffix(".docx"))
+    if job.get("cover_letter_path"):
+        c = Path(job["cover_letter_path"])
+        paths += [c.with_suffix(".pdf"), c.with_suffix(".txt")]
+    return [p for p in dict.fromkeys(paths) if p.is_file()]
+
+
 def current_result(job: dict) -> dict | None:
     """The last accepted result for this job (the packet's current draft), if there is one."""
     path = job.get("tailored_resume_path")
@@ -1223,6 +1238,15 @@ def publish_drafts(client, conn: Connection, job: dict, inputs: Inputs | None = 
         written_at = job.get(_WRITTEN_AT[kind]) or job.get("drafts_written_at")
         doc_id = job.get(f"{kind}_draft_doc_id")
         meta = client.doc_meta(doc_id) if doc_id else None
+        if meta and not meta.get("trashed") and meta.get("name") != draft_name(job, kind):
+            # The user edited the title or company: the prompt names the Doc by the new name, in the new folder.
+            folder_id = folder_id or client.ensure_folder_path(packet_folder_path(job))
+            moved = client.move_doc(doc_id, draft_name(job, kind), folder_id)
+            if written_at and not _after(meta.get("modifiedTime"), written_at):  # the move isn't an edit
+                written_at = moved.get("modifiedTime") or written_at
+                conn.execute(f"UPDATE jobs SET {_WRITTEN_AT[kind]} = ? WHERE user_id = ? AND url = ?",
+                             (written_at, job["user_id"], job["url"]))
+            meta = {**meta, "name": moved.get("name"), "modifiedTime": moved.get("modifiedTime")}
         if meta and not meta.get("trashed"):
             edited = not written_at or _after(meta.get("modifiedTime"), written_at)
             if edited or not (has_draft and _after(job.get("tailored_at"), written_at)):

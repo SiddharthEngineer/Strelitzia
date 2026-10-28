@@ -467,6 +467,14 @@ class DriveClient:
         return DriveFile(id=meta["id"], url=meta.get("webViewLink", ""), md5=meta.get("md5Checksum"), created=created,
                          folder_id=folder_id, modified=meta.get("modifiedTime"))
 
+    def move_doc(self, file_id: str, name: str, folder_id: str) -> dict:
+        """Rename a Doc and move it into folder_id (after the user edited the job's title or company)."""
+        meta = self._service.files().get(fileId=file_id, fields="parents").execute()
+        old = ",".join(p for p in meta.get("parents") or [] if p != folder_id)
+        return self._service.files().update(
+            fileId=file_id, body={"name": name}, addParents=folder_id, removeParents=old or None, fields=_FILE_FIELDS,
+        ).execute()
+
     def find_doc(self, folder_id: str, name: str) -> dict | None:
         """A Google Doc named `name` in folder_id that isn't trashed, if any."""
         found = self._list(f"name = {_q(name)} and mimeType = {_q(DOC_MIME)} and {_q(folder_id)} in parents "

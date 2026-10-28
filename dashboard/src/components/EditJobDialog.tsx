@@ -23,6 +23,9 @@ export default function EditJobDialog({ job, onSaved, onClose }: Props) {
 
   useEffect(() => {
     titleRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };

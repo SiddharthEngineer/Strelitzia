@@ -331,12 +331,19 @@ def delete_job_rows(conn: Connection, user_id: str, url: str) -> bool:
             return False
         for table, column in JOB_TABLES.items():
             conn.execute(f"DELETE FROM {table} WHERE user_id = ? AND {column} = ?", (user_id, url))
-        # Panel items have no user_id: they belong to the user's runs. Their grades go with them.
-        runs = "SELECT id FROM panel_runs WHERE user_id = ?"
-        items = f"SELECT run_id, item_no FROM panel_items WHERE job_url = ? AND run_id IN ({runs})"
-        for run_id, item_no in conn.execute(items, (url, user_id)).fetchall():
-            conn.execute("DELETE FROM panel_grades WHERE run_id = ? AND item_no = ?", (run_id, item_no))
-        conn.execute(f"DELETE FROM panel_items WHERE job_url = ? AND run_id IN ({runs})", (url, user_id))
+        # Panel items have no user_id: they belong to the user's runs. Their grades go with them. An open run's
+        # packet still shows the job, so it could never be graded: the whole run goes.
+        items = conn.execute(
+            "SELECT i.run_id, i.item_no, r.status FROM panel_items i JOIN panel_runs r ON r.id = i.run_id "
+            "WHERE i.job_url = ? AND r.user_id = ?", (url, user_id)).fetchall()
+        for run_id, item_no, status in items:
+            if status == "open":
+                for table in ("panel_grades", "panel_items"):
+                    conn.execute(f"DELETE FROM {table} WHERE run_id = ?", (run_id,))
+                conn.execute("DELETE FROM panel_runs WHERE id = ?", (run_id,))
+            else:
+                for table in ("panel_grades", "panel_items"):
+                    conn.execute(f"DELETE FROM {table} WHERE run_id = ? AND item_no = ?", (run_id, item_no))
         conn.commit()
     except Exception:
         conn.rollback()
@@ -615,12 +622,19 @@ _ALL_COLUMNS: dict[str, str] = {
     "responded_at": "TEXT",
     "notes": "TEXT",
     "fields_edited_at": "TEXT",  # the user last edited the title or company; after assessed_at the score is stale
+    "edited_fields": "TEXT",  # JSON list of the fields the user set by hand; extraction keeps them (keep_edited)
     # Workspace intake (strelitzia.intake): jobs the user added by link or paste
     "source": "TEXT",  # 'manual' | 'discovered'; NULL = discovered (rows from before the column)
     "added_at": "TEXT",
     "intake_status": "TEXT",  # queued | scraping | ok | needs_paste | error
     "intake_error": "TEXT",
 }
+
+
+def keep_edited(field: str, column: str | None = None) -> str:
+    """SQL for an UPDATE of jobs: `column = ?`, unless the user edited `field` by hand (edited_fields), which keeps it."""
+    column = column or field
+    return f"{column} = CASE WHEN COALESCE(edited_fields, '') LIKE '%\"{field}\"%' THEN {column} ELSE ? END"
 
 
 def table_columns(conn: Connection, table: str = "jobs") -> set[str]:

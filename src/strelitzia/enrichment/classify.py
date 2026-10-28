@@ -225,7 +225,7 @@ def run_classify(conn=None, only_missing: bool = False) -> dict:
     changes apply on the next run, unless `only_missing` (the extract stage's pre-pass), which only
     fills rows without a role_category. Returns {"classified": n, "by_category": {category: n}}.
     """
-    from strelitzia.database import get_connection
+    from strelitzia.database import get_connection, keep_edited
 
     if conn is None:
         conn = get_connection()
@@ -242,7 +242,7 @@ def run_classify(conn=None, only_missing: bool = False) -> dict:
         by_category[category] = by_category.get(category, 0) + 1
         updates.append((category, mode, loc.city, loc.state, loc.country, user_id, url))
     conn.executemany(
-        "UPDATE jobs SET role_category = ?, work_mode = ?, location_city = ?, location_state = ?, "
+        f"UPDATE jobs SET role_category = ?, {keep_edited('work_mode')}, location_city = ?, location_state = ?, "
         "location_country = ?, category_source = 'heuristic' WHERE user_id = ? AND url = ? AND extracted_at IS NULL",
         updates,
     )

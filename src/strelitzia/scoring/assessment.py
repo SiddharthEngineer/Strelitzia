@@ -136,7 +136,9 @@ def posting_document(job: dict) -> dict:
     posting = _posting(job)
     doc = posting.to_dict()
     doc["listing_title"] = job.get("title")
-    doc["company"] = posting.company or job_company(job) or None
+    # A company the user corrected on the job page wins over the one read from the posting.
+    edited = '"company"' in (job.get("edited_fields") or "")
+    doc["company"] = (job_company(job) if edited else posting.company or job_company(job)) or None
     return doc
 
 

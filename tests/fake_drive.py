@@ -71,14 +71,21 @@ class FakeFiles:
             return self._d.public(f)
         return _Req(run)
 
-    def update(self, fileId, media_body=None, fields=None, body=None):
+    def update(self, fileId, media_body=None, fields=None, body=None, addParents=None, removeParents=None):
         self._d.calls["update"] += 1
 
         def run():
             f = self._d.store[fileId]
             if media_body is not None:
                 f["content"] = media_body
-                f["modifiedTime"] = self._d.tick()
+            if removeParents:
+                f["parents"] = [p for p in f["parents"] if p not in removeParents.split(",")]
+            if addParents and addParents not in f["parents"]:
+                f["parents"].append(addParents)
+            if body and "name" in body:
+                f["name"] = body["name"]
+            if media_body is not None or body or addParents or removeParents:
+                f["modifiedTime"] = self._d.tick()  # Drive counts a rename or a move as a modification
             return self._d.public(f)
         return _Req(run)
 
