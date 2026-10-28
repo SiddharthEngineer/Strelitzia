@@ -56,7 +56,6 @@ log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
 SUMMARY_MAX = 300  # stored in the model's `headline` field
-BULLET_MAX = 230
 COVER_MAX_WORDS = 250
 PROMPT_MAX = 700
 DESCRIPTION_MAX = 12000
@@ -254,6 +253,9 @@ def _rules() -> _Doc:
         "When an answer is reusable, offer to add it to my Content Library or About me (if I have that Doc; never "
         "create one), and write it there only if I agree, keeping the Doc's format (its headings, slugs and field "
         "lines) exactly.",
+
+        "If you can't reach a role's count with bullets that pass the checks, ask me for more material (another "
+        "project, an outcome) instead of padding, and never split one project into task bullets to hit a count.",
     ])
     d.h("Wording")
     d.ul([
@@ -283,7 +285,9 @@ def _rules() -> _Doc:
         "Before: \"Created Airflow DAGs with sensors and retries for ingestion jobs.\" After: \"Owned ingestion "
         "orchestration for 12 vendor feeds in Airflow, adding retries and late-data alerts that cut missed morning "
         "loads from weekly to rare.\"",
-        f"One page. Each bullet at most {BULLET_MAX} characters. Keep each role within the bullet range the packet gives.",
+        "One full page: write exactly the number of bullets the packet gives each role, each within the packet's "
+        "character band (two printed lines). The counts and bands are binding; leave a role out only when the "
+        "packet gives it 0 bullets.",
         "Cite every project a bullet draws on in the [slug] tags at the end of the bullet, using slugs from that "
         "bullet's own role. Never leave a bullet without tags.",
         "Skills: keep my base resume's categories (you may reorder them) and put the posting's must-haves that are "
@@ -455,19 +459,22 @@ def _qualification_line(e) -> str:
 
 
 def job_packet(job: dict, library: ContentLibrary, base_resume_text: str, current: dict | None = None,
-               *, fixed_roles: dict | None = None) -> Packet:
+               *, fixed_roles: dict | None = None, profile: dict | None = None, fixed: dict | None = None) -> Packet:
     """The per-job packet and the prompt to paste into the chat.
 
     The packet is a Doc in the job's Drive folder, so the prompt is a short pointer to it and the draft Docs. It ends
-    with the full rules, so Claude always works from the app's current ones.
+    with the full rules, so Claude always works from the app's current ones. The bullets per role and their
+    character band come from the page (`tailor.page_plan`, with `profile` and `fixed` as the checks use them).
     """
-    from strelitzia.scoring.tailor import _role_slots
+    from strelitzia.scoring.tailor import page_plan
 
     library.ensure_keys()
     name = packet_name(job)
     base = parse_base_resume(base_resume_text, library) if base_resume_text.strip() else None
     fixed_roles = {**(fixed_roles_from_resume(base) if base else {}), **(fixed_roles or {})}
-    slots = _role_slots(library, base)
+    fixed = fixed if fixed is not None else fixed_from_data({}, base_resume_text)
+    plan, budget = page_plan(library, base, profile or {}, {**fixed, "roles": fixed_roles})
+    lo, hi = budget.band
     ev = job_evidence(job, library, base_resume_text)
 
     d = _Doc(name)
@@ -490,16 +497,18 @@ def job_packet(job: dict, library: ContentLibrary, base_resume_text: str, curren
             d.ul(quals)
         else:
             d.p("None listed in the posting.")
-    d.h("Roles, bullet ranges and allowed project slugs")
+    d.h("Roles, bullet counts and allowed project slugs")
+    d.p(f"These counts fill one page with two-line bullets: each bullet {lo}-{hi} characters. The counts and the "
+        "band are binding; leave a role out (under Dropped roles) only when it has 0 bullets here.")
     role_lines = []
     for role in library.roles:
-        lo, hi = slots[role.key]
+        n = plan[role.key]
         info = fixed_roles.get(role.key, {})
         head = f"{info['title']} at {info['company']}" if info.get("title") and info.get("company") else role.title
-        need = "required" if lo > 0 else "optional, may go in dropped_roles"
+        count = (f"exactly {n} bullet{'s' if n != 1 else ''}, each {lo}-{hi} characters" if n
+                 else "0 bullets: leave it out, under Dropped roles")
         slugs = ", ".join(p.slug for p in role.projects) or "(no projects)"
-        role_lines.append(f"{role.key}: {head} ({info.get('dates') or role.dates}); {lo}-{hi} bullets, {need}; "
-                          f"projects: {slugs}")
+        role_lines.append(f"{role.key}: {head} ({info.get('dates') or role.dates}); {count}; projects: {slugs}")
     d.ul(role_lines)
     if base and base.skills:
         d.p("Skill categories (from the base resume): " + "; ".join(f"{k}: {v}" for k, v in base.skills.items()))
@@ -626,7 +635,7 @@ def output_prefix(job: dict) -> str:
 
 def check_result(data: dict, job: dict, inputs: Inputs) -> tuple[TailoredResume | None, list[str], list[str]]:
     """All deterministic checks on a parsed result. Returns (resume, errors, warnings)."""
-    from strelitzia.scoring.tailor import _role_slots
+    from strelitzia.scoring.tailor import page_plan
 
     library = inputs.library.ensure_keys()
     errors = schema_errors(data, result_schema(library))
@@ -644,10 +653,11 @@ def check_result(data: dict, job: dict, inputs: Inputs) -> tuple[TailoredResume 
     ev = job_evidence(job, library, inputs.base_resume_text)
     known = inputs.known_text()
     # The skills boundary doesn't make a skill claimable, so the watchlist check sees only real material.
+    plan, budget = page_plan(library, base, inputs.profile, {**inputs.fixed, "roles": fixed_roles})
     model = validate_resume_model(resume, {**inputs.profile, "skills_boundary": {}}, mode="strict",
-                                  slots=_role_slots(library, base), known_text=known)
+                                  slots={k: (n, n) for k, n in plan.items()}, known_text=known)
     errors = [e for e in model["errors"] if not e.startswith(("Banned words", "LLM self-talk"))]
-    errors += validate_wording(resume, BULLET_MAX)
+    errors += validate_wording(resume, *reversed(budget.band))
     errors += validate_provenance(resume, library)
     errors += validate_claims(resume, ev, known)
     errors += validate_skills_known(resume, known)
@@ -834,7 +844,7 @@ def current_result(job: dict) -> dict | None:
 def packet_for(job: dict, inputs: Inputs) -> Packet:
     """The job's packet from the loaded inputs: the current draft, and role facts from resume_fixed.yaml."""
     return job_packet(job, inputs.library, inputs.base_resume_text, current_result(job),
-                      fixed_roles=inputs.fixed.get("roles") or None)
+                      fixed_roles=inputs.fixed.get("roles") or None, profile=inputs.profile, fixed=inputs.fixed)
 
 
 def publish_packet(client, conn: Connection, job: dict, inputs: Inputs | None = None) -> tuple[str, str]:

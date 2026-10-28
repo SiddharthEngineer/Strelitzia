@@ -1,6 +1,9 @@
 """Synthetic inputs for the Claude workbench tests (no personal data)."""
 
+import html as html_mod
 import json
+import math
+import re
 
 from strelitzia.scoring.content_library import ContentLibrary, Project, RoleSection
 
@@ -138,15 +141,31 @@ def add_job_row(conn, **overrides) -> dict:
     return dict(conn.execute("SELECT * FROM jobs WHERE url = ?", (row["url"],)).fetchone())
 
 
+# A stand-in page layout (no Chromium): a fixed block plus each <li> at FAKE_CPL characters a line. Sized so the
+# base fixtures plan 2 + 1 bullets of 91-111 characters, as good_result has, and good_result fills ~97%.
+FAKE_CPL, FAKE_LINE_PT, FAKE_FIXED_PT, FAKE_LI_GAP_PT = 57, 12.0, 635.25, 0.75
+
+
+def fake_height(html: str) -> float:
+    items = [html_mod.unescape(re.sub(r"<[^>]+>", "", t)).strip() for t in re.findall(r"<li>(.*?)</li>", html, re.S)]
+    return FAKE_FIXED_PT + sum(max(1, math.ceil(len(t) / FAKE_CPL)) * FAKE_LINE_PT + FAKE_LI_GAP_PT for t in items)
+
+
+def fake_measure_layout(htmls):
+    """Stand-in for pdf.measure_layout (tests/conftest.py uses it unless a test is marked real_layout)."""
+    return [{"content_height_pt": fake_height(h), "chars_per_line": FAKE_CPL, "line_pt": FAKE_LINE_PT + FAKE_LI_GAP_PT}
+            for h in htmls]
+
+
 def fake_render_pdf(html, output_path):
-    """Stand-in for pdf.render_pdf (no Chromium): writes a blank one-page PDF and reports one page."""
+    """Stand-in for pdf.render_pdf (no Chromium): writes a blank one-page PDF and reports the fake layout's height."""
     from pypdf import PdfWriter
 
     writer = PdfWriter()
     writer.add_blank_page(width=612, height=792)
     with open(output_path, "wb") as f:
         writer.write(f)
-    return {"overflow": False, "content_height_pt": 500.0, "usable_height_pt": 741.6, "pages": 1}
+    return {"overflow": False, "content_height_pt": round(fake_height(html), 1), "usable_height_pt": 741.6, "pages": 1}
 
 
 def reply(data: dict, prose: str = "Here is the tailored resume and letter.") -> str:

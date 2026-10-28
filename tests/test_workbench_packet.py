@@ -47,7 +47,8 @@ def test_rules_cover_the_rules_and_the_draft_format():
     html = wb.rules_text()
     assert "```json" not in html and "project_ids" not in html
     for phrase in ("required qualification you rate claimable", "most recent role", "exact term",
-                   "Never claim a tool or skill the packet lists as not in my material", "Working with me", "No keyword lists", "No hidden text", "230 characters",
+                   "Never claim a tool or skill the packet lists as not in my material", "Working with me", "No keyword lists", "No hidden text", "character band",
+                   "ask me for more material", "never split one project into task bullets",
                    "3 paragraphs", "250 words", "spearheaded", "## Dropped roles", "## Notes for me",
                    "Evidence: ", "never create a new Doc", "Resume draft", "Instructions version: "):
         assert phrase in html, phrase
@@ -91,10 +92,34 @@ def test_packet_lists_terms_and_qualifications():
     assert "claimable / partly / not" in quals
     assert "- 3+ years building data pipelines with Spark (possible evidence: base resume data-engineer-acme)" in quals
     assert "not in your material" not in quals
-    assert "data-engineer-acme: Data Engineer at Acme Corp (Jan 2024 – Present); 1-2 bullets, required" in p.text
+    assert ("data-engineer-acme: Data Engineer at Acme Corp (Jan 2024 – Present); exactly 2 bullets, each 91-111 "
+            "characters;") in p.text
+    assert "data-analyst-intern-globex: Data Analyst Intern at Globex (Jun 2022 – Aug 2022); exactly 1 bullet," in p.text
+    assert "each bullet 91-111 characters. The counts and the band are binding" in p.text
     assert "projects: orders-pipeline, quality-dashboard" in p.text
     assert "Customer Data Platform (CDP)" in p.text
     assert "<h2>Required qualifications</h2>" in p.html
+
+
+def test_bullet_band_and_exact_counts_are_checked():
+    data = good_result()
+    data["resume"]["roles"][1]["bullets"][0]["text"] = "Trained a churn model in Python with scikit-learn, AUC 0.83"
+    _, errors, _ = wb.check_result(data, job(), inputs())
+    assert any("is 59 characters; at least 91, so it prints as two lines" in e for e in errors), errors
+    data = good_result()
+    data["resume"]["roles"] = data["resume"]["roles"][:1]
+    _, errors, _ = wb.check_result(data, job(), inputs())
+    assert "Role 'data-analyst-intern-globex' is required (exactly 1 bullet) but missing" in errors
+
+
+def test_a_role_planned_at_zero_must_be_left_out(monkeypatch):
+    from strelitzia.scoring import tailor
+
+    monkeypatch.setattr(tailor, "bullet_plan", lambda lib, base, budget: {"data-engineer-acme": 2,
+                                                                          "data-analyst-intern-globex": 0})
+    _, errors, _ = wb.check_result(good_result(), job(), inputs())
+    assert "Role 'data-analyst-intern-globex' gets 0 bullets on this page; leave it out (under Dropped roles)" in errors
+    assert "0 bullets: leave it out, under Dropped roles" in wb.packet_for(job(), inputs()).text
 
 
 def test_packet_gives_an_unmatched_sentence_no_verdict():

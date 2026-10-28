@@ -44,7 +44,7 @@ band (error below the minimum, as today above the maximum). Add to "Working with
 count with bullets that pass the checks, ask me for more material (another project, an outcome) instead of padding,
 and never split one project into task bullets to hit a count."
 **Validate:** `pytest tests/test_workbench_packet.py -q` → counts and bands appear; a 60-character bullet errors.
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (Task 2 commit; tests get a stand-in layout, `real_layout` marks Chromium ones)
 
 ### Task 3: Measure and close the gap
 **Runs:** unattended

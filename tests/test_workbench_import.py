@@ -57,8 +57,7 @@ def test_a_qualification_sentence_is_claude_s_call(conn, tmp_path):
     posting = {**POSTING, "required_qualifications": [*POSTING["required_qualifications"], sentence]}
     data = good_result()
     data["resume"]["roles"][0]["bullets"][0]["text"] = (
-        "Migrated the nightly orders pipeline from cron to Airflow and Spark, cutting runtime from 6 hours to "
-        "45 minutes for desks pricing corporate bonds against Treasury rates and credit spreads")
+        "Moved orders jobs to Airflow for desks pricing corporate bonds against Treasury rates and credit spreads")
     out = _import(conn, tmp_path, data, details_json=json.dumps(posting))
     assert out.ok, out.errors
     assert out.unmet == ["Kubernetes", "Terraform"] and sentence in out.coverage["covered"]
@@ -149,9 +148,9 @@ def test_slug_role_count_wording_checks(conn, tmp_path):
         {"text": "Ran the pipeline — every night, a robust setup " + "x" * 220, "project_ids": ["orders-pipeline"]})
     out = _import(conn, tmp_path, data)
     joined = "\n".join(out.errors)
-    assert "Role 'data-engineer-acme' has 3 bullets; it needs 1-2" in joined
+    assert "Role 'data-engineer-acme' has 3 bullets; it needs exactly 2" in joined
     assert "Em or en dash" in joined and "Banned words in data-engineer-acme bullet 3: robust" in joined
-    assert "at most 230" in joined
+    assert "at most 111" in joined
     bad_slug = good_result()
     bad_slug["resume"]["roles"][1]["bullets"][0]["project_ids"] = ["orders-pipeline"]
     out = wb.import_data(conn, dict(conn.execute("SELECT * FROM jobs").fetchone()), bad_slug,
