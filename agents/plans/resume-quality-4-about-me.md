@@ -52,7 +52,7 @@ only, ≤ 2000 characters).
 **What:** The notes box (saves on blur) with the per-application questions 14-17 as placeholder text; the About me link
 on the Profile page.
 **Validate:** `scripts/validate.sh --full` → dashboard tests pass.
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (this commit)
 
 ### Task 4: Interview prompts
 **Runs:** unattended

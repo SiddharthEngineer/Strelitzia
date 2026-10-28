@@ -66,6 +66,7 @@ export function jobDetail(extra: Partial<JobDetail> = {}): JobDetail {
     discovered_at: '2026-10-02T06:59:45+00:00',
     deadline: '2026-11-01',
     notes: null,
+    cover_notes: null,
     description_text: 'We are hiring a data scientist to build models.',
     details: {
       company: 'Acme', title_normalized: 'Data Scientist', role_category: 'data_science', seniority: 'mid',

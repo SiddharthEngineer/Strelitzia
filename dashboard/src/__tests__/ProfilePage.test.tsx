@@ -26,6 +26,7 @@ const minutesAgo = (n: number) => new Date(Date.now() - n * 60000).toISOString()
 const DOCS: ProfileDocs = {
   library: { url: 'https://docs.google.com/document/d/L/edit', synced_at: minutesAgo(5) },
   resume: { url: 'https://docs.google.com/document/d/R/edit', synced_at: minutesAgo(5) },
+  about: { url: 'https://docs.google.com/document/d/A/edit', synced_at: minutesAgo(5) },
 };
 
 function renderPage() {
@@ -86,14 +87,16 @@ describe('ProfilePage', () => {
     const docs = await screen.findByRole('list', { name: 'Profile Docs' });
     expect(within(docs).getByRole('link', { name: /Content Library/ })).toHaveAttribute('href', DOCS.library!.url);
     expect(within(docs).getByRole('link', { name: /Base Resume/ })).toHaveAttribute('href', DOCS.resume!.url);
+    expect(within(docs).getByRole('link', { name: /About me/ })).toHaveAttribute('href', DOCS.about!.url);
     expect(screen.getByText(/Last synced 5 minutes ago/)).toBeInTheDocument();
   });
 
   it('syncs now', async () => {
     vi.mocked(api.getProfile).mockResolvedValue({ ...RESPONSE, profile_docs: DOCS });
-    const synced = { library: { ...DOCS.library!, synced_at: minutesAgo(0) }, resume: { ...DOCS.resume!, synced_at: minutesAgo(0) } };
+    const synced = { library: { ...DOCS.library!, synced_at: minutesAgo(0) }, resume: { ...DOCS.resume!, synced_at: minutesAgo(0) },
+      about: { ...DOCS.about!, synced_at: minutesAgo(0) } };
     vi.mocked(api.syncProfileDocs).mockResolvedValue({
-      ...RESPONSE, profile_docs: synced, ok: true, problems: [], changed: true, draft: {}, parse_error: null,
+      ...RESPONSE, profile_docs: synced, ok: true, problems: [], warnings: [], changed: true, draft: {}, parse_error: null,
     });
     const user = renderPage();
     await user.click(await screen.findByRole('button', { name: 'Sync now' }));
@@ -103,10 +106,23 @@ describe('ProfilePage', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  it('shows About me warnings after a sync that saved', async () => {
+    vi.mocked(api.getProfile).mockResolvedValue({ ...RESPONSE, profile_docs: DOCS });
+    vi.mocked(api.syncProfileDocs).mockResolvedValue({
+      ...RESPONSE, profile_docs: DOCS, ok: true, problems: [], changed: false, draft: {}, parse_error: null,
+      warnings: ['The About me Doc has no answers yet: Claude needs them for your cover letters.'],
+    });
+    const user = renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Sync now' }));
+    expect(await screen.findByText(/About me Doc has no answers yet/)).toBeInTheDocument();
+    expect(screen.getByText('Synced: nothing changed.')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('lists the problems a sync found', async () => {
     vi.mocked(api.getProfile).mockResolvedValue({ ...RESPONSE, profile_docs: DOCS });
     vi.mocked(api.syncProfileDocs).mockResolvedValue({
-      ...RESPONSE, profile_docs: DOCS, ok: false, changed: false, draft: {}, parse_error: null,
+      ...RESPONSE, profile_docs: DOCS, ok: false, warnings: [], changed: false, draft: {}, parse_error: null,
       problems: ['The Content Library Doc has no projects.'],
     });
     const user = renderPage();
@@ -119,7 +135,7 @@ describe('ProfilePage', () => {
   it('fills the empty fields from the resume, highlighted, without saving them until Save', async () => {
     vi.mocked(api.getProfile).mockResolvedValue({ ...RESPONSE, profile_docs: DOCS });
     vi.mocked(api.syncProfileDocs).mockResolvedValue({
-      ...RESPONSE, profile_docs: DOCS, ok: true, problems: [], changed: true, parse_error: null,
+      ...RESPONSE, profile_docs: DOCS, ok: true, problems: [], warnings: [], changed: true, parse_error: null,
       draft: { last_name: 'Example', current_job_title: 'Widget Engineer', education_level: 'masters',
         years_experience: 4, skills: ['Python', 'SQL'] },
     });
@@ -147,7 +163,7 @@ describe('ProfilePage', () => {
   it('a field typed before the sync keeps the typed value, and Discard drops the draft', async () => {
     vi.mocked(api.getProfile).mockResolvedValue({ ...RESPONSE, profile_docs: DOCS });
     vi.mocked(api.syncProfileDocs).mockResolvedValue({
-      ...RESPONSE, profile_docs: DOCS, ok: true, problems: [], changed: false, parse_error: null,
+      ...RESPONSE, profile_docs: DOCS, ok: true, problems: [], warnings: [], changed: false, parse_error: null,
       draft: { last_name: 'Example', location: 'Springfield' },
     });
     const user = renderPage();
@@ -164,7 +180,7 @@ describe('ProfilePage', () => {
   it('shows why the resume could not be read after a good sync', async () => {
     vi.mocked(api.getProfile).mockResolvedValue({ ...RESPONSE, profile_docs: DOCS });
     vi.mocked(api.syncProfileDocs).mockResolvedValue({
-      ...RESPONSE, profile_docs: DOCS, ok: true, problems: [], changed: true, draft: {},
+      ...RESPONSE, profile_docs: DOCS, ok: true, problems: [], warnings: [], changed: true, draft: {},
       parse_error: 'Synced, but your resume couldn\'t be read to fill in your profile (ValueError).',
     });
     const user = renderPage();

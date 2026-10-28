@@ -224,6 +224,8 @@ export interface ProfileDocLink {
 export interface ProfileDocs {
   library: ProfileDocLink | null;
   resume: ProfileDocLink | null;
+  /** The About me Doc: the personal answers a cover letter needs (Sync creates it for users set up before it). */
+  about: ProfileDocLink | null;
 }
 
 export interface JobDetail {
@@ -240,6 +242,8 @@ export interface JobDetail {
   discovered_at: string | null;
   deadline: string | null;
   notes: string | null;
+  /** The user's notes for the cover letter: why this company, referrals, what to stress (≤ 2000 characters). */
+  cover_notes: string | null;
   description_text: string | null;
   details: JobDetails | null;
   status: Status;
@@ -562,6 +566,8 @@ export type ProfileSave = ProfileFields;
 export interface ProfileSyncResult extends ProfileResponse {
   ok: boolean;
   problems: string[];
+  /** About me trouble (e.g. no answers yet): shown, but the rest was saved. */
+  warnings: string[];
   changed: boolean;
   /** Values from the Base Resume for fields that are still empty (not saved: the user reviews, then saves). */
   draft: Partial<ProfileFields>;

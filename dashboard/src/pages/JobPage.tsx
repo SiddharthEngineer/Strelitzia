@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import * as api from '../api';
 import ActionBar from '../components/ActionBar';
+import BlurField from '../components/BlurField';
 import ContactsPanel from '../components/ContactsPanel';
 import InterviewsPanel from '../components/InterviewsPanel';
 import PastePanel from '../components/PastePanel';
@@ -12,6 +13,16 @@ import TaskProgress from '../components/TaskProgress';
 import WorkbenchPanel from '../components/WorkbenchPanel';
 import { day, humanize, roleLabel, STATUS_LABELS, WORK_MODE_LABELS } from '../labels';
 import type { JobDetail, JobDetails, Task, UserStatus } from '../types';
+
+// The per-application questions (agents/research/cover-letter.md §5, 14-17): Claude reads the answers for the letter.
+const COVER_NOTES_PLACEHOLDER = [
+  'For the cover letter, before you open Claude:',
+  '• What specifically drew you to this company or team? Something concrete you read, used or heard.',
+  '• Do you know anyone there, or have a referral?',
+  '• Which 1-2 of your projects fit best, and why? (Optional)',
+  '• Anything to emphasise or avoid for this application?',
+].join('\n');
+const COVER_NOTES_MAX = 2000;
 
 function money(value: number, currency: string | null): string {
   try {
@@ -271,6 +282,9 @@ export default function JobPage() {
 
       <ContactsPanel job={job} onChange={setJob} />
       <InterviewsPanel job={job} onChange={setJob} />
+      <BlurField label="Why this company, referrals, anything to stress" className="notes cover-notes" multiline rows={4}
+        maxLength={COVER_NOTES_MAX} placeholder={COVER_NOTES_PLACEHOLDER} value={job.cover_notes}
+        onSave={(value) => act(() => api.putCoverNotes(key, value))} />
       <WorkbenchPanel job={job} onSaved={setJob} />
 
       <div className="sections">
