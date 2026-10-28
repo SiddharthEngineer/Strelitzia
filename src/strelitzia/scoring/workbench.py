@@ -43,6 +43,7 @@ from strelitzia.scoring.validator import (
     BANNED_WORDS,
     LETTER_BANNED_PHRASES,
     resume_parts,
+    tool_names,
     validate_bullet_shape,
     validate_claims,
     validate_letter,
@@ -854,18 +855,27 @@ def check_result(data: dict, job: dict, inputs: Inputs) -> tuple[TailoredResume 
     errors += validate_skills_known(resume, known)
     errors += validate_numbers_known(resume.headline or "", known, "Summary")
     letter = data.get("cover_letter")
-    if letter:
-        personal = inputs.profile.get("personal", {})
-        errors += validate_letter(letter["paragraphs"], letter["evidence_slugs"], library, ev,
-                                  sign_off=personal.get("preferred_name") or personal.get("full_name", ""),
-                                  max_words=COVER_WORDS[1],
-                                  posting_text=job.get("full_description") or job.get("description") or "")
-    warnings = _coverage_warnings(resume, ev) + validate_bullet_shape(resume, base.skills if base else {})
+    letter_errors, letter_warnings = check_letter(letter, job, inputs, ev) if letter else ([], [])
+    errors += letter_errors
+    warnings = (_coverage_warnings(resume, ev) + validate_bullet_shape(resume, base.skills if base else {})
+                + letter_warnings)
     for version_warning in (rules_version_warning(data.get("rules_version")),
                             instructions_version_warning(data.get("instructions_version"))):
         if version_warning:
             warnings.append(version_warning)
     return resume, list(dict.fromkeys(errors)), warnings
+
+
+def check_letter(letter: dict, job: dict, inputs: Inputs, ev: EvidenceMap | None = None) -> tuple[list[str], list[str]]:
+    """The letter's checks (`validate_letter`) against the user's material and the posting. Returns (errors, warnings)."""
+    library = inputs.library.ensure_keys()
+    ev = ev or job_evidence(job, library, inputs.base_resume_text)
+    base = parse_base_resume(inputs.base_resume_text, library) if inputs.base_resume_text.strip() else None
+    personal = inputs.profile.get("personal", {})
+    return validate_letter(letter["paragraphs"], letter["evidence_slugs"], library, ev,
+                           sign_off=personal.get("preferred_name") or personal.get("full_name", ""),
+                           posting_text=job.get("full_description") or job.get("description") or "",
+                           company=job_company(job), tools=tool_names(base.skills) if base else ())
 
 
 def _coverage_warnings(resume: TailoredResume, ev: EvidenceMap) -> list[str]:

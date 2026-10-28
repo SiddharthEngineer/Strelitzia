@@ -19,7 +19,7 @@ def test_cover_pdf_has_greeting_paragraphs_and_sign_off(tmp_path):
     assert path == tmp_path / "cl.pdf" and isinstance(path, type(tmp_path))
     text = _norm(" ".join(p.extract_text() for p in PdfReader(str(path)).pages))
     pos = 0
-    for part in ["Dear Hiring Manager,", *paragraphs, "Alex Tester"]:
+    for part in ["Dear Hiring Team,", *paragraphs, "Alex Tester"]:
         found = text.find(_norm(part), pos)
         assert found >= 0, f"{part!r} missing or out of order in {text!r}"
         pos = found + len(_norm(part))
@@ -28,11 +28,11 @@ def test_cover_pdf_has_greeting_paragraphs_and_sign_off(tmp_path):
 
 def test_letter_html_is_clean_and_dated():
     html = cover_letter.letter_html(["One.", "Two.", "Three."], PROFILE, job(), today=datetime(2026, 10, 5))
-    assert "October 5, 2026" in html and "Dear Hiring Manager," in html
+    assert "October 5, 2026" in html and "Dear Hiring Team," in html
     assert validate_visible(html) == []
 
 
 def test_letter_text_and_preferred_sign_off():
     profile = {"personal": {"full_name": "Alexandra Tester", "preferred_name": "Alex"}}
     text = cover_letter.letter_text(["One.", " ", "Two."], profile)
-    assert text == "Dear Hiring Manager,\n\nOne.\n\nTwo.\n\nAlex\n"
+    assert text == "Dear Hiring Team,\n\nOne.\n\nTwo.\n\nAlex\n"

@@ -15,7 +15,7 @@ from strelitzia.scoring.content_library import parse_content_library
 
 # ── Rendering ────────────────────────────────────────────────────────────
 
-GREETING = "Dear Hiring Manager,"
+GREETING = "Dear Hiring Team,"
 DEFAULT_TEMPLATE_PATH = config.CONFIG_DIR / "cover_letter_template.default.html"
 
 
