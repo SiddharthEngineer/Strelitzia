@@ -399,3 +399,15 @@ def test_the_default_template_spreads_out_with_the_gap():
     tight, spaced = pdf_mod.measure_layout([
         render_resume(resume, PROFILE, template_path=DEFAULT_TEMPLATE_PATH, fixed=FIXED, gap=g) for g in (0, 3)])
     assert spaced["content_height_pt"] > tight["content_height_pt"] + 10
+
+
+def test_the_gap_style_lands_in_the_head_or_before_the_body(tmp_path):
+    from strelitzia.scoring.resume_model import TailoredResume
+    from strelitzia.scoring.template import render_resume
+    from workbench_helpers import FIXED, PROFILE
+
+    bare = tmp_path / "bare.html"
+    bare.write_text("<!DOCTYPE html><html><body>{{ name }}</body></html>", encoding="utf-8")
+    html = render_resume(TailoredResume(), PROFILE, template_path=bare, fixed=FIXED, gap=2)
+    assert html.startswith("<!DOCTYPE html><html><style>:root { --gap: 2.00px; }</style><body>")
+    assert "--gap" not in render_resume(TailoredResume(), PROFILE, template_path=bare, fixed=FIXED)

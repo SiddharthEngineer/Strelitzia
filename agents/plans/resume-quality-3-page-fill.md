@@ -1,5 +1,5 @@
 # Plan: Resume quality 3/5: a fixed line budget so the resume fills 95-100% of the page
-**Status:** ❌ Not started (planned with the user 2026-10-27)
+**Status:** ✅ Done 2026-10-27 (planned with the user 2026-10-27)
 **Risk:** low (user, 2026-10-27: merge without a review wait; protected paths still get the automated review and preprod check; was review: packet, rules and renderer)
 **Depends on:** resume-quality-2-bullets
 

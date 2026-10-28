@@ -242,7 +242,7 @@ def validate_resume_model(
             elif hi == 0:
                 errors.append(f"Role '{key}' gets 0 bullets on this page; leave it out (under Dropped roles)")
             elif not lo <= n <= hi:
-                errors.append(f"Role '{key}' has {n} bullets; it needs {need}")
+                errors.append(f"Role '{key}' has {n} bullet{'' if n == 1 else 's'}; it needs {need}")
 
     all_text = " ".join(b.text for r in resume.roles for b in r.bullets).lower()
     found_leaks = [p for p in LLM_LEAK_PHRASES if p in all_text]

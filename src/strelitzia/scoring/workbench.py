@@ -498,8 +498,12 @@ def job_packet(job: dict, library: ContentLibrary, base_resume_text: str, curren
         else:
             d.p("None listed in the posting.")
     d.h("Roles, bullet counts and allowed project slugs")
+    with_summary, _ = page_plan(library, base, profile or {}, {**fixed, "roles": fixed_roles}, summary=True)
+    changed = "; ".join(f"{k}: {n}" for k, n in with_summary.items() if n != plan[k])
     d.p(f"These counts fill one page with two-line bullets: each bullet {lo}-{hi} characters. The counts and the "
-        "band are binding; leave a role out (under Dropped roles) only when it has 0 bullets here.")
+        "band are binding; leave a role out (under Dropped roles) only when it has 0 bullets here."
+        + (f" They assume no Summary; a Summary takes a bullet's room, so with one write {changed}." if changed
+           else ""))
     role_lines = []
     for role in library.roles:
         n = plan[role.key]
@@ -654,7 +658,8 @@ def check_result(data: dict, job: dict, inputs: Inputs) -> tuple[TailoredResume 
     ev = job_evidence(job, library, inputs.base_resume_text)
     known = inputs.known_text()
     # The skills boundary doesn't make a skill claimable, so the watchlist check sees only real material.
-    plan, budget = page_plan(library, base, inputs.profile, {**inputs.fixed, "roles": fixed_roles})
+    plan, budget = page_plan(library, base, inputs.profile, {**inputs.fixed, "roles": fixed_roles},
+                             summary=bool(resume.headline))
     model = validate_resume_model(resume, {**inputs.profile, "skills_boundary": {}}, mode="strict",
                                   slots={k: (n, n) for k, n in plan.items()}, known_text=known)
     errors = [e for e in model["errors"] if not e.startswith(("Banned words", "LLM self-talk"))]
@@ -773,11 +778,19 @@ def render_outputs(resume: TailoredResume, data: dict, job: dict, inputs: Inputs
     """
     from strelitzia.scoring import cover_letter
     from strelitzia.scoring.docx_export import to_docx
-    from strelitzia.scoring.tailor import FILL_MIN, FILL_REJECT, FILL_TARGET, fill_page, fit_to_one_page, page_plan
+    from strelitzia.scoring.tailor import (
+        FILL_MIN,
+        FILL_REJECT,
+        FILL_TARGET,
+        fill_page,
+        fit_to_one_page,
+        page_plan,
+    )
 
     base = parse_base_resume(inputs.base_resume_text, inputs.library) if inputs.base_resume_text.strip() else None
     fixed_roles = {**(fixed_roles_from_resume(base) if base else {}), **(inputs.fixed.get("roles") or {})}
-    plan, budget = page_plan(inputs.library, base, inputs.profile, {**inputs.fixed, "roles": fixed_roles})
+    plan, budget = page_plan(inputs.library, base, inputs.profile, {**inputs.fixed, "roles": fixed_roles},
+                             summary=bool(resume.headline))
     cover_dir = cover_dir or out_dir
     letter = data.get("cover_letter")
     # Render into staging files so a rejected paste never replaces the last accepted draft's files.

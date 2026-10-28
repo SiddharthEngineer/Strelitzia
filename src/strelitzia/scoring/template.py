@@ -299,7 +299,8 @@ def render_resume(
     )
     if gap > 0:
         style = f"<style>:root {{ --gap: {gap:.2f}px; }}</style>"
-        html = html.replace("</head>", style + "</head>", 1) if "</head>" in html else style + html
+        html = re.sub(r"(</head>|<body)", lambda m: style + m.group(1), html, count=1, flags=re.I) \
+            if re.search(r"</head>|<body", html, re.I) else style + html
     return html
 
 
