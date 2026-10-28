@@ -217,8 +217,8 @@ def has_about_answers(text: str) -> bool:
     """Whether the About me text has at least one answer: any text under a `##` question heading."""
     in_question = False
     for line in text.splitlines():
-        if line.lstrip().startswith("#"):
-            in_question = line.lstrip().startswith("##")
+        if heading := re.match(r"\s*(#{1,6})\s", line):
+            in_question = len(heading.group(1)) >= 2
         elif in_question and line.strip(" \t*_-\\"):
             return True
     return False
@@ -238,11 +238,14 @@ def _pull_about(client, conn, user_id: str, stored: dict) -> tuple[dict | None, 
             return None, None, [f"The {name} Doc is in the trash: restore it, or empty the trash and sync again "
                                 "for a new one."]
         if not meta:
-            seed = about_text(conn, user_id)
-            f = client.create_doc_from_text(client.ensure_folder_path(profile_folder_path()), name,
-                                            seed if seed.strip() else TEMPLATE_ABOUT, _MIME["about"],
-                                            known_id=stored.get("id"))
-            meta = {"id": f.id, "webViewLink": f.url, "modifiedTime": f.modified}
+            # A same-named Doc the app made before (its id lost, e.g. a failed save) is adopted, never overwritten.
+            folder_id = client.ensure_folder_path(profile_folder_path())
+            meta = client.find_doc(folder_id, name)
+            if not meta:
+                seed = about_text(conn, user_id)
+                f = client.create_doc_from_text(folder_id, name, seed if seed.strip() else TEMPLATE_ABOUT,
+                                                _MIME["about"])
+                meta = {"id": f.id, "webViewLink": f.url, "modifiedTime": f.modified}
         text = _normalize_about(client.export_text(meta["id"], _MIME["about"]))
     except Exception as e:  # noqa: BLE001 -- any Drive error is a warning, never raised
         log.warning("Reading the %s Doc from Drive failed: %s", name, e)
