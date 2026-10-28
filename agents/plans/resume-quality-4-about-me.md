@@ -36,7 +36,7 @@ written by the user before opening the cover letter chat.
 **What:** Third Profile Doc kind; setup creates it when missing (no overwrite of the others); pull stores its text per
 user; a pull with every answer empty is a warning, not an error.
 **Validate:** `pytest tests/test_profile_sync.py -q` → setup on a user with two Docs creates only About me.
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (this commit)
 
 ### Task 2: Cover notes per job
 **Runs:** unattended

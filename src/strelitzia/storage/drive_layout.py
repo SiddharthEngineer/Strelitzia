@@ -77,8 +77,9 @@ def folder_path(job: dict, kind: str) -> list[str]:
 
 
 PROFILE_FOLDER = "Profile"
-# The Profile Docs (profile_sync): the source of truth for the content library and the base resume.
-PROFILE_DOCS = {"library": "Content Library", "resume": "Base Resume"}
+# The Profile Docs (profile_sync): the source of truth for the content library and the base resume, plus About me
+# (the personal answers a cover letter needs and a resume never holds).
+PROFILE_DOCS = {"library": "Content Library", "resume": "Base Resume", "about": "About me"}
 
 
 def profile_folder_path() -> list[str]:
