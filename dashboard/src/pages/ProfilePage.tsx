@@ -34,6 +34,7 @@ export default function ProfilePage() {
   const [syncNote, setSyncNote] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   function load(res: ProfileResponse) {
     setData(res);
@@ -105,6 +106,7 @@ export default function ProfilePage() {
       const res = await api.syncProfileDocs();
       setData(res);  // the fields being edited stay as typed
       setProblems(res.problems);
+      setWarnings(res.warnings ?? []);
       const found = Object.keys(res.draft ?? {}).length > 0;
       if (found) {
         setForm((f) => (f ? withDraft(f, res.draft) : f));
@@ -161,8 +163,10 @@ export default function ProfilePage() {
         ))}
       </Group>
 
-      <Group title="Content library and resume" hint="Both live in Google Docs in the Drive folder Strelitzia/Profile.
-        Edit them there; the app reads them again before every Claude packet and check, or when you press Sync now.">
+      <Group title="Content library, resume and About me" hint="They live in Google Docs in the Drive folder
+        Strelitzia/Profile. Edit them there; the app reads them again before every Claude packet and check, or when you
+        press Sync now. About me holds what a resume never says (why you do this work, goals, constraints) for your
+        cover letters.">
         {data.profile_docs ? (
           <>
             <ProfileDocLinks docs={data.profile_docs} label="Profile Docs" />
@@ -176,6 +180,11 @@ export default function ProfilePage() {
               <div className="notice error" role="alert">
                 <p>Nothing was synced. Fix these in the Docs, then Sync now:</p>
                 <ul>{problems.map((p) => <li key={p}>{p}</li>)}</ul>
+              </div>
+            )}
+            {warnings.length > 0 && (
+              <div className="notice" role="status">
+                <ul>{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
               </div>
             )}
           </>

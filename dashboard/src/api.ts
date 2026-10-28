@@ -91,6 +91,11 @@ export function setStatus(key: string, status: UserStatus | null, submittedAt?: 
   });
 }
 
+/** Save the user's notes for the job's cover letter (null or blank clears them). */
+export function putCoverNotes(key: string, notes: string | null): Promise<JobDetail> {
+  return request<JobDetail>(`${job(key)}/cover-notes`, { method: 'PUT', body: JSON.stringify({ notes }) });
+}
+
 export function patchJob(key: string, patch: { submitted_at?: string; notes?: string | null }): Promise<JobDetail> {
   return request<JobDetail>(`/jobs/${encodeURIComponent(key)}`, { method: 'PATCH', body: JSON.stringify(patch) });
 }

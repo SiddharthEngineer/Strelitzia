@@ -20,7 +20,7 @@ function joinNames(names: string[]): string {
 }
 
 // The Doc names setup reports as existing (drive_layout.PROFILE_DOCS).
-const DOC_NAMES = { library: 'Content Library', resume: 'Base Resume' } as const;
+const DOC_NAMES = { library: 'Content Library', resume: 'Base Resume', about: 'About me' } as const;
 
 /** When the app last pulled the named Docs (the oldest): edits made in a Doc since then aren't in its copy. */
 function lastSynced(docs: ProfileDocs | null, names: string[]): string | null {
@@ -128,7 +128,7 @@ export default function ClaudeSetupPage() {
           <strong> Base Resume</strong> in the Drive folder Strelitzia/Profile, filled with what it has now.
           From then on you edit your library and resume there, and every packet reads them fresh.
           <p className="muted small">
-            The app can only see files it created. Edit these two Docs; don't add new ones to the folder (by hand or
+            The app can only see files it created. Edit these Docs; don't add new ones to the folder (by hand or
             from Claude), because the app won't see them. The old Docs in Strelitzia/_Claude are no longer used and
             can be deleted.
           </p>

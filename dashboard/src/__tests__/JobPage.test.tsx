@@ -124,6 +124,24 @@ describe('JobPage status actions', () => {
     await user.tab();
     expect(api.patchJob).toHaveBeenCalledWith('abc123', { notes: 'Referral from Sam' });
   });
+
+  it('saves the cover letter notes on blur, with the per-application questions as the placeholder', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getJob).mockResolvedValue(jobDetail({ cover_notes: 'Used their API' }));
+    vi.mocked(api.putCoverNotes).mockResolvedValue(jobDetail({ cover_notes: 'Used their API. Referral: Sam' }));
+    renderJob();
+    const box = await screen.findByRole('textbox', { name: 'Why this company, referrals, anything to stress' });
+    expect(box).toHaveValue('Used their API');
+    expect(box).toHaveAttribute('maxlength', '2000');
+    expect(box.getAttribute('placeholder')).toMatch(/drew you to this company[\s\S]*referral[\s\S]*emphasise or avoid/);
+    await user.click(box);
+    await user.tab();
+    expect(api.putCoverNotes).not.toHaveBeenCalled();
+    await user.type(box, '. Referral: Sam');
+    await user.tab();
+    expect(api.putCoverNotes).toHaveBeenCalledWith('abc123', 'Used their API. Referral: Sam');
+    expect(await screen.findByDisplayValue('Used their API. Referral: Sam')).toBeInTheDocument();
+  });
 });
 
 const saved = {

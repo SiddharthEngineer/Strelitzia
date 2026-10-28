@@ -11,6 +11,7 @@ vi.mock('../api');
 const DOCS: ProfileDocs = {
   library: { url: 'https://docs.google.com/document/d/L/edit', synced_at: '2026-10-26T09:30:00+00:00' },
   resume: { url: 'https://docs.google.com/document/d/R/edit', synced_at: '2026-10-26T09:30:00+00:00' },
+  about: { url: 'https://docs.google.com/document/d/A/edit', synced_at: '2026-10-26T09:30:00+00:00' },
 };
 
 function setup(extra: Partial<ClaudeSetup> = {}): ClaudeSetup {
@@ -110,6 +111,7 @@ describe('ClaudeSetupPage', () => {
     const user = userEvent.setup();
     vi.mocked(api.getClaudeSetup).mockResolvedValue(setup({ profile_docs: {
       library: { url: DOCS.library!.url, synced_at: '2020-01-01T00:00:00+00:00' }, resume: { url: null, synced_at: null },
+      about: null,
     } }));
     vi.mocked(api.setupProfileDocs).mockResolvedValueOnce({ ok: false, existing: ['Base Resume'] });
     renderPage();

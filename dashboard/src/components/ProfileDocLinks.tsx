@@ -3,9 +3,10 @@ import type { ProfileDocs } from '../types';
 const DOC_NAMES: Record<keyof ProfileDocs, string> = {
   library: 'Content Library',
   resume: 'Base Resume',
+  about: 'About me',
 };
 
-/** The two Profile Docs as links (a Doc without a link is shown by name). */
+/** The Profile Docs as links (a Doc without a link is shown by name). */
 export default function ProfileDocLinks({ docs, label }: { docs: ProfileDocs; label: string }) {
   return (
     <ul aria-label={label}>

@@ -8,10 +8,14 @@ interface Props {
   type?: string;
   placeholder?: string;
   className?: string;
+  rows?: number;
+  maxLength?: number;
 }
 
 /** A labelled input (or textarea) that saves on blur, only when the text changed. Empty saves as null. */
-export default function BlurField({ label, value, onSave, multiline, type = 'text', placeholder, className = 'field' }: Props) {
+export default function BlurField({
+  label, value, onSave, multiline, type = 'text', placeholder, className = 'field', rows = 3, maxLength,
+}: Props) {
   const [text, setText] = useState(value ?? '');
   useEffect(() => setText(value ?? ''), [value]);
   const save = () => {
@@ -21,7 +25,7 @@ export default function BlurField({ label, value, onSave, multiline, type = 'tex
     <label className={className}>
       <span>{label}</span>
       {multiline ? (
-        <textarea rows={3} value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onBlur={save} />
+        <textarea rows={rows} maxLength={maxLength} value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onBlur={save} />
       ) : (
         <input type={type} value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onBlur={save} />
       )}
