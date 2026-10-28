@@ -1,4 +1,4 @@
-"""Claude workbench: resumes and cover letters are written in a Claude Pro chat, not through the API.
+"""Claude workbench: resumes and cover letters are written in Claude Pro chats, not through the API.
 
 The app prepares the inputs and checks the output:
 - `project_instructions()` is the only text the user pastes into the Claude project, once per version. It stays short
@@ -6,7 +6,9 @@ The app prepares the inputs and checks the output:
 - `job_packet()` is the per-job input (a Doc in the job's Drive folder, rewritten on every Open in Claude): the
   posting, its tools and skills marked in the material or not, its qualification sentences (Claude judges them), the allowed role keys and project slugs, and the
   full rules (`RULES_VERSION`), so the rules are always the app's current ones. The content library and base resume
-  are the user's Profile Docs (`profile_sync`).
+  are the user's Profile Docs (`profile_sync`). It is for the resume only.
+- `cover_packet()` is the cover letter's input, for its own chat once a resume is accepted: the posting, the accepted
+  resume, the job's cover notes, a pointer to About me and the cover letter rules (`COVER_RULES_VERSION`).
 - Claude writes the resume and cover letter into the job's two draft Docs (`publish_drafts`, format in
   `draft_docs`). "Check & format" reads them back and `import_drafts()` runs the deterministic checks, then
   renders and records the draft.
@@ -39,6 +41,7 @@ from strelitzia.scoring.template import (
 )
 from strelitzia.scoring.validator import (
     BANNED_WORDS,
+    LETTER_BANNED_PHRASES,
     resume_parts,
     validate_bullet_shape,
     validate_claims,
@@ -56,7 +59,7 @@ log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
 SUMMARY_MAX = 300  # stored in the model's `headline` field
-COVER_MAX_WORDS = 250
+COVER_WORDS = (250, 350)  # what the cover rules ask for; Check & format allows 220-380
 PROMPT_MAX = 700
 DESCRIPTION_MAX = 12000
 
@@ -212,8 +215,9 @@ class _Doc:
 
 def _rules() -> _Doc:
     d = _Doc("Strelitzia rules")
-    d.p("You write my one-page resume and a short cover letter for one job at a time. These rules come with each "
-        "job's Claude packet and are binding; if anything else (an older rules file, say) disagrees, these win. "
+    d.p("You write my one-page resume for one job at a time: the resume only. The cover letter is written later, "
+        "in its own chat from its own cover letter packet. These rules come with each job's Claude packet and are "
+        "binding; if anything else (an older rules file, say) disagrees, these win. "
         "My real experience is in the \"Content Library\" Google Doc (projects with stable slugs, grouped under role "
         "keys) and the \"Base Resume\" Google Doc, both in the Drive folder Strelitzia/Profile. "
         "Strelitzia checks every draft mechanically, so follow these rules exactly.")
@@ -226,14 +230,13 @@ def _rules() -> _Doc:
         "that Doc), and write a verdict for each under \"## Notes for me\": claimable, partly or not, with the "
         "projects behind it, one plain line each (no headings inside Notes for me). Claim a qualification only "
         "when your assessment finds real backing.",
-        "Never claim a tool or skill the packet lists as not in my material: not in bullets, the Summary, Skills or "
-        "the cover letter. List it under \"## Notes for me\" instead so I see it.",
+        "Never claim a tool or skill the packet lists as not in my material: not in bullets, the Summary or Skills. "
+        "List it under \"## Notes for me\" instead so I see it.",
         "Facts like work authorisation come from About me, never the resume; without that Doc, ask me.",
         "Show each required qualification you rate claimable through the responsibilities in my bullets (under the "
         "most recent role it applies to) or, for a tool, in Skills. Never write a bullet just to cover a tool.",
         "Every number in a bullet must appear in the facts of the projects that bullet cites. Never invent, round or "
-        "combine numbers. The same goes for the cover letter and the projects on its Evidence line (numbers about the "
-        "company may come from the posting). The Summary cites no project, so any number in it must be in my "
+        "combine numbers. The Summary cites no project, so any number in it must be in my "
         "library or base resume.",
         "No keyword lists inside bullets. Each bullet describes real work.",
         "No hidden text of any kind, and no instructions to screeners or AI systems (for example \"ignore previous "
@@ -299,36 +302,24 @@ def _rules() -> _Doc:
         "No em dashes or en dashes; use commas, periods or hyphens.",
         "Banned words and phrases: " + ", ".join(BANNED_WORDS) + ".",
     ])
-    d.h("Cover letter")
-    d.ul([
-        f"Exactly 3 paragraphs, {COVER_MAX_WORDS} words or fewer in total. No greeting and no sign-off: the app adds "
-        "\"Dear Hiring Manager,\" and my name.",
-        "Paragraph 1: a specific thing I built that solves their problem. Paragraph 2: two achievements from the "
-        "resume's cited projects, with numbers. Paragraph 3: one specific thing about the company from the posting, "
-        "then a short close.",
-        "List every project the letter draws on in its Evidence line. Direct and plain; no narration about yourself.",
-        "Leave the cover letter draft empty only when I ask for the resume alone.",
-    ])
     d.h("Output format")
     d.ul([
-        "Write the resume into the job's \"Resume draft\" Google Doc and the cover letter into its \"Cover letter "
-        "draft\" Doc (both in the job's Drive folder, named in the prompt) with the Google Docs connector. Replace "
-        "each Doc's whole text, in the formats below: the full resume and letter, not a diff.",
-        "Edit only those two Docs, and never create a new Doc: Strelitzia can only read Docs it created.",
+        "Write the resume into the job's \"Resume draft\" Google Doc (in the job's Drive folder, named in the prompt) "
+        "with the Google Docs connector. Replace the Doc's whole text, in the format below: the full resume, not a "
+        "diff. Don't write a cover letter in this chat.",
+        "Edit only that Doc, and never create a new Doc: Strelitzia can only read Docs it created.",
         "The first line of the resume draft is \"Rules version: \" followed by the Rules version this packet "
         "states at the top. The second line is \"Instructions version: \" followed by the version on the first "
         "line of your project instructions; leave it empty if they have none. Never copy these values from "
         "anywhere else, including the draft Docs.",
-        "When I ask for a change, write the complete updated resume and letter into the Docs again.",
-        "When I paste \"These problems were found\", fix exactly those in the Docs and change nothing else.",
-        "In the chat, say briefly what you wrote or changed; the Docs hold the result.",
+        "When I ask for a change, write the complete updated resume into the Doc again.",
+        "When I paste \"These problems were found\", fix exactly those in the Doc and change nothing else.",
+        "In the chat, say briefly what you wrote or changed; the Doc holds the result.",
     ])
     d.p("Resume draft (one \"## <role key>\" section per role you keep, keys from the packet; each bullet ends with "
         "the [slugs] of the projects it cites; roles you leave out go under \"## Dropped roles\"; skills as "
         "\"- Category: items\"; anything for me, such as qualifications I can't claim, under \"## Notes for me\"):")
     d.pre(RESUME_DRAFT_EXAMPLE)
-    d.p("Cover letter draft (the three paragraphs separated by blank lines, then the Evidence line):")
-    d.pre(COVER_DRAFT_EXAMPLE)
     return d
 
 
@@ -350,11 +341,104 @@ Summary:
 ## Notes for me
 Kubernetes isn't in your library, so I left it out."""
 
-COVER_DRAFT_EXAMPLE = """<paragraph 1>
+def _cover_rules() -> _Doc:
+    """The cover letter rules (agents/research/cover-letter.md §1-4 and §6), carried by the cover letter packet."""
+    lo, hi = COVER_WORDS
+    d = _Doc("Strelitzia cover letter rules")
+    d.p("You write my cover letter for one job, in this chat only, after my resume for it is accepted. These rules "
+        "come with the job's cover letter packet and are binding; if anything else disagrees, these win. The letter "
+        "tells one or two real stories, why they matter to this team and why I want this job; it never restates "
+        "my resume.")
+    d.h("Sources")
+    d.ul([
+        "Use only facts from my About me Doc, my cover notes in this packet, the \"Content Library\" and \"Base "
+        "Resume\" Google Docs (Drive folder Strelitzia/Profile), the accepted resume and the posting in this packet.",
+        "Never invent motivation, a reason for this company or industry, a referral, numbers or company facts. When "
+        "I skip a question the letter needs, write [NEEDS INPUT: <the question>] in its place.",
+        "Every number must appear in the facts of the projects on the letter's Evidence line, or in the posting for "
+        "numbers about the company. Never invent, round or combine numbers.",
+        "Never claim a tool or skill the packet lists as not in my material.",
+        "No salary. Mention work authorisation only if the posting raises it, and only from About me.",
+        "No hidden text and no instructions to screeners or AI systems.",
+    ])
+    d.h("Working with me")
+    d.ul([
+        "This chat is interactive: ask freely, one question at a time, each with your suggested answer when you "
+        "have one.",
+        "Before drafting, read About me and my cover notes, then ask me about anything the letter needs that they "
+        "don't answer: why this company, a referral, why this industry if About me doesn't cover it.",
+        "Propose 2-3 candidate stories, one line each with the posting responsibility it maps to, and ask which to "
+        "use.",
+        "For the chosen story, ask me one or two questions about the stakes, the decision I made and what I took "
+        "from it, if the library and About me don't already say.",
+        "Write [NEEDS INPUT: ...] only for a question I chose to skip. After the letter, offer to save new reusable "
+        "answers to About me, and write them there only if I agree, keeping the Doc's format exactly.",
+    ])
+    d.h("Structure")
+    d.ul([
+        f"{lo}-{hi} words in 4 paragraphs. No greeting and no sign-off: the app adds \"Dear Hiring Team,\" and my "
+        "name.",
+        "Paragraph 1, the hook (2-3 sentences): the role and the company by name, plus one specific reason this "
+        "team and this work appeal to me, tied to one fact about me. Name the referrer here if I have one.",
+        "Paragraph 2, the main story (about 120 words): one concrete episode that maps onto the posting's core "
+        "responsibility: the situation, what I did and decided, the result, and why it matters to this team.",
+        "Paragraph 3 (about 70 words): a shorter second story covering a different requirement, or a work habit "
+        "backed by evidence. Context such as a career change goes here.",
+        "Paragraph 4, the close (2 sentences): fit in one line, what I want to work on next, and thanks. No "
+        "summary of the letter.",
+    ])
+    d.h("Stories")
+    d.ul([
+        "Choose 1-2 stories, not 6 facts. Rank my projects by overlap with the posting's 2-3 core "
+        "responsibilities, not its tool list.",
+        "Lead with the problem, the stakes and the judgment call. A concrete decision (choosing not to build "
+        "something, say) says more than a list of tools.",
+        "At most 2 named tools per story, only where they carry meaning, and never more than 2 in one sentence. One "
+        "number per story is enough.",
+        "Don't restate the resume's bullets, list technologies or describe small tasks.",
+    ])
+    d.h("Motivation")
+    d.ul([
+        "Motivation is causal and personal: the moment or experience that produced the interest, not adjectives.",
+        "One specific reason for this company (a product, an engineering post, the team's scope in the posting, a "
+        "conversation), from my cover notes or About me, connected to my own goal. No copied website text and no "
+        "generic praise of the mission.",
+        "At most one sentence on what I want to get deeper at.",
+    ])
+    d.h("Voice")
+    d.ul([
+        "First person, plain verbs, mixed sentence lengths, in the voice of my writing sample in About me. Vary how "
+        "sentences and paragraphs open; not every one starts with \"I\". Credit others where it's true.",
+        "Banned phrases: " + ", ".join(LETTER_BANNED_PHRASES) + ", and \"not only X but also Y\".",
+        "Banned patterns: triplets of adjectives, rhetorical questions, a closing summary that repeats the letter, a "
+        "different tool name in every sentence.",
+        "No em dashes or en dashes; use commas, periods or hyphens. Banned words: " + ", ".join(BANNED_WORDS) + ".",
+    ])
+    d.h("Output format")
+    d.ul([
+        "Write the letter into the job's \"Cover letter draft\" Google Doc (in the job's Drive folder, named in the "
+        "prompt) with the Google Docs connector. Replace its whole text; edit no other job Doc, and never create a "
+        "new Doc: Strelitzia can only read Docs it created.",
+        "The first line is \"Rules version: \" followed by the Rules version this packet states at the top. Then "
+        "the paragraphs, separated by blank lines, then a last line \"Evidence: \" with the slugs of every project "
+        "the letter draws on.",
+        "When I ask for a change, write the complete updated letter into the Doc again. When I paste \"These "
+        "problems were found\", fix exactly those and change nothing else.",
+    ])
+    d.p("Cover letter draft:")
+    d.pre(COVER_DRAFT_EXAMPLE)
+    return d
+
+
+COVER_DRAFT_EXAMPLE = """Rules version: <the Rules version at the top of this packet>
+
+<paragraph 1>
 
 <paragraph 2>
 
 <paragraph 3>
+
+<paragraph 4>
 
 Evidence: <project slug>, <other project slug>"""
 
@@ -364,17 +448,23 @@ def rules_text() -> str:
     return _rules().text()
 
 
+def cover_rules_text() -> str:
+    """The cover letter rules as text (the cover letter packet carries them under its "Rules" heading)."""
+    return _cover_rules().text()
+
+
 RULES_VERSION = hashlib.sha256(rules_text().encode("utf-8")).hexdigest()[:8]
+COVER_RULES_VERSION = hashlib.sha256(cover_rules_text().encode("utf-8")).hexdigest()[:8]
 
 
-def rules_version_warning(used: str | None) -> str | None:
+def rules_version_warning(used: str | None, current: str = RULES_VERSION) -> str | None:
     """A warning when the draft names no rules version or an old one (a stale packet or an old rules file)."""
-    if used == RULES_VERSION:
+    if used == current:
         return None
     refresh = ("click Open in Claude to refresh the packet, then ask Claude to reread it and rewrite the drafts")
     if not used:
-        return f"Claude didn't say which rules version it used (current: {RULES_VERSION}); {refresh}"
-    return f"Claude used rules version {used}, not the current {RULES_VERSION}; {refresh}"
+        return f"Claude didn't say which rules version it used (current: {current}); {refresh}"
+    return f"Claude used rules version {used}, not the current {current}; {refresh}"
 
 
 # ── Project instructions (pasted into the "Strelitzia Resumes" Claude project) ──
@@ -384,14 +474,15 @@ def rules_version_warning(used: str | None) -> str | None:
 
 PROJECT_NAME = "Strelitzia Resumes"
 PROJECT_INSTRUCTIONS = (
-    "You tailor my resume and cover letter for one job per chat. Each prompt names the job's Claude packet, a "
-    "Google Doc in the job's Google Drive folder: open it with the Google Docs connector before you write anything. "
+    "You tailor my application for one job per chat, in two kinds of chat: a resume chat, from the job's Claude "
+    "packet, and later a cover letter chat, from its cover letter packet. Each prompt names the packet, a Google Doc "
+    "in the job's Google Drive folder: open it with the Google Docs connector before you write anything. "
     "The Rules section of that packet is binding and always current; if anything else in this project disagrees "
     "with it (an older rules file, say), follow the packet. Also open the Google Docs \"Content Library\" and "
-    "\"Base Resume\" in the Drive folder Strelitzia/Profile, and use only their facts and the packet's. Never claim "
-    "a tool or skill the packet lists as not in my material, and never invent numbers. Write only into the job's "
-    "two draft Docs named in the prompt; edit the Profile Docs only when I agree, keeping their format. When I ask "
-    "for changes, keep everything else the same."
+    "\"Base Resume\" (and \"About me\" when it exists) in the Drive folder Strelitzia/Profile, and use only their "
+    "facts and the packet's. Never claim a tool or skill the packet lists as not in my material, and never invent "
+    "numbers. Write only into the draft Doc named in the prompt; edit the Profile Docs only when I agree, keeping "
+    "their format. When I ask for changes, keep everything else the same."
 )
 # Prompts the user copies from the Profile page into a new chat in the project. They are versioned with the
 # instructions (they lean on them: the Profile Docs' location, editing only when the user agrees).
@@ -535,22 +626,101 @@ def job_packet(job: dict, library: ContentLibrary, base_resume_text: str, curren
     d.pre((job.get("full_description") or job.get("description") or "")[:DESCRIPTION_MAX].strip() or "(none)")
     if current:
         d.h("Current draft")
-        d.p("The current draft is in the job's resume and cover letter draft Docs: start from it and keep what "
-            "already works.")
+        d.p("The current draft is in the job's resume draft Doc: start from it and keep what already works.")
     d.include(_rules(), "Rules")
 
     from strelitzia.storage.drive_layout import draft_name
 
-    def short(n: str) -> str:
-        return n if len(n) <= 120 else n[:117] + "..."
-
-    prompt = (f"Tailor my resume and cover letter for the job in '{short(name)}'. Write the resume into the "
-              f"Google Doc '{short(draft_name(job, 'resume'))}' and the cover letter into "
-              f"'{short(draft_name(job, 'cover'))}' (both in the job's folder) with the Google Docs connector. "
-              "Follow the packet's Rules section: replace each Doc's whole text and edit only those two Docs."
-              + (" Start from the current draft in them." if current else ""))
+    prompt = (f"Tailor my resume (the resume only) for the job in '{_short(name)}'. Write it into the Google Doc "
+              f"'{_short(draft_name(job, 'resume'))}' in the job's folder with the Google Docs connector. Follow the "
+              "packet's Rules section: replace the Doc's whole text and edit only that Doc."
+              + (" Start from the current draft in it." if current else ""))
     text = d.text()
     return Packet(name=name, html=d.html(), text=text, prompt=prompt, evidence=ev)
+
+
+def _short(name: str) -> str:
+    return name if len(name) <= 120 else name[:117] + "..."
+
+
+class NoAcceptedResume(LookupError):
+    """The job has no accepted resume draft yet, so its cover letter can't be written."""
+
+
+def cover_packet_name(job: dict) -> str:
+    return f"{job_company(job)} – {job.get('title') or 'Untitled role'} – Cover letter packet"
+
+
+def accepted_resume_text(job: dict, inputs: Inputs) -> str:
+    """The job's last accepted resume as plain text.
+
+    Raises:
+        NoAcceptedResume: no resume draft was accepted yet.
+    """
+    from strelitzia.scoring.draft_docs import resume_draft_text
+
+    path = job.get("tailored_resume_path")
+    if path:
+        try:
+            return Path(path).with_suffix(".txt").read_text(encoding="utf-8")
+        except OSError:
+            pass
+    current = current_result(job)
+    if not current or not current.get("resume"):
+        raise NoAcceptedResume("Accept a resume draft first: the cover letter is written from it")
+    return resume_draft_text(current, inputs.library, "")
+
+
+def cover_packet(job: dict, inputs: Inputs) -> Packet:
+    """The job's cover letter packet and its prompt: the posting, the accepted resume, the cover notes, a pointer to
+    About me and the cover letter rules. The letter is written in its own chat, after the resume is accepted.
+
+    Raises:
+        NoAcceptedResume: no resume draft was accepted yet.
+    """
+    library = inputs.library.ensure_keys()
+    resume_text = accepted_resume_text(job, inputs)
+    name = cover_packet_name(job)
+    ev = job_evidence(job, library, inputs.base_resume_text)
+    current = (current_result(job) or {}).get("cover_letter")
+
+    d = _Doc(name)
+    d.ul([f"Role: {job.get('title') or ''}", f"Company: {job_company(job)}",
+          f"Location: {job.get('location') or 'N/A'}", f"Posting: {job.get('url') or ''}",
+          f"Rules version: {COVER_RULES_VERSION} (the Rules section at the end of this packet is binding)"])
+    d.h("My cover notes for this job")
+    notes = (job.get("cover_notes") or "").strip()
+    if notes:
+        d.pre(notes)
+    else:
+        d.p("None. Ask me why this company (and about a referral) before drafting.")
+    d.h("About me")
+    d.p("Read my \"About me\" Google Doc in the Drive folder Strelitzia/Profile for my motivation, goals, the "
+        "industries I care about and my voice sample. If it doesn't exist or doesn't answer what the letter "
+        "needs, ask me.")
+    d.h("Accepted resume")
+    d.p("The resume I'm sending with this letter. The letter adds what it can't say; don't restate it.")
+    d.pre(resume_text.strip())
+    d.h("Allowed project slugs for the Evidence line")
+    d.ul([f"{r.key}: " + (", ".join(p.slug for p in r.projects) or "(no projects)") for r in library.roles])
+    absent = [e.target.text for e in ev.absent_terms()]
+    if absent:
+        d.h("Not in my material")
+        d.p("Never claim these in the letter: " + ", ".join(absent) + ".")
+    d.h("Job description")
+    d.pre((job.get("full_description") or job.get("description") or "")[:DESCRIPTION_MAX].strip() or "(none)")
+    if current:
+        d.h("Current draft")
+        d.p("The current letter is in the job's cover letter draft Doc: start from it and keep what already works.")
+    d.include(_cover_rules(), "Rules")
+
+    from strelitzia.storage.drive_layout import draft_name
+
+    prompt = (f"Write my cover letter for the job in '{_short(name)}'. Follow the packet's Rules section: ask me what "
+              "it says to ask before drafting, then write the letter into the Google Doc "
+              f"'{_short(draft_name(job, 'cover'))}' in the job's folder with the Google Docs connector, replacing "
+              "its whole text and editing only that Doc." + (" Start from the current letter in it." if current else ""))
+    return Packet(name=name, html=d.html(), text=d.text(), prompt=prompt, evidence=ev)
 
 
 # ── Paste-back import ─────────────────────────────────────────────────────
@@ -688,7 +858,7 @@ def check_result(data: dict, job: dict, inputs: Inputs) -> tuple[TailoredResume 
         personal = inputs.profile.get("personal", {})
         errors += validate_letter(letter["paragraphs"], letter["evidence_slugs"], library, ev,
                                   sign_off=personal.get("preferred_name") or personal.get("full_name", ""),
-                                  max_words=COVER_MAX_WORDS,
+                                  max_words=COVER_WORDS[1],
                                   posting_text=job.get("full_description") or job.get("description") or "")
     warnings = _coverage_warnings(resume, ev) + validate_bullet_shape(resume, base.skills if base else {})
     for version_warning in (rules_version_warning(data.get("rules_version")),

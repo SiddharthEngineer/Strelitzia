@@ -50,10 +50,12 @@ def test_rules_cover_the_rules_and_the_draft_format():
     for phrase in ("required qualification you rate claimable", "most recent role", "exact term",
                    "Never claim a tool or skill the packet lists as not in my material", "Working with me", "No keyword lists", "No hidden text", "character band",
                    "ask me for more material", "never split one project into task bullets",
-                   "3 paragraphs", "250 words", "spearheaded", "## Dropped roles", "## Notes for me",
-                   "Evidence: ", "never create a new Doc", "Resume draft", "Instructions version: "):
+                   "spearheaded", "## Dropped roles", "## Notes for me", "the resume only",
+                   "never create a new Doc", "Resume draft", "Instructions version: "):
         assert phrase in html, phrase
     assert "Cover every" not in html and "Write fresh from the facts" not in html
+    # The resume chat writes no letter: the cover letter has its own packet and rules.
+    assert "## Cover letter" not in html and "\nEvidence: " not in html and "3 paragraphs" not in html
     assert len(wb.RULES_VERSION) == 8 and wb.RULES_VERSION in wb.job_packet(job(), library(), BASE_RESUME).text
 
 
@@ -61,8 +63,9 @@ def test_packet_carries_the_full_rules():
     p = wb.job_packet(job(), library(), BASE_RESUME)
     assert f"Rules version: {wb.RULES_VERSION} (the Rules section" in p.text
     rules = p.text.split("\n## Rules\n", 1)[1]
-    for heading in ("Honesty", "Wording", "Cover letter", "Output format"):
+    for heading in ("Honesty", "Wording", "Output format"):
         assert f"## Rules: {heading}" in rules, heading
+    assert "## Rules: Cover letter" not in rules
     assert "No hidden text" in rules and "## Dropped roles" in rules
     assert "<h2>Rules: Output format</h2>" in p.html
     assert "Rules section" in p.prompt
@@ -73,6 +76,7 @@ def test_project_instructions_are_versioned_and_point_at_the_packet():
     assert text.splitlines()[0] == f"Instructions version: {wb.INSTRUCTIONS_VERSION}"
     assert len(wb.INSTRUCTIONS_VERSION) == 8 and wb.PROJECT_INSTRUCTIONS in text
     assert "Rules section" in text and "knowledge" not in text
+    assert "resume chat" in text and "cover letter chat" in text and "cover letter packet" in text
     assert wb.instructions_version_warning(wb.INSTRUCTIONS_VERSION) is None
     assert "didn't say" in wb.instructions_version_warning(None)
     old = wb.instructions_version_warning("0ld0ld00")
@@ -150,8 +154,8 @@ def test_drive_prompt_is_short_and_names_the_docs():
     assert len(p.prompt) <= wb.PROMPT_MAX
     assert "'Initech – Senior Data Engineer – Claude packet'" in p.prompt
     assert "'Initech - Senior Data Engineer - Resume draft'" in p.prompt
-    assert "'Initech - Senior Data Engineer - Cover letter draft'" in p.prompt
-    assert "edit only those two Docs" in p.prompt and "JSON" not in p.prompt
+    assert "Cover letter draft" not in p.prompt and "resume only" in p.prompt
+    assert "edit only that Doc" in p.prompt and "JSON" not in p.prompt
     long = wb.job_packet(job(title="Very long title " * 30), library(), BASE_RESUME, current=good_result())
     assert len(long.prompt) <= wb.PROMPT_MAX and "current draft" in long.prompt
     assert "## Current draft" in long.text and json.dumps(good_result()["resume"]["headline"]) not in long.text
@@ -160,7 +164,7 @@ def test_drive_prompt_is_short_and_names_the_docs():
 def test_packet_points_at_the_current_draft():
     p = wb.job_packet(job(), library(), BASE_RESUME, current=copy.deepcopy(good_result()))
     assert "## Current draft" in p.text and "draft Docs" in p.text
-    assert "Start from the current draft in them." in p.prompt
+    assert "Start from the current draft in it." in p.prompt
 
 
 def test_packet_without_posting_details():
@@ -174,6 +178,49 @@ def test_packet_for_uses_resume_fixed_role_facts():
                                                                 "dates": "2021 – 2024"}}}
     p = wb.packet_for(job(), ins)
     assert "data-engineer-acme: Senior Data Engineer at Acme Corp (2021 – 2024)" in p.text
+
+
+# ── Cover letter packet (resume-quality-5-cover-letter Task 1) ──
+
+def _accepted(**overrides) -> dict:
+    """A job whose resume was accepted (its result sidecar is all the packet needs without a .txt)."""
+    return job(tailored_resume_path="/nonexistent/initech.pdf", **overrides)
+
+
+def test_cover_packet_needs_an_accepted_resume():
+    with pytest.raises(wb.NoAcceptedResume):
+        wb.cover_packet(job(), inputs())
+
+
+def test_cover_packet_carries_the_notes_the_resume_about_me_and_the_cover_rules(monkeypatch, tmp_path):
+    monkeypatch.setattr(wb, "current_result", lambda j: copy.deepcopy(good_result()))
+    p = wb.cover_packet(_accepted(cover_notes="I use Initech's CDP at my current job."), inputs())
+    assert p.name == "Initech – Senior Data Engineer – Cover letter packet"
+    assert f"Rules version: {wb.COVER_RULES_VERSION} (the Rules section" in p.text
+    assert "I use Initech's CDP at my current job." in p.text
+    assert "\"About me\" Google Doc" in p.text
+    assert "## Accepted resume" in p.text and "[orders-pipeline]" in p.text
+    assert "Never claim these in the letter: Kubernetes" in p.text
+    rules = p.text.split("\n## Rules\n", 1)[1]
+    assert "Propose 2-3 candidate stories" in rules and "ask which to use" in rules
+    assert "Before drafting, read About me and my cover notes" in rules
+    assert "[NEEDS INPUT: ...] only for a question I chose to skip" in rules
+    assert "250-350 words in 4 paragraphs" in rules and "Dear Hiring Team," in rules
+    assert "I am writing to express" in rules and "Evidence: " in rules
+    # The resume's rules never reach the cover chat, and vice versa.
+    assert "character band" not in rules and "Propose 2-3 candidate stories" not in wb.rules_text()
+    assert len(p.prompt) <= wb.PROMPT_MAX and "'Initech - Senior Data Engineer - Cover letter draft'" in p.prompt
+    assert "Resume draft" not in p.prompt and "Start from the current letter in it." in p.prompt
+    assert len(wb.COVER_RULES_VERSION) == 8 and wb.COVER_RULES_VERSION != wb.RULES_VERSION
+
+
+def test_cover_packet_without_notes_asks_why_this_company(monkeypatch, tmp_path):
+    resume_pdf = tmp_path / "initech.pdf"
+    resume_pdf.with_suffix(".txt").write_text("ALEX TESTER\nSynthetic accepted resume text", encoding="utf-8")
+    monkeypatch.setattr(wb, "current_result", lambda j: None)
+    p = wb.cover_packet(job(tailored_resume_path=str(resume_pdf)), inputs())
+    assert "Synthetic accepted resume text" in p.text
+    assert "None. Ask me why this company" in p.text and "Start from the current letter" not in p.prompt
 
 
 # ── Draft Docs with the packet (docs-drafts-2-api Task 1) ──

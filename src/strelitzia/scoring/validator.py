@@ -421,6 +421,14 @@ def validate_tailored_resume(
 
 # ── Cover Letter Validation ──────────────────────────────────────────────
 
+# Stock letter phrases (agents/research/cover-letter.md §4): the cover rules list them and Check & format rejects them.
+LETTER_BANNED_PHRASES: list[str] = [
+    "I am writing to express", "I'm excited to apply for", "esteemed organization", "passionate",
+    "proven track record", "detail-oriented", "hard worker", "great problem solver", "results-driven", "dynamic",
+    "leverage", "synergy", "delve", "tapestry", "fast-paced environment", "I am confident that",
+    "I would welcome the opportunity", "unique blend of", "In today's data-driven world",
+]
+
 def validate_cover_letter(text: str, mode: str = "normal") -> dict:
     """Programmatic validation of a cover letter.
 
