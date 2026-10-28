@@ -582,6 +582,7 @@ _ALL_COLUMNS: dict[str, str] = {
     "submitted_at": "TEXT",
     "responded_at": "TEXT",
     "notes": "TEXT",
+    "fields_edited_at": "TEXT",  # the user last edited the title or company; after assessed_at the score is stale
     # Workspace intake (strelitzia.intake): jobs the user added by link or paste
     "source": "TEXT",  # 'manual' | 'discovered'; NULL = discovered (rows from before the column)
     "added_at": "TEXT",
