@@ -177,15 +177,24 @@ export interface DraftHistoryEntry {
   rules_version: string;
 }
 
-/** POST /jobs/{key}/packet */
-/** POST /jobs/{key}/packet: the packet and the two draft Docs in the job's Drive folder, and the prompt. */
+/** POST /jobs/{key}/packet: the packet and the resume draft Doc in the job's Drive folder, and the prompt. */
 export interface PacketResult {
   prompt: string;
   doc_url: string;
   rules_version: string;
   resume_draft_url: string | null;
+}
+
+/** POST /jobs/{key}/cover-packet: the cover letter packet and draft Doc, and the prompt for a new chat. */
+export interface CoverPacketResult {
+  prompt: string;
+  doc_url: string;
+  rules_version: string;
   cover_draft_url: string | null;
 }
+
+/** The draft Doc a Check & format reads. */
+export type DraftKind = 'resume' | 'cover';
 
 /** POST /jobs/{key}/drafts/check on success */
 export interface ImportResult {
@@ -285,6 +294,9 @@ export interface JobDetail {
   packet_doc_url?: string | null;
   resume_draft_url?: string | null;
   cover_draft_url?: string | null;
+  /** When the cover letter last passed its own Check & format, and that check's warnings. */
+  cover_letter_at?: string | null;
+  cover_warnings?: string[];
 }
 
 export interface Criterion<V = unknown> {

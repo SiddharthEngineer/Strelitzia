@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  activeRescoreAll, addJob, ApiError, checkDrafts, jobsQueryString, linkContact, listJobs, onUnauthorized, openPacket, putDescription,
+  activeRescoreAll, addJob, ApiError, checkDrafts, jobsQueryString, linkContact, listJobs, onUnauthorized, openCoverPacket, openPacket, putDescription,
   rescore, rescoreAll, savePreferences, setStatus,
 } from '../api';
 import type { Preferences } from '../types';
@@ -68,9 +68,19 @@ describe('api', () => {
     const out = await checkDrafts('k1');
     expect(out).toEqual({ ok: false, errors: ['bad', 'worse'], warnings: [], fix_prompt: 'These problems…' });
     const [url, init] = fetch.mock.calls[0];
-    expect(url).toBe('/strelitzia/dashboard/api/jobs/k1/drafts/check');
+    expect(url).toBe('/strelitzia/dashboard/api/jobs/k1/drafts/check?kind=resume');
     expect(init.method).toBe('POST');
     expect(init.headers['X-Strelitzia']).toBe('1');
+  });
+
+  it('opens the cover letter packet and checks the cover letter Doc by kind', async () => {
+    const fetch = mockFetch(200, { prompt: 'p', doc_url: 'd', rules_version: 'c1', cover_draft_url: 'c' });
+    expect((await openCoverPacket('k1')).cover_draft_url).toBe('c');
+    expect(fetch.mock.calls[0][0]).toBe('/strelitzia/dashboard/api/jobs/k1/cover-packet');
+    expect(fetch.mock.calls[0][1].method).toBe('POST');
+    const check = mockFetch(200, { outcome: { draft_version: 1, warnings: [], coverage: null, unmet: [] }, job: { key: 'k1' } });
+    await checkDrafts('k1', 'cover');
+    expect(check.mock.calls[0][0]).toBe('/strelitzia/dashboard/api/jobs/k1/drafts/check?kind=cover');
   });
 
   it('returns a passing check with the job, and throws other errors with their body', async () => {
