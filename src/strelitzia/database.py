@@ -555,6 +555,8 @@ _ALL_COLUMNS: dict[str, str] = {
     "cover_draft_doc_id": "TEXT",
     "cover_draft_doc_url": "TEXT",
     "drafts_written_at": "TEXT",  # Drive's modifiedTime of the app's last write to them
+    # The user's notes for the cover letter (resume-quality-4): why this company, referrals, what to stress
+    "cover_notes": "TEXT",
     # Google Drive (the PDFs are moved there; see strelitzia.storage)
     "resume_drive_id": "TEXT",
     "resume_drive_url": "TEXT",

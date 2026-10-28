@@ -4,8 +4,9 @@ import json
 from datetime import UTC, date, datetime
 
 import pytest
-from web_helpers import add_job
+from web_helpers import act_as, add_job, second_user
 
+from strelitzia import users
 from strelitzia.database import job_key
 from strelitzia.web import app as app_mod
 
@@ -54,6 +55,34 @@ def test_detail_shape(client, job):
         "resume": "https://drive.google.com/file/d/r/view", "cover_letter": None, "packet": None,
         "resume_draft": None, "cover_draft": None,
     }
+
+
+def _cover_notes(client, notes, key=KEY):
+    return client.put(f"/strelitzia/dashboard/api/jobs/{key}/cover-notes", json={"notes": notes})
+
+
+def test_cover_notes_round_trip(client, job):
+    assert _detail(client)["cover_notes"] is None
+    r = _cover_notes(client, "  Used their API at my last job.\nReferral: Sam.  ")
+    assert r.status_code == 200, r.text
+    assert r.json()["cover_notes"] == "Used their API at my last job.\nReferral: Sam."
+    assert _detail(client)["cover_notes"] == "Used their API at my last job.\nReferral: Sam."
+    assert _cover_notes(client, "   ").json()["cover_notes"] is None  # blank clears
+    assert _cover_notes(client, "x" * 2000).status_code == 200
+    assert _cover_notes(client, "x" * 2001).status_code == 422
+    assert _detail(client)["cover_notes"] == "x" * 2000
+
+
+def test_cover_notes_are_the_row_owners_only(client, conn, job, monkeypatch):
+    _cover_notes(client, "Mine")
+    bo = second_user(conn)
+    act_as(monkeypatch, bo)
+    assert _cover_notes(client, "Theirs").status_code == 404
+    assert client.get(f"/strelitzia/dashboard/api/jobs/{KEY}").status_code == 404
+    add_job(conn, URL, title="Theirs", user_id=bo.id, job_key=KEY)  # their own row, same posting
+    assert _cover_notes(client, "Theirs").json()["cover_notes"] == "Theirs"
+    act_as(monkeypatch, users.owner(conn))
+    assert _detail(client)["cover_notes"] == "Mine"
 
 
 def test_detail_without_extraction(client, conn):
