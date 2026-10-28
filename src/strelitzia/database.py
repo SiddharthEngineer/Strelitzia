@@ -311,6 +311,38 @@ USER_TABLES = ("status_events", "dashboard_tasks", "contacts", "job_contacts", "
 # Message Batches belong to the user they were submitted for (one batch per user); older ones are the owner's.
 _OWNED_TABLES = ("llm_batches", *USER_TABLES)
 
+# Side tables with a row per job: table -> the column holding the job's url. delete_job_rows empties them.
+JOB_TABLES = {"status_events": "url", "dashboard_tasks": "url", "job_contacts": "job_url", "interviews": "job_url",
+              "drafts": "job_url"}
+# Side tables that keep a deleted job's url: llm_usage is the spend history.
+KEPT_JOB_TABLES = ("llm_usage",)
+
+
+def delete_job_rows(conn: Connection, user_id: str, url: str) -> bool:
+    """Delete one of the user's jobs and everything that belongs to it, in one transaction. False if it isn't theirs.
+
+    Contacts stay (they are shared across jobs); only their link to the job goes. Deleting the job's tasks cancels the
+    queued ones; one already running finishes, and its writes to the deleted row change nothing. Drive files stay.
+    """
+    try:
+        cur = conn.execute("DELETE FROM jobs WHERE user_id = ? AND url = ?", (user_id, url))
+        if cur.rowcount == 0:
+            conn.rollback()
+            return False
+        for table, column in JOB_TABLES.items():
+            conn.execute(f"DELETE FROM {table} WHERE user_id = ? AND {column} = ?", (user_id, url))
+        # Panel items have no user_id: they belong to the user's runs. Their grades go with them.
+        runs = "SELECT id FROM panel_runs WHERE user_id = ?"
+        items = f"SELECT run_id, item_no FROM panel_items WHERE job_url = ? AND run_id IN ({runs})"
+        for run_id, item_no in conn.execute(items, (url, user_id)).fetchall():
+            conn.execute("DELETE FROM panel_grades WHERE run_id = ? AND item_no = ?", (run_id, item_no))
+        conn.execute(f"DELETE FROM panel_items WHERE job_url = ? AND run_id IN ({runs})", (url, user_id))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    return True
+
 
 def _owner_id(conn: Connection) -> str:
     owner_id = users.owner(conn).id
