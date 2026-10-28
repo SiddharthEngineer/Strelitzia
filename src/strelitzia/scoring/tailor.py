@@ -14,6 +14,9 @@ from strelitzia.scoring.resume_model import Bullet, RoleEntry, TailoredResume
 # The page is full at 95-100%; the plan aims for 97% and never past 99%, so a bullet that wraps one line long
 # still fits.
 FILL_MIN, FILL_TARGET, FILL_MAX = 0.95, 0.97, 0.99
+# Below FILL_REJECT the draft goes back to Claude; between it and FILL_MIN, spacing (the template's --gap, at most
+# GAP_MAX_PX) closes the gap.
+FILL_REJECT, GAP_MAX_PX = 0.90, 4.0
 # Bullets are two printed lines (user decision, 2026-10-27): this band of characters per bullet line.
 BAND = (1.6, 1.95)
 # Bullets per role by recency (research §3): the most recent role 5-6, then 3-4, 2-3, and 1-2 for the rest.
@@ -103,29 +106,6 @@ def bullet_plan(library: ContentLibrary, base: TailoredResume | None, budget: Bu
     return plan
 
 
-def _role_slots(
-    library: ContentLibrary, base: TailoredResume | None = None,
-) -> dict[str, tuple[int, int]]:
-    """Bullet range per content-library role, shaped like the base resume.
-
-    The max is the role's bullet count in the base resume; the min is two fewer (at least one
-    for the most recent role). A role the base resume doesn't show gets 0-2. Without a base
-    resume: most recent role 2-5, others 0-3.
-    """
-    library.ensure_keys()
-    counts = {r.role_key: len(r.bullets) for r in base.roles} if base else {}
-    slots: dict[str, tuple[int, int]] = {}
-    for i, role in enumerate(library.roles):
-        if not counts:
-            slots[role.key] = (2, 5) if i == 0 else (0, 3)
-        elif role.key in counts:
-            hi = max(counts[role.key], 1)
-            slots[role.key] = (max(1 if i == 0 else 0, hi - 2), hi)
-        else:
-            slots[role.key] = (0, 2)
-    return slots
-
-
 def page_plan(library: ContentLibrary, base: TailoredResume | None, profile: dict,
               fixed: dict) -> tuple[dict[str, int], Budget]:
     """The exact bullets per role for this user's page, and the budget behind them.
@@ -184,3 +164,37 @@ def fit_to_one_page(
         dropped.append(resume.roles[idx].bullets.pop().text)
         info = pdf_mod.render_pdf(render_resume(resume, profile, fixed=fixed), str(pdf_path))
     return info, dropped
+
+
+def fill_page(resume: TailoredResume, profile: dict, fixed: dict, pdf_path: Path, info: dict,
+              max_iterations: int = 4) -> tuple[dict, float]:
+    """Close a small gap at the bottom of the page: raise the template's --gap until the page is FILL_MIN full.
+
+    Each round re-renders and aims at FILL_TARGET from the spacing's measured effect, never past GAP_MAX_PX.
+    A template without --gap doesn't change, so the loop stops after one round.
+
+    Returns:
+        (render_pdf info of the final render, the gap in CSS pixels; 0 when the page was already full).
+    """
+    from strelitzia.scoring import pdf as pdf_mod
+    from strelitzia.scoring.template import render_resume
+
+    def render(gap: float) -> dict:
+        return pdf_mod.render_pdf(render_resume(resume, profile, fixed=fixed, gap=gap), str(pdf_path))
+
+    usable = info["usable_height_pt"]
+    gap, step = 0.0, 1.0
+    for _ in range(max_iterations):
+        if info["content_height_pt"] >= FILL_MIN * usable or gap >= GAP_MAX_PX:
+            break
+        new_gap = min(GAP_MAX_PX, gap + step)
+        new = render(new_gap)
+        if new["overflow"]:
+            info = render(gap)
+            break
+        slope = (new["content_height_pt"] - info["content_height_pt"]) / (new_gap - gap)
+        gap, info = new_gap, new
+        if slope <= 0:
+            break
+        step = max(0.25, (FILL_TARGET * usable - info["content_height_pt"]) / slope)
+    return info, gap

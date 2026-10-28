@@ -221,12 +221,12 @@ describe('JobPage Claude workbench', () => {
     };
     vi.mocked(api.getJob).mockResolvedValue(jobDetail({ resume_draft_url: PACKET.resume_draft_url }));
     vi.mocked(api.checkDrafts).mockResolvedValue({
-      ok: true, outcome: { draft_version: 1, warnings: ["Dropped to fit one page: 'x'"], coverage: saved.coverage, unmet: saved.unmet },
+      ok: true, outcome: { draft_version: 1, warnings: ["Dropped to fit one page: 'x'"], coverage: saved.coverage, unmet: saved.unmet, fill_pct: 97 },
       job: jobDetail({ ...saved, links, resume_draft_url: PACKET.resume_draft_url }),
     });
     renderJob();
     await user.click(await screen.findByRole('button', { name: 'Check & format' }));
-    expect(await screen.findByText('Saved draft v1.')).toBeInTheDocument();
+    expect(await screen.findByText('Saved draft v1. The resume fills 97% of the page.')).toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Warnings' })).toHaveTextContent('Dropped to fit one page');
     const files = screen.getByRole('navigation', { name: 'Files' });
     expect(within(files).getByRole('link', { name: /Resume PDF/ })).toHaveAttribute('href', links.resume);

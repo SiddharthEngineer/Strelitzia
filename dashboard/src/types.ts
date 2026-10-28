@@ -189,7 +189,7 @@ export interface PacketResult {
 
 /** POST /jobs/{key}/drafts/check on success */
 export interface ImportResult {
-  outcome: { draft_version: number; warnings: string[]; coverage: Coverage; unmet: string[] };
+  outcome: { draft_version: number; warnings: string[]; coverage: Coverage; unmet: string[]; fill_pct?: number | null };
   job: JobDetail;
 }
 
@@ -266,6 +266,7 @@ export interface JobDetail {
   coverage?: Coverage | null;
   unmet?: string[];
   warnings?: string[];
+  fill_pct?: number | null;
   notes_for_user?: string;
   draft_history?: DraftHistoryEntry[];
   packet_doc_url?: string | null;

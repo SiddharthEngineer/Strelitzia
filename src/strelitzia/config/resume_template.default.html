@@ -14,6 +14,8 @@
     skills     [(category, items)]
     education  [{heading, dates, bullets}] (resume_fixed.yaml)
   Keep the @page margins at 0.35in 0.5in: one-page overflow detection assumes them.
+  --gap (0px unless set) is extra spacing Check & format adds when a page is a little short: use it in
+  section, entry and bullet spacing so short pages can fill.
   ATS-safe on purpose: one column, no tables, text boxes, header/footer regions, images or icon text, dates
   inline after the company, and a font stack with metric-compatible fallbacks. Never hide text.
 #}
@@ -60,7 +62,7 @@ body {
     text-decoration: none;
 }
 .section {
-    margin-top: 5px;
+    margin-top: calc(5px + 2 * var(--gap, 0px));
 }
 .section-title {
     font-size: 10pt;
@@ -82,7 +84,7 @@ body {
     color: #1a3a5c;
 }
 .entry {
-    margin-bottom: 4px;
+    margin-bottom: calc(4px + var(--gap, 0px));
     break-inside: avoid;
 }
 .entry-head {
@@ -106,7 +108,7 @@ ul {
 }
 li {
     font-size: 9.5pt;
-    margin-bottom: 1px;
+    margin-bottom: calc(1px + 0.5 * var(--gap, 0px));
     line-height: 1.35;
 }
 </style>

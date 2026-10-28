@@ -581,6 +581,7 @@ class ImportOutcome:
     coverage: dict | None = None
     unmet: list[str] = field(default_factory=list)
     files: dict[str, str] = field(default_factory=dict)
+    fill_pct: int | None = None  # how full the resume's page is (content / usable height)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -713,7 +714,7 @@ def import_data(conn: Connection, job: dict, data: dict, inputs: Inputs | None =
     out_dir.mkdir(parents=True, exist_ok=True)
     prefix = output_prefix(job)
     try:
-        files, render_warnings = render_outputs(resume, data, job, inputs, out_dir, prefix, cover_dir)
+        files, render_warnings, fill_pct = render_outputs(resume, data, job, inputs, out_dir, prefix, cover_dir)
     except RenderRejected as e:
         return ImportOutcome(ok=False, errors=e.errors, warnings=warnings, fix_prompt=fix_prompt(e.errors, where))
     warnings += render_warnings
@@ -727,7 +728,7 @@ def import_data(conn: Connection, job: dict, data: dict, inputs: Inputs | None =
     now = datetime.now(UTC).isoformat()
     history = draft_history(job) + [{"version": version, "at": now, "rules_version": RULES_VERSION}]
     report = {"draft_version": version, "rules_version": RULES_VERSION, "at": now, "coverage": cov.to_dict(),
-              "unmet": unmet, "warnings": warnings, "notes_for_user": data.get("notes_for_user") or "",
+              "unmet": unmet, "warnings": warnings, "fill_pct": fill_pct, "notes_for_user": data.get("notes_for_user") or "",
               "history": history}
 
     (out_dir / f"{prefix}.json").write_text(
@@ -756,23 +757,27 @@ def import_data(conn: Connection, job: dict, data: dict, inputs: Inputs | None =
     if tracking.effective_status(job, datetime.now(UTC).date()) in ("active", "inactive"):
         tracking.set_status(conn, user_id, job["url"], "in_progress", source="workbench")
     return ImportOutcome(ok=True, warnings=warnings, draft_version=version, coverage=cov.to_dict(), unmet=unmet,
-                         files=files)
+                         files=files, fill_pct=fill_pct)
 
 
 def render_outputs(resume: TailoredResume, data: dict, job: dict, inputs: Inputs, out_dir: Path,
-                   prefix: str, cover_dir: Path | None = None) -> tuple[dict[str, str], list[str]]:
-    """Render the resume PDF (fit to one page), its DOCX and the cover-letter PDF.
+                   prefix: str, cover_dir: Path | None = None) -> tuple[dict[str, str], list[str], int]:
+    """Render the resume PDF (fit to one page, then filled to 95-100%), its DOCX and the cover-letter PDF.
 
-    Returns ({"resume", "resume_docx", "cover_letter"?: path}, warnings).
+    An overflowing page drops at most one bullet per role; a page 90-95% full gets more spacing.
+
+    Returns ({"resume", "resume_docx", "cover_letter"?: path}, warnings, the page's fill percentage).
 
     Raises:
-        RenderRejected: still longer than one page after trimming to the bullet minimums, or hidden text.
+        RenderRejected: still longer than one page after the drops, under 90% full, or hidden text.
     """
     from strelitzia.scoring import cover_letter
     from strelitzia.scoring.docx_export import to_docx
-    from strelitzia.scoring.tailor import _role_slots, fit_to_one_page
+    from strelitzia.scoring.tailor import FILL_MIN, FILL_REJECT, FILL_TARGET, fill_page, fit_to_one_page, page_plan
 
     base = parse_base_resume(inputs.base_resume_text, inputs.library) if inputs.base_resume_text.strip() else None
+    fixed_roles = {**(fixed_roles_from_resume(base) if base else {}), **(inputs.fixed.get("roles") or {})}
+    plan, budget = page_plan(inputs.library, base, inputs.profile, {**inputs.fixed, "roles": fixed_roles})
     cover_dir = cover_dir or out_dir
     letter = data.get("cover_letter")
     # Render into staging files so a rejected paste never replaces the last accepted draft's files.
@@ -781,12 +786,19 @@ def render_outputs(resume: TailoredResume, data: dict, job: dict, inputs: Inputs
         cover_dir.mkdir(parents=True, exist_ok=True)
         staged["cover_letter"] = cover_dir / f"{prefix}_CL.staging.pdf"
     try:
-        info, dropped = fit_to_one_page(resume, inputs.profile, inputs.fixed, _role_slots(inputs.library, base),
-                                        staged["resume"])
+        slots = {k: (max(n - 1, 1 if n else 0), n) for k, n in plan.items()}
+        info, dropped = fit_to_one_page(resume, inputs.profile, inputs.fixed, slots, staged["resume"])
         if info["overflow"]:
-            raise RenderRejected(["The resume is longer than one page even with the fewest bullets allowed. "
-                                  "Shorten the bullets (aim for one printed line each) and the Skills lines."])
-        html = render_resume(resume, inputs.profile, fixed=inputs.fixed)
+            raise RenderRejected([f"The resume is longer than one page even with a bullet fewer per role. Shorten "
+                                  f"the bullets toward {budget.band[0]} characters and the Skills lines."])
+        usable = info["usable_height_pt"]
+        if info["content_height_pt"] < FILL_REJECT * usable:
+            raise RenderRejected([_underfill_error(resume, info, budget, FILL_TARGET)])
+        gap = 0.0
+        if info["content_height_pt"] < FILL_MIN * usable:
+            info, gap = fill_page(resume, inputs.profile, inputs.fixed, staged["resume"], info)
+        fill_pct = round(100 * info["content_height_pt"] / usable)
+        html = render_resume(resume, inputs.profile, fixed=inputs.fixed, gap=gap)
         problems = validate_visible(html) + validate_pdf_text(staged["resume"], html)
         if letter:
             letter_html = cover_letter.letter_html(letter["paragraphs"], inputs.profile, job, fixed=inputs.fixed)
@@ -809,7 +821,23 @@ def render_outputs(resume: TailoredResume, data: dict, job: dict, inputs: Inputs
     if letter:
         Path(files["cover_letter"]).with_suffix(".txt").write_text(
             cover_letter.letter_text(letter["paragraphs"], inputs.profile), encoding="utf-8")
-    return files, [f"Dropped to fit one page: '{t}'" for t in dropped]
+    return files, [f"Dropped to fit one page: '{t}'" for t in dropped], fill_pct
+
+
+def _underfill_error(resume: TailoredResume, info: dict, budget, target: float) -> str:
+    """How short the page is, in printed lines, and where to add them: the roles with the shortest bullets."""
+    usable = info["usable_height_pt"]
+    line_pt = usable / budget.lines_total if budget.lines_total else 12.8
+    lines = max(1, round((target * usable - info["content_height_pt"]) / line_pt))
+    hi = budget.band[1]
+    averages = sorted(((sum(len(b.text) for b in r.bullets) // len(r.bullets), r.role_key)
+                       for r in resume.roles if r.bullets), key=lambda a: a[0])
+    short = [f"{key} (bullets average {avg} characters)" for avg, key in averages if avg < hi]
+    where = (f"lengthen the bullets toward {hi} characters, starting with " + ", ".join(short) if short
+             else "the bullets are already at the top of the band")
+    summary = "" if resume.headline else ", or add a 1-2 line Summary"
+    return (f"The resume fills {round(100 * info['content_height_pt'] / usable)}% of the page; it needs 95-100%. "
+            f"Add about {lines} printed lines: {where}{summary}. If the material runs out, ask me for more.")
 
 
 def tailor_report(job: dict) -> dict:
