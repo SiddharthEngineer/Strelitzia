@@ -412,3 +412,63 @@ describe('JobPage fit breakdown', () => {
     expect(await screen.findByText(/Not assessed by Claude yet/)).toBeInTheDocument();
   });
 });
+
+describe('JobPage edit and delete', () => {
+  it('Edit saves only the changed fields and re-renders', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.patchJob).mockResolvedValue(jobDetail({ company: 'Globex', deadline: '2026-12-01', score_stale: true }));
+    renderJob();
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit job' });
+    const company = within(dialog).getByLabelText('Company');
+    await user.clear(company);
+    await user.type(company, 'Globex');
+    fireEvent.change(within(dialog).getByLabelText('Deadline'), { target: { value: '2026-12-01' } });
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(api.patchJob).toHaveBeenCalledWith('abc123', { company: 'Globex', deadline: '2026-12-01' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByText(/Globex/)).toBeInTheDocument();
+    expect(screen.getByText(/You edited the title or company/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Rescore' })).toBeEnabled();
+  });
+
+  it('Edit refuses an empty title and shows API errors', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.patchJob).mockRejectedValue(new Error('The company can\'t be empty'));
+    renderJob();
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit job' });
+    await user.clear(within(dialog).getByLabelText('Title'));
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('can’t be empty');
+    expect(api.patchJob).not.toHaveBeenCalled();
+    await user.type(within(dialog).getByLabelText('Title'), 'ML Engineer');
+    await user.selectOptions(within(dialog).getByLabelText('Work mode'), 'remote');
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(api.patchJob).toHaveBeenCalledWith('abc123', { title: 'ML Engineer', work_mode: 'remote' });
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('The company can\'t be empty');
+  });
+
+  it('Delete job confirms by name, calls the API and goes back to the jobs list', async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    vi.mocked(api.deleteJob).mockResolvedValue({ ok: true, drive_folder: null, message: 'Deleted.' });
+    render(
+      <MemoryRouter initialEntries={['/jobs/abc123']}>
+        <Routes>
+          <Route path="/" element={<p>Jobs list</p>} />
+          <Route path="/jobs/:key" element={<JobPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const button = await screen.findByRole('button', { name: 'Delete job' });
+    await user.click(button);
+    expect(confirm).toHaveBeenCalledWith(
+      'Delete Data Scientist at Acme? Drafts, interviews and notes go too; files in Google Drive stay.');
+    expect(api.deleteJob).not.toHaveBeenCalled();
+    await user.click(button);
+    expect(api.deleteJob).toHaveBeenCalledWith('abc123');
+    expect(await screen.findByText('Jobs list')).toBeInTheDocument();
+    confirm.mockRestore();
+  });
+});

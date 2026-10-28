@@ -36,6 +36,10 @@ export default function FitBreakdown({ job, busy, onRescore }: Props) {
         <p className="stale-note">Stale assessment: your resume or the inputs Claude judges have changed since this job
           was assessed. Rescore it, or re-assess every job from Preferences.</p>
       )}
+      {job.score_stale && (
+        <p className="stale-note">You edited the title or company since this job was scored. Rescore it to update the
+          fit.</p>
+      )}
       {job.flag_reasons.length > 0 && (
         <ul className="flag-list" aria-label="Flags">
           {job.flag_reasons.map((r) => <li key={r}>⚠ {r}</li>)}
