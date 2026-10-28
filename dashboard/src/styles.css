@@ -209,6 +209,8 @@ details.card > summary h2 { display: inline; }
 .fit-head h2 { display: flex; align-items: center; gap: 6px; margin: 0; }
 .fit-card h3 { font-size: 0.95rem; margin: 10px 0 4px; }
 .stale-note { padding: 6px 10px; border-radius: var(--radius); background: var(--badge-yellow-bg); color: var(--badge-yellow-fg); }
+.danger-zone { margin-top: 16px; border-color: var(--danger); }
+.danger-zone h2 { color: var(--danger); }
 .flag-list { list-style: none; padding: 0 !important; margin: 0 0 6px !important; color: var(--danger); font-weight: 600; }
 .breakdown { list-style: none; padding: 0 !important; margin: 6px 0 0 !important; display: grid; grid-template-columns: max-content max-content max-content 1fr; gap: 4px 14px; }
 .breakdown li { display: contents; }

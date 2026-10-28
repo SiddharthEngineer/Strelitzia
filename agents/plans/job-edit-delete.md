@@ -36,7 +36,7 @@ Rescore. The URL is not editable (decision 1).
 cancelled first. The Drive folder is left alone (decision 2); the response says so.
 **Validate:** `pytest tests/test_web_jobs.py -q -k delete` → no rows left for that URL in any table; the same URL
 for another user is untouched; a test lists every `job_url` table from the schema so a new one can't be missed.
-**Status:** ❌
+**Status:** ✅ 2026-10-28 (5f514b5)
 
 ### Task 3: Job page UI
 **Runs:** unattended

@@ -254,6 +254,8 @@ export interface JobDetail {
   site: string | null;
   location: string | null;
   work_mode: WorkMode | null;
+  /** The posting's pay as written (the extracted range is in details). */
+  salary: string | null;
   role_category: string | null;
   fit_score: number | null;
   score_reasoning: string | null;
@@ -280,6 +282,8 @@ export interface JobDetail {
   fit_flags: string[];
   flag_reasons: string[];
   assessment_stale: boolean;
+  /** The user edited the title or company after the last assessment. */
+  score_stale: boolean;
   fit_assessment: FitAssessment | null;
   draft_version?: number | null;
   draft_rules_version?: string | null;
@@ -598,3 +602,22 @@ export interface ProfileSyncResult extends ProfileResponse {
 
 /** POST /profile/docs/setup: done, or the names of the Docs it would overwrite. */
 export type ProfileDocsSetupOutcome = { ok: true; profile: ProfileResponse } | { ok: false; existing: string[] };
+
+/** PATCH /jobs/{key}: only the fields present change; null clears an optional one. */
+export interface JobPatch {
+  submitted_at?: string;
+  notes?: string | null;
+  title?: string;
+  company?: string;
+  location?: string | null;
+  work_mode?: WorkMode | null;
+  salary?: string | null;
+  deadline?: string | null;
+}
+
+/** DELETE /jobs/{key}: the job's Drive folder is left alone. */
+export interface DeleteJobResult {
+  ok: boolean;
+  drive_folder: string | null;
+  message: string;
+}

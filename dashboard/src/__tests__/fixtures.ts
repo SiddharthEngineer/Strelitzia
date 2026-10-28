@@ -60,6 +60,7 @@ export function jobDetail(extra: Partial<JobDetail> = {}): JobDetail {
     site: 'Acme',
     location: 'Chicago, IL',
     work_mode: 'hybrid',
+    salary: null,
     role_category: 'data_science',
     fit_score: 80,
     score_reasoning: 'Python, SQL\nStrong match on Python and SQL.',
@@ -107,6 +108,7 @@ export function jobDetail(extra: Partial<JobDetail> = {}): JobDetail {
     fit_flags: [],
     flag_reasons: [],
     assessment_stale: false,
+    score_stale: false,
     fit_assessment: {
       skills_match: { score: 4, evidence: 'Has Python and SQL; no Spark.' },
       experience_match: { score: 3, evidence: 'Similar level.' },

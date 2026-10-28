@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import * as api from '../api';
 import ActionBar from '../components/ActionBar';
 import BlurField from '../components/BlurField';
 import ContactsPanel from '../components/ContactsPanel';
+import EditJobDialog from '../components/EditJobDialog';
 import InterviewsPanel from '../components/InterviewsPanel';
 import PastePanel from '../components/PastePanel';
 import FitBreakdown from '../components/FitBreakdown';
@@ -145,6 +146,8 @@ export default function JobPage() {
   const [rescoreTask, setRescoreTask] = useState<Task | null>(null); // a rescore still queued or running
   const [intakeTask, setIntakeTask] = useState<Task | null>(null); // Add job: reading the posting
   const [notes, setNotes] = useState('');
+  const [editing, setEditing] = useState(false);
+  const navigate = useNavigate();
   const toast = (useLocation().state as { toast?: string } | null)?.toast;
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -192,6 +195,14 @@ export default function JobPage() {
     setIntakeTask(t);
     api.getJob(key).then((d) => setJob(d)).catch(() => {}); // the title, description and fit score
   }, [key]);
+  const onDelete = () => {
+    if (!job || !window.confirm(`Delete ${job.title || '(untitled)'} at ${job.company}? Drafts, interviews and notes go `
+      + 'too; files in Google Drive stay.')) return;
+    act(async () => {
+      await api.deleteJob(key);
+      navigate('/');
+    });
+  };
   const onPasted = (t: Task) => {
     setIntakeTask(t);
     api.getJob(key).then((d) => setJob(d)).catch(() => {});
@@ -228,7 +239,8 @@ export default function JobPage() {
         <div className="job-title">
           <h1>{job.title || '(untitled)'}</h1>
           <p className="muted">
-            {[job.company, job.location, roleLabel(job.role_category)].filter(Boolean).join(' · ')}
+            {[job.company, job.location, job.work_mode && job.work_mode !== 'unknown' ? WORK_MODE_LABELS[job.work_mode] : null,
+              job.salary, roleLabel(job.role_category)].filter(Boolean).join(' · ')}
             {job.deadline && <> · due {day(job.deadline)}</>}
             {job.discovered_at && <> · found {day(job.discovered_at)}</>}
           </p>
@@ -238,8 +250,10 @@ export default function JobPage() {
           {job.days_since_submitted != null && (
             <span className="muted">{job.days_since_submitted} days since submitted</span>
           )}
+          <button type="button" disabled={busy} onClick={() => setEditing(true)}>Edit</button>
         </div>
       </header>
+      {editing && <EditJobDialog job={job} onSaved={setJob} onClose={() => setEditing(false)} />}
 
       {(d || job.fit_score != null) && (
         <FitBreakdown job={job} onRescore={onRescore}
@@ -321,6 +335,13 @@ export default function JobPage() {
           <p className="muted">No changes yet.</p>
         )}
       </Section>
+
+      <section className="card danger-zone" aria-label="Danger zone">
+        <h2>Delete this job</h2>
+        <p className="muted">Removes the job with its drafts, interviews, notes and status history. There is no undo.
+          Files in Google Drive stay; trash the folder there if you want them gone.</p>
+        <button type="button" className="danger" disabled={busy} onClick={onDelete}>Delete job</button>
+      </section>
     </article>
   );
 }

@@ -1,7 +1,7 @@
 // Typed fetch helpers for the dashboard API (<base>/api, e.g. /strelitzia/dashboard/api). Mutating calls send `X-Strelitzia: 1` (the server's CSRF check).
 import type {
-  AddJobInput, AddJobResult, AuthMe, ClaudeSetup, Contact, CoverPacketResult, DraftCheckOutcome, DraftKind, ContactFields, ContactListItem, ContactWithJobs,
-  Facets, Interview, ImportResult, InterviewFields, JobDetail, JobList, JobQuery, PacketResult, PanelGradeOutcome,
+  AddJobInput, AddJobResult, AuthMe, ClaudeSetup, Contact, CoverPacketResult, DeleteJobResult, DraftCheckOutcome, DraftKind, ContactFields, ContactListItem, ContactWithJobs,
+  Facets, Interview, ImportResult, InterviewFields, JobDetail, JobList, JobPatch, JobQuery, PacketResult, PanelGradeOutcome,
   PanelMode, PanelOverview, PanelRun, PanelWinner, Preferences, PreferencesResponse, ProfileDocsSetupOutcome,
   ProfileResponse, ProfileSave, ProfileSyncResult, ReassessPreview, ReassessScope, Relation, RescoreAllResult,
   RescorePreview, SavePreferencesResult, Task, UserStatus,
@@ -96,8 +96,13 @@ export function putCoverNotes(key: string, notes: string | null): Promise<JobDet
   return request<JobDetail>(`${job(key)}/cover-notes`, { method: 'PUT', body: JSON.stringify({ notes }) });
 }
 
-export function patchJob(key: string, patch: { submitted_at?: string; notes?: string | null }): Promise<JobDetail> {
+export function patchJob(key: string, patch: JobPatch): Promise<JobDetail> {
   return request<JobDetail>(`/jobs/${encodeURIComponent(key)}`, { method: 'PATCH', body: JSON.stringify(patch) });
+}
+
+/** Delete the job with its drafts, interviews, notes and history (no undo). Drive files stay. */
+export function deleteJob(key: string): Promise<DeleteJobResult> {
+  return request<DeleteJobResult>(job(key), { method: 'DELETE' });
 }
 
 /** Write the job's Claude packet and resume draft Doc to Drive and get the prompt to paste in Claude (409 without
