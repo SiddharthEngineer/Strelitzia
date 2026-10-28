@@ -142,6 +142,7 @@ def job_detail(conn: Connection, job: dict) -> dict:
         status=status,
         status_color=tracking.COLORS[status],
         days_since_submitted=tracking.days_since_submitted(job, day),
+        score_stale=_score_stale(job),
         submitted_date=tracking.submitted_date(job),
         events=tracking.status_events(conn, job["user_id"], job["url"]),
         source=job.get("source") or "discovered",
@@ -161,6 +162,14 @@ def job_detail(conn: Connection, job: dict) -> dict:
         **_draft_fields(job),
     )
     return out
+
+
+def _score_stale(job: dict) -> bool:
+    """The user edited the title or company after the job was last scored, so Rescore would change the score."""
+    edited = job.get("fields_edited_at")
+    if not edited or job.get("fit_score") is None:
+        return False
+    return not job.get("assessed_at") or edited > job["assessed_at"]
 
 
 # Local draft files served by GET /jobs/{key}/files/{kind}: kind -> jobs column.
@@ -227,20 +236,49 @@ def post_status(key: str, body: StatusUpdate, request: Request) -> dict:
 class JobPatch(BaseModel):
     submitted_at: date | None = None
     notes: str | None = None
+    title: str | None = Field(default=None, max_length=300)
+    company: str | None = Field(default=None, max_length=300)
+    location: str | None = Field(default=None, max_length=300)
+    work_mode: Literal["remote", "hybrid", "onsite", "unknown"] | None = None
+    salary: str | None = Field(default=None, max_length=200)
+    deadline: date | None = None
+
+
+# Job fields the user can correct by hand; a blank value clears the optional ones. The URL is the key and stays.
+_EDITABLE_FIELDS = ("title", "company", "location", "work_mode", "salary")
+_REQUIRED_FIELDS = ("title", "company")
+_SCORED_FIELDS = ("title", "company")  # the assessment read these, so editing them makes the score stale
 
 
 @api.patch("/jobs/{key}")
 def patch_job(key: str, body: JobPatch, request: Request) -> dict:
-    """Edit the submitted date and/or notes. Only the fields present in the body change."""
+    """Edit the submitted date, notes and the job's details. Only the fields present in the body change."""
     conn = db_conn(request)
     user = current_user(request)
     job = job_by_key(conn, user.id, key)
-    if "submitted_at" in body.model_fields_set:
-        if body.submitted_at is None:
-            raise HTTPException(status_code=422, detail="submitted_at can't be cleared; set a status instead")
+    sent = body.model_fields_set
+    if "submitted_at" in sent and body.submitted_at is None:
+        raise HTTPException(status_code=422, detail="submitted_at can't be cleared; set a status instead")
+    updates: dict = {}
+    for name in _EDITABLE_FIELDS:
+        if name in sent:
+            value = getattr(body, name)
+            value = value.strip() or None if isinstance(value, str) else value
+            if value is None and name in _REQUIRED_FIELDS:
+                raise HTTPException(status_code=422, detail=f"The {name} can't be empty")
+            updates[name] = value
+    if "deadline" in sent:
+        updates["deadline"] = body.deadline.isoformat() if body.deadline else None
+    if "notes" in sent:
+        updates["notes"] = body.notes
+    if any(updates.get(name) != job.get(name) for name in _SCORED_FIELDS if name in updates):
+        updates["fields_edited_at"] = tracking._now()
+    if "submitted_at" in sent:
         tracking.set_submitted_at(conn, user.id, job["url"], body.submitted_at.isoformat())
-    if "notes" in body.model_fields_set:
-        conn.execute("UPDATE jobs SET notes = ? WHERE user_id = ? AND url = ?", (body.notes, user.id, job["url"]))
+    if updates:
+        assignments = ", ".join(f"{name} = ?" for name in updates)
+        conn.execute(f"UPDATE jobs SET {assignments} WHERE user_id = ? AND url = ?",
+                     (*updates.values(), user.id, job["url"]))
         conn.commit()
     return job_detail(conn, job_by_key(conn, user.id, key))
 
