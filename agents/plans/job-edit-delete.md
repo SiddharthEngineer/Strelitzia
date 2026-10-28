@@ -1,5 +1,5 @@
 # Plan: Edit or delete a job (issue #98, item 3)
-**Status:** ❌ Not started (planned with the user 2026-10-27)
+**Status:** ✅ Complete 2026-10-28 (human test steps on preprod pending)
 **Risk:** low (user, 2026-10-27: merge without a review wait; protected paths still get the automated review and preprod check; was review: deletes user data)
 **Depends on:** —
 
@@ -59,3 +59,13 @@ files in Google Drive stay.") and returns to the Jobs list.
 1. The URL stays fixed (it's the key in six tables). A wrong URL means delete and re-add.
 2. Delete leaves Drive files; the user can trash the folder by hand. (Alternative: move it to Drive's trash.)
 3. Hard delete, no undo. (Alternative: an `archived` flag hidden from the list.)
+
+## Build notes (2026-10-28)
+- Tests live in `tests/web/test_job_edit_delete.py` (there is no `tests/test_web_jobs.py`).
+- `score_stale` compares a new `fields_edited_at` column with `assessed_at`, so a Rescore clears it.
+- From the self-review: hand-edited work mode, deadline and location are kept by extraction and classify
+  (`edited_fields`, `database.keep_edited`); an edited location also sets `location_city/state/country`; the
+  assessment uses a corrected company; Open in Claude renames and moves existing draft Docs after a title/company edit;
+  delete discards an open panel run that included the job and removes its local draft files (unless another user's row
+  for the same posting uses them).
+- Open: a discovery run can re-add a deleted discovered job (no tombstone); a task already running finishes.
