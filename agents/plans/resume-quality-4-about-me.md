@@ -44,7 +44,7 @@ user; a pull with every answer empty is a warning, not an error.
 **What:** `cover_notes` column, returned in the job detail, saved by `PUT /jobs/{key}/cover-notes` (owner of the row
 only, ≤ 2000 characters).
 **Validate:** `pytest tests/web/test_job_detail.py -q` → round trip; another user's job → 404.
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (this commit)
 
 ### Task 3: Dashboard
 **Runs:** unattended

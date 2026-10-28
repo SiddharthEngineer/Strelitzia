@@ -668,6 +668,25 @@ def put_description(key: str, body: PastedDescription, request: Request) -> dict
     return {"task": _queue_intake(conn, request, user.id, job["url"]), "key": key}
 
 
+MAX_COVER_NOTES = 2000
+
+
+class CoverNotes(BaseModel):
+    notes: str | None = Field(default=None, max_length=MAX_COVER_NOTES)
+
+
+@api.put("/jobs/{key}/cover-notes")
+def put_cover_notes(key: str, body: CoverNotes, request: Request) -> dict:
+    """Save the user's notes for this job's cover letter (blank clears them); returns the job detail."""
+    conn = db_conn(request)
+    user = current_user(request)
+    job = job_by_key(conn, user.id, key)
+    notes = (body.notes or "").strip() or None
+    conn.execute("UPDATE jobs SET cover_notes = ? WHERE user_id = ? AND url = ?", (notes, user.id, job["url"]))
+    conn.commit()
+    return job_detail(conn, job_by_key(conn, user.id, key))
+
+
 # --- Contacts and interviews (strelitzia.workspace) ---
 
 def _check_email(value: str | None) -> str | None:
