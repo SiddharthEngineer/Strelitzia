@@ -132,6 +132,8 @@ def page_plan(library: ContentLibrary, base: TailoredResume | None, profile: dic
     fewer = 1 if summary else 0
     plan = bullet_plan(library, base, budget, fewer)
     kept = [r for r in roles if plan[r.role_key]]
+    if roles and not kept:  # not even one bullet fits: every role stays at 0
+        return plan, budget
     if roles and len(kept) < len(roles):  # a dropped role's heading frees room: measure again without it
         budget = line_budget(profile, fixed, kept, base.skills if base else {})
         plan = bullet_plan(library, TailoredResume(roles=kept), budget, fewer)

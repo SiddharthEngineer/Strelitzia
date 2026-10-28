@@ -848,9 +848,8 @@ def _underfill_error(resume: TailoredResume, info: dict, budget, target: float) 
     short = [f"{key} (bullets average {avg} characters)" for avg, key in averages if avg < hi]
     where = (f"lengthen the bullets toward {hi} characters, starting with " + ", ".join(short) if short
              else "the bullets are already at the top of the band")
-    summary = "" if resume.headline else ", or add a 1-2 line Summary"
     return (f"The resume fills {round(100 * info['content_height_pt'] / usable)}% of the page; it needs 95-100%. "
-            f"Add about {lines} printed lines: {where}{summary}. If the material runs out, ask me for more.")
+            f"Add about {lines} printed lines: {where}. If the material runs out, ask me for more.")
 
 
 def tailor_report(job: dict) -> dict:
