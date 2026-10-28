@@ -1,12 +1,106 @@
-"""Resume layout helpers shared by the Claude workbench: bullet ranges per role and the one-page fit loop.
+"""Resume layout helpers shared by the Claude workbench: the page's line budget, bullets per role and the
+one-page fit loop.
 
 Resumes are written in a Claude Pro chat (strelitzia.scoring.workbench); the API tailor and its judge are gone.
 """
 
+import math
+from dataclasses import dataclass
 from pathlib import Path
 
 from strelitzia.scoring.content_library import ContentLibrary
-from strelitzia.scoring.resume_model import TailoredResume
+from strelitzia.scoring.resume_model import Bullet, RoleEntry, TailoredResume
+
+# The page is full at 95-100%; the plan aims for 97% and never past 99%, so a bullet that wraps one line long
+# still fits.
+FILL_MIN, FILL_TARGET, FILL_MAX = 0.95, 0.97, 0.99
+# Bullets are two printed lines (user decision, 2026-10-27): this band of characters per bullet line.
+BAND = (1.6, 1.95)
+# Bullets per role by recency (research §3): the most recent role 5-6, then 3-4, 2-3, and 1-2 for the rest.
+TIERS = ((5, 6), (3, 4), (2, 3), (1, 2))
+_PLACEHOLDER = "Placeholder bullet"
+
+
+@dataclass(frozen=True)
+class Budget:
+    """The room a page leaves for experience bullets, measured by rendering."""
+    lines_free: float  # room below the fixed parts (header, role headings, education, skills, Summary), in lines
+    chars_per_line: int  # characters of typical bullet text per printed line
+    lines_total: float = 0.0  # the usable page height, in lines
+    bullet_lines: float = 2.0  # what one two-line bullet takes, its spacing included, in lines
+
+    @property
+    def band(self) -> tuple[int, int]:
+        """(min, max) characters per bullet, so each prints as two lines."""
+        return round(self.chars_per_line * BAND[0]), round(self.chars_per_line * BAND[1])
+
+    @property
+    def bullets(self) -> int:
+        """How many two-line bullets fill the page without going past FILL_MAX."""
+        room = self.lines_free - (1 - FILL_MAX) * self.lines_total
+        return max(0, math.floor(room / self.bullet_lines + 1e-9)) if self.bullet_lines > 0 else 0
+
+
+def line_budget(profile: dict, fixed: dict, roles: list[RoleEntry], skills: dict[str, str],
+                summary: str = "") -> Budget:
+    """Measure the room for bullets: render the fixed parts with the role headings and placeholder lines.
+
+    Two renders in one browser session: every role with one one-line bullet, and the same with a second bullet
+    in the first role. Their difference is what a bullet line and its spacing take; the line height and the
+    characters per line come from the first experience bullet.
+    """
+    from strelitzia.scoring import pdf as pdf_mod
+    from strelitzia.scoring.template import render_resume
+
+    def resume(extra: int) -> TailoredResume:
+        out = [RoleEntry(role_key=r.role_key, title=r.title, company=r.company, dates=r.dates, tagline=r.tagline,
+                         bullets=[Bullet(_PLACEHOLDER) for _ in range(1 + (extra if i == 0 else 0))])
+               for i, r in enumerate(roles)]
+        return TailoredResume(roles=out, skills=dict(skills), headline=summary)
+
+    one, two = pdf_mod.measure_layout([render_resume(resume(0), profile, fixed=fixed),
+                                       render_resume(resume(1), profile, fixed=fixed)])
+    line_pt = one.get("line_pt") or 9.5 * 1.35
+    bullet_pt = (two["content_height_pt"] - one["content_height_pt"]) if roles else line_pt
+    bullet_pt = max(bullet_pt, line_pt)
+    fixed_pt = one["content_height_pt"] - len(roles) * bullet_pt
+    usable = pdf_mod.USABLE_HEIGHT_PT
+    return Budget(lines_free=(usable - fixed_pt) / line_pt, chars_per_line=one.get("chars_per_line") or 120,
+                  lines_total=usable / line_pt, bullet_lines=(bullet_pt + line_pt) / line_pt)
+
+
+def bullet_plan(library: ContentLibrary, base: TailoredResume | None, budget: Budget) -> dict[str, int]:
+    """Exact bullets per content-library role, so the page fills to FILL_TARGET-FILL_MAX.
+
+    The roles are the base resume's (all of the library's without one); every other role gets 0, as does a role
+    that doesn't fit even at one bullet (oldest first). Counts start at each role's tier minimum; a short page
+    takes bullets from the role with the most (the older on a tie), a long one adds them most recent first, up to
+    the tier maximums and then past them.
+    """
+    library.ensure_keys()
+    shown = {r.role_key for r in base.roles} if base and base.roles else None
+    keys = [r.key for r in library.roles if shown is None or r.key in shown]
+    plan = {r.key: 0 for r in library.roles}
+    counts = [TIERS[min(i, len(TIERS) - 1)][0] for i in range(len(keys))]
+    highs = [TIERS[min(i, len(TIERS) - 1)][1] for i in range(len(keys))]
+    want = budget.bullets
+    while sum(counts) > want:
+        over = [(c, i) for i, c in enumerate(counts) if c > 1]
+        if over:
+            counts[max(over)[1]] -= 1
+        else:
+            counts[max(i for i, c in enumerate(counts) if c)] = 0
+    for cap in (highs, None):
+        while keys and sum(counts) < want:
+            grew = False
+            for i in range(len(counts)):
+                if sum(counts) < want and (cap is None or counts[i] < cap[i]):
+                    counts[i] += 1
+                    grew = True
+            if not grew:
+                break
+    plan.update(zip(keys, counts, strict=True))
+    return plan
 
 
 def _role_slots(
