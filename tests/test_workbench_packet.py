@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import json
+from datetime import datetime, timedelta
 
 import pytest
 from fake_drive import FakeDrive
@@ -379,3 +380,21 @@ def test_after_a_title_edit_the_drafts_are_renamed_and_moved_unedited(drive, cli
     row = _row(conn)
     assert row["drafts_written_at"] == resume["modifiedTime"]
     assert row["cover_draft_written_at"] == drive.store[ids["cover"]]["modifiedTime"]
+
+
+def test_after_a_title_edit_a_newer_draft_still_reseeds_the_renamed_doc(drive, client, conn, tmp_path, monkeypatch):
+    from strelitzia.scoring import pdf as pdf_mod
+    from workbench_helpers import fake_render_pdf
+
+    monkeypatch.setattr(pdf_mod, "render_pdf", fake_render_pdf)
+    wb.publish_drafts(client, conn, add_job_row(conn), inputs())
+    resume_id = _row(conn)["resume_draft_doc_id"]
+    assert wb.import_data(conn, _row(conn), good_result(), inputs=inputs(), out_dir=tmp_path / "out").ok
+    conn.execute("UPDATE jobs SET title = 'Staff Data Engineer'")
+    conn.commit()
+    drive._clock = datetime.fromisoformat(_row(conn)["tailored_at"]) + timedelta(days=1)  # the move comes later
+    wb.publish_drafts(client, conn, _row(conn), inputs())
+    resume = drive.store[resume_id]
+    assert resume["name"] == "Initech - Staff Data Engineer - Resume draft"
+    assert b"Summary: Data engineer building Airflow and Spark pipelines" in resume["content"]
+    assert _row(conn)["drafts_written_at"] == resume["modifiedTime"]

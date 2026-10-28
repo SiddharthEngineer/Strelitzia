@@ -1238,6 +1238,8 @@ def publish_drafts(client, conn: Connection, job: dict, inputs: Inputs | None = 
         written_at = job.get(_WRITTEN_AT[kind]) or job.get("drafts_written_at")
         doc_id = job.get(f"{kind}_draft_doc_id")
         meta = client.doc_meta(doc_id) if doc_id else None
+        # Decided on the app's last write, before a move below bumps it: a newer accepted draft still reseeds the Doc.
+        newer_draft = has_draft and _after(job.get("tailored_at"), written_at)
         if meta and not meta.get("trashed") and meta.get("name") != draft_name(job, kind):
             # The user edited the title or company: the prompt names the Doc by the new name, in the new folder.
             folder_id = folder_id or client.ensure_folder_path(packet_folder_path(job))
@@ -1249,7 +1251,7 @@ def publish_drafts(client, conn: Connection, job: dict, inputs: Inputs | None = 
             meta = {**meta, "name": moved.get("name"), "modifiedTime": moved.get("modifiedTime")}
         if meta and not meta.get("trashed"):
             edited = not written_at or _after(meta.get("modifiedTime"), written_at)
-            if edited or not (has_draft and _after(job.get("tailored_at"), written_at)):
+            if edited or not newer_draft:
                 urls[kind] = meta.get("webViewLink") or job.get(f"{kind}_draft_doc_url") or ""
                 continue
         texts = texts or draft_texts(job, inputs)

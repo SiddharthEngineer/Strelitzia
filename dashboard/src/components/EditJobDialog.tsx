@@ -35,7 +35,8 @@ export default function EditJobDialog({ job, onSaved, onClose }: Props) {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!title.trim() || !company.trim()) {
+    // Only a field the user changed is checked, so an untitled job can still get a deadline or a location.
+    if ((title.trim() !== (job.title ?? '') && !title.trim()) || (company.trim() !== (job.company ?? '') && !company.trim())) {
       setError('The title and company can’t be empty.');
       return;
     }
