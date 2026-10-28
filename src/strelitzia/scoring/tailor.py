@@ -11,9 +11,9 @@ from pathlib import Path
 from strelitzia.scoring.content_library import ContentLibrary
 from strelitzia.scoring.resume_model import Bullet, RoleEntry, TailoredResume
 
-# The page is full at 95-100%; the plan aims for 97% and never past 99%, so a bullet that wraps one line long
-# still fits.
-FILL_MIN, FILL_TARGET, FILL_MAX = 0.95, 0.97, 0.99
+# The page is full at 95-100%. The plan never goes past 98%, so a bullet that wraps one line long (~1.7%) still
+# fits; a plan that lands a little under 95% is closed by spacing (fill_page).
+FILL_MIN, FILL_TARGET, FILL_MAX = 0.95, 0.97, 0.98
 # Below FILL_REJECT the draft goes back to Claude; between it and FILL_MIN, spacing (the template's --gap, at most
 # GAP_MAX_PX) closes the gap.
 FILL_REJECT, GAP_MAX_PX = 0.90, 4.0
@@ -72,8 +72,10 @@ def line_budget(profile: dict, fixed: dict, roles: list[RoleEntry], skills: dict
                   lines_total=usable / line_pt, bullet_lines=(bullet_pt + line_pt) / line_pt)
 
 
-def bullet_plan(library: ContentLibrary, base: TailoredResume | None, budget: Budget) -> dict[str, int]:
-    """Exact bullets per content-library role, so the page fills to FILL_TARGET-FILL_MAX.
+def bullet_plan(library: ContentLibrary, base: TailoredResume | None, budget: Budget,
+                fewer: int = 0) -> dict[str, int]:
+    """Exact bullets per content-library role, so the page fills to FILL_TARGET-FILL_MAX (with `fewer` bullets
+    less in all: a Summary takes about one bullet's room).
 
     The roles are the base resume's (all of the library's without one); every other role gets 0, as does a role
     that doesn't fit even at one bullet (oldest first). Counts start at each role's tier minimum; a short page
@@ -86,7 +88,7 @@ def bullet_plan(library: ContentLibrary, base: TailoredResume | None, budget: Bu
     plan = {r.key: 0 for r in library.roles}
     counts = [TIERS[min(i, len(TIERS) - 1)][0] for i in range(len(keys))]
     highs = [TIERS[min(i, len(TIERS) - 1)][1] for i in range(len(keys))]
-    want = budget.bullets
+    want = max(0, budget.bullets - fewer)
     while sum(counts) > want:
         over = [(c, i) for i, c in enumerate(counts) if c > 1]
         if over:
@@ -106,12 +108,13 @@ def bullet_plan(library: ContentLibrary, base: TailoredResume | None, budget: Bu
     return plan
 
 
-def page_plan(library: ContentLibrary, base: TailoredResume | None, profile: dict,
-              fixed: dict) -> tuple[dict[str, int], Budget]:
+def page_plan(library: ContentLibrary, base: TailoredResume | None, profile: dict, fixed: dict,
+              summary: bool = False) -> tuple[dict[str, int], Budget]:
     """The exact bullets per role for this user's page, and the budget behind them.
 
     The budget is measured with the base resume's role headings (resume_fixed.yaml's win) and Skills and no
-    Summary, so the packet and the checks of its draft always agree.
+    Summary, so the packet and the checks of its draft always agree; `summary` plans one bullet fewer for a
+    draft with one.
     """
     from strelitzia.scoring.template import fixed_roles_from_resume
 
@@ -126,7 +129,13 @@ def page_plan(library: ContentLibrary, base: TailoredResume | None, profile: dic
                                    company=info.get("company") or "", dates=info.get("dates") or section.dates,
                                    tagline=info.get("tagline") or None))
     budget = line_budget(profile, fixed, roles, base.skills if base else {})
-    return bullet_plan(library, base, budget), budget
+    fewer = 1 if summary else 0
+    plan = bullet_plan(library, base, budget, fewer)
+    kept = [r for r in roles if plan[r.role_key]]
+    if roles and len(kept) < len(roles):  # a dropped role's heading frees room: measure again without it
+        budget = line_budget(profile, fixed, kept, base.skills if base else {})
+        plan = bullet_plan(library, TailoredResume(roles=kept), budget, fewer)
+    return plan, budget
 
 
 def fit_to_one_page(
@@ -194,7 +203,7 @@ def fill_page(resume: TailoredResume, profile: dict, fixed: dict, pdf_path: Path
             break
         slope = (new["content_height_pt"] - info["content_height_pt"]) / (new_gap - gap)
         gap, info = new_gap, new
-        if slope <= 0:
-            break
+        if slope <= 0:  # the template doesn't use --gap
+            return info, 0.0
         step = max(0.25, (FILL_TARGET * usable - info["content_height_pt"]) / slope)
     return info, gap

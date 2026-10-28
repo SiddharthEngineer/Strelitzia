@@ -141,13 +141,15 @@ def add_job_row(conn, **overrides) -> dict:
     return dict(conn.execute("SELECT * FROM jobs WHERE url = ?", (row["url"],)).fetchone())
 
 
-# A stand-in page layout (no Chromium): a fixed block plus each <li> at FAKE_CPL characters a line. Sized so the
-# base fixtures plan 2 + 1 bullets of 91-111 characters, as good_result has, and good_result fills ~97%.
-FAKE_CPL, FAKE_LINE_PT, FAKE_FIXED_PT, FAKE_LI_GAP_PT = 57, 12.0, 635.25, 0.75
+# A stand-in page layout (no Chromium): a fixed block plus the Summary and each <li> at FAKE_CPL characters a line.
+# Sized so the base fixtures plan 2 + 2 bullets of 91-111 characters (2 + 1 with a Summary, as good_result has),
+# and good_result fills ~95%.
+FAKE_CPL, FAKE_LINE_PT, FAKE_FIXED_PT, FAKE_LI_GAP_PT = 57, 12.0, 608.0, 0.75
 
 
 def fake_height(html: str) -> float:
-    items = [html_mod.unescape(re.sub(r"<[^>]+>", "", t)).strip() for t in re.findall(r"<li>(.*?)</li>", html, re.S)]
+    found = re.findall(r"<li>(.*?)</li>|<div class=\"summary\"[^>]*>(.*?)</div>", html, re.S)
+    items = [html_mod.unescape(re.sub(r"<[^>]+>", "", li or summary)).strip() for li, summary in found]
     return FAKE_FIXED_PT + sum(max(1, math.ceil(len(t) / FAKE_CPL)) * FAKE_LINE_PT + FAKE_LI_GAP_PT for t in items)
 
 

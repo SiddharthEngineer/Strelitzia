@@ -94,8 +94,9 @@ def test_packet_lists_terms_and_qualifications():
     assert "not in your material" not in quals
     assert ("data-engineer-acme: Data Engineer at Acme Corp (Jan 2024 – Present); exactly 2 bullets, each 91-111 "
             "characters;") in p.text
-    assert "data-analyst-intern-globex: Data Analyst Intern at Globex (Jun 2022 – Aug 2022); exactly 1 bullet," in p.text
+    assert "data-analyst-intern-globex: Data Analyst Intern at Globex (Jun 2022 – Aug 2022); exactly 2 bullets," in p.text
     assert "each bullet 91-111 characters. The counts and the band are binding" in p.text
+    assert "They assume no Summary; a Summary takes a bullet's room, so with one write data-analyst-intern-globex: 1." in p.text
     assert "projects: orders-pipeline, quality-dashboard" in p.text
     assert "Customer Data Platform (CDP)" in p.text
     assert "<h2>Required qualifications</h2>" in p.html
@@ -110,12 +111,15 @@ def test_bullet_band_and_exact_counts_are_checked():
     data["resume"]["roles"] = data["resume"]["roles"][:1]
     _, errors, _ = wb.check_result(data, job(), inputs())
     assert "Role 'data-analyst-intern-globex' is required (exactly 1 bullet) but missing" in errors
+    data = good_result(headline="")  # without a Summary the page has room for one bullet more
+    _, errors, _ = wb.check_result(data, job(), inputs())
+    assert "Role 'data-analyst-intern-globex' has 1 bullet; it needs exactly 2" in errors
 
 
 def test_a_role_planned_at_zero_must_be_left_out(monkeypatch):
     from strelitzia.scoring import tailor
 
-    monkeypatch.setattr(tailor, "bullet_plan", lambda lib, base, budget: {"data-engineer-acme": 2,
+    monkeypatch.setattr(tailor, "bullet_plan", lambda lib, base, budget, fewer=0: {"data-engineer-acme": 2,
                                                                           "data-analyst-intern-globex": 0})
     _, errors, _ = wb.check_result(good_result(), job(), inputs())
     assert "Role 'data-analyst-intern-globex' gets 0 bullets on this page; leave it out (under Dropped roles)" in errors

@@ -460,6 +460,8 @@ def measure_layout(htmls: list[str]) -> list[dict]:
                 page.set_content(html, wait_until="networkidle")
                 out.append(page.evaluate(_MEASURE_JS, _CPL_SAMPLE))
             browser.close()
+        if len(_LAYOUT_CACHE) >= 128:
+            _LAYOUT_CACHE.clear()
         _LAYOUT_CACHE[key] = out
     return [dict(m) for m in _LAYOUT_CACHE[key]]
 
