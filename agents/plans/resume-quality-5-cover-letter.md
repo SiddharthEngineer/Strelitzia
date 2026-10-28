@@ -1,5 +1,5 @@
 # Plan: Resume quality 5/5: the cover letter gets its own chat, rules and checks
-**Status:** ❌ Not started (planned with the user 2026-10-27)
+**Status:** ✅ Done 2026-10-27 (all four tasks)
 **Risk:** low (user, 2026-10-27: merge without a review wait; protected paths still get the automated review and preprod check; was review: packet flow, rules, validator, API and dashboard)
 **Depends on:** resume-quality-4-about-me, resume-quality-2-bullets
 
