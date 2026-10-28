@@ -476,7 +476,7 @@ def validate_cover_letter(text: str, mode: str = "normal") -> dict:
     # 5. Must start with "Dear" — always checked (preamble should have been stripped)
     stripped = text.strip()
     if not stripped.lower().startswith("dear"):
-        errors.append("Must start with 'Dear Hiring Manager,'")
+        errors.append("Must start with 'Dear Hiring Team,'")
 
     return {"passed": len(errors) == 0, "errors": errors, "warnings": warnings}
 
@@ -609,8 +609,7 @@ def validate_bullet_shape(resume: "TailoredResume", skills: dict[str, str], max_
                           min_rest: int = 60) -> list[str]:
     """Warnings for task-level bullets: more than `max_tools` tools from the base resume's Skills, a role split
     into several bullets about one project, or a bullet that is little more than its tools."""
-    tools = list(dict.fromkeys(part.strip() for items in skills.values() for item in split_items(items)
-                               for part in _skill_parts(item) if part.strip()))
+    tools = tool_names(skills)
     # Longest first, and each match is removed before the next tool looks, so "Spark SQL" isn't also Spark and SQL.
     patterns = [(t, _tool_pattern(t)) for t in sorted(tools, key=len, reverse=True)]
     warnings = []
@@ -634,25 +633,53 @@ def validate_bullet_shape(resume: "TailoredResume", skills: dict[str, str], max_
     return warnings
 
 
+_NEEDS_INPUT = re.compile(r"\[\s*NEEDS INPUT\s*:?\s*([^\]]*)\]?", re.I)
+_NOT_ONLY = re.compile(r"\bnot only\b[^.!?]*\bbut also\b", re.I)
+_SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"'(\[])")
+
+
+def letter_sentences(text: str) -> list[str]:
+    return [s.strip() for s in _SENTENCE.split(text.strip()) if s.strip()]
+
+
 def validate_letter(paragraphs: list[str], evidence_slugs: list[str], library: "ContentLibrary",
-                    evidence: "EvidenceMap | None" = None, sign_off: str = "", max_words: int = 250,
-                    posting_text: str = "") -> list[str]:
-    """Cover-letter checks on a pasted letter: 3 paragraphs, the usual letter rules (strict), numbers
-    backed by the facts of its evidence_slugs (or by the posting, for what it says about the company), and no
-    unevidenced posting targets."""
+                    evidence: "EvidenceMap | None" = None, sign_off: str = "", posting_text: str = "", *,
+                    company: str = "", tools: "list[str] | tuple[str, ...]" = (), min_words: int = 220,
+                    max_words: int = 380, max_tools: int = 2) -> tuple[list[str], list[str]]:
+    """Cover-letter checks on a written letter (agents/research/cover-letter.md). Returns (errors, warnings).
+
+    Errors: 3-5 paragraphs, `min_words`-`max_words` words, the usual letter rules (strict), the research's banned
+    phrases, any [NEEDS INPUT] marker left in, numbers not backed by the facts of its evidence_slugs (or by the
+    posting, for what it says about the company), and unevidenced posting targets. Warnings: a sentence naming more
+    than `max_tools` of `tools`, and a first sentence without the company's name.
+    """
     from strelitzia.scoring.targets import matches
 
     errors: list[str] = []
+    warnings: list[str] = []
     paras = [p.strip() for p in paragraphs if p.strip()]
-    if len(paras) != 3:
-        errors.append(f"The cover letter has {len(paras)} paragraphs; it needs exactly 3")
+    if not 3 <= len(paras) <= 5:
+        errors.append(f"The cover letter has {len(paras)} paragraphs; it needs 3-5 (4 is best)")
     body = "\n\n".join(paras)
     words = len(body.split())
     if words > max_words:
-        errors.append(f"The cover letter is {words} words; at most {max_words}")
-    letter = f"Dear Hiring Manager,\n\n{body}\n\n{sign_off}".strip()
+        errors.append(f"The cover letter is {words} words; at most {max_words} (aim for 250-350)")
+    elif words < min_words:
+        errors.append(f"The cover letter is {words} words; at least {min_words} (aim for 250-350)")
+    for question in _NEEDS_INPUT.findall(body):
+        errors.append(f"The cover letter still needs your input: {question.strip() or 'a question you skipped'}. "
+                      "Answer it in the chat (or in your cover notes) so Claude can finish the letter")
+    letter = f"Dear Hiring Team,\n\n{body}\n\n{sign_off}".strip()
     errors += [f"Cover letter: {e}" for e in validate_cover_letter(letter, mode="strict")["errors"]
                if not e.startswith("Too long")]
+    plain = body.replace("\u2019", "'").lower()
+    # Phrases the banned words already cover are reported once, by validate_cover_letter.
+    phrases = [p for p in LETTER_BANNED_PHRASES if re.search(r"\b" + re.escape(p.lower()) + r"\b", plain)
+               and not any(w in p.lower() for w in BANNED_WORDS)]
+    if _NOT_ONLY.search(body):
+        phrases.append("not only ... but also")
+    if phrases:
+        errors.append(f"Cover letter uses stock phrases: {', '.join(phrases[:5])}; say it plainly in your own words")
     projects = [library.project_by_slug(s) for s in evidence_slugs]
     facts = " ".join([*(p.facts() for p in projects if p), posting_text]).replace(",", "")
     missing = [n for n in dict.fromkeys(_numbers(body)) if not _number_in(n, facts)]
@@ -665,7 +692,29 @@ def validate_letter(paragraphs: list[str], evidence_slugs: list[str], library: "
             if matches(e.target, body, evidence.pairs):
                 errors.append(f"Cover letter mentions '{e.target.text}', which your content library and base "
                               "resume don't back; remove it")
-    return errors
+
+    patterns = [(t, _tool_pattern(t)) for t in sorted(dict.fromkeys(tools), key=len, reverse=True)]
+    sentences = letter_sentences(body)
+    for i, sentence in enumerate(sentences, 1):
+        named, rest = [], sentence
+        for tool, pattern in patterns:
+            rest, hits = pattern.subn(" ", rest)
+            if hits:
+                named.append(tool)
+        if len(named) > max_tools:
+            short = sentence if len(sentence) <= 60 else sentence[:57] + "..."
+            warnings.append(f"Cover letter sentence {i} names {len(named)} tools ({', '.join(named)}): '{short}'; "
+                            f"keep at most {max_tools} per story and tell what you decided instead")
+    if company.strip() and sentences and company.strip().lower() not in sentences[0].lower():
+        warnings.append(f"The cover letter's first sentence doesn't name {company.strip()}; open with the role and "
+                        "one specific reason for this company")
+    return errors, list(dict.fromkeys(warnings))
+
+
+def tool_names(skills: dict[str, str]) -> list[str]:
+    """The tools in a base resume's Skills lines (each item and its parts), in order."""
+    return list(dict.fromkeys(part.strip() for items in skills.values() for item in split_items(items)
+                              for part in _skill_parts(item) if part.strip()))
 
 
 # ── Hidden text and injection (rendered HTML and PDF) ─────────────────────

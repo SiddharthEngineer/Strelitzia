@@ -112,13 +112,23 @@ def good_result(**resume_overrides) -> dict:
         "resume": resume,
         "cover_letter": {
             "paragraphs": [
-                "I moved a nightly orders pipeline from cron to Airflow and cut its runtime from 6 hours to "
-                "45 minutes, the kind of work your data team describes.",
-                "At Acme the pipeline handles 40 million rows per day across 12 source systems, and failures "
-                "dropped 80% after the move. I also built a Superset dashboard that caught 2 schema regressions "
-                "before release.",
-                "Your Customer Data Platform is the center of the role, and I have built on one before. Happy to "
-                "walk through any of this in more detail.",
+                "Initech's data team owns the Airflow pipelines behind its Customer Data Platform, and that is the "
+                "work I have enjoyed most at Acme. When the finance warehouse depended on a fragile nightly job, I "
+                "chose to rebuild it instead of patching it again, and I would like to bring that judgment to your "
+                "platform team.",
+                "The orders pipeline at Acme moved 40 million rows per day from 12 source systems, and it ran on cron "
+                "with no retries. A single late source could hold up the morning reports for the whole finance group. "
+                "I proposed moving it to Airflow, and I made the call to migrate one source at a time rather than "
+                "switch everything in one weekend, so analysts never lost a day of numbers. The runtime fell from 6 "
+                "hours to 45 minutes, and failures dropped 80%. More than the speed, the team stopped starting each "
+                "morning by asking whether the data had arrived, which is the kind of trust your posting describes.",
+                "A second habit I would bring is checking data before anyone else has to. On our customer data "
+                "platform I built a small quality dashboard for 3 teams, and it caught 2 schema regressions before "
+                "release. Those catches came from talking with the analysts who used the data every day and asking "
+                "what a bad morning looked like for them, not from adding more tooling.",
+                "Owning dependable pipelines on a customer data platform is where I want to grow next, and your team "
+                "looks like the right place to do it. Thank you for reading; I would be glad to walk through any of "
+                "this in more detail.",
             ],
             "evidence_slugs": ["orders-pipeline", "quality-dashboard"],
         },

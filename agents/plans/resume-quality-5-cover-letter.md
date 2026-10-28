@@ -55,7 +55,7 @@ marker (error naming the question), numbers still backed by cited projects or th
 naming more than 2 tools and for a first sentence without the company name. The greeting becomes "Dear Hiring Team,"
 (`cover_letter.py:18` `GREETING`, the template, and `validator.py:468`, `:597`).
 **Validate:** `pytest tests/test_workbench_validate.py tests/test_cover_letter_pdf.py -q` → a 3-paragraph tools-list letter warns; "I am writing to express" errors.
-**Status:** ❌
+**Status:** ✅ 2026-10-27 (this commit)
 
 ### Task 3: Separate checks and endpoints
 **Runs:** unattended
