@@ -472,3 +472,18 @@ describe('JobPage edit and delete', () => {
     confirm.mockRestore();
   });
 });
+
+describe('JobPage edit an untitled job', () => {
+  it('saves other fields without asking for a title', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getJob).mockResolvedValue(jobDetail({ title: null }));
+    vi.mocked(api.patchJob).mockResolvedValue(jobDetail({ title: null, salary: '$90k' }));
+    renderJob();
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit job' });
+    await user.type(within(dialog).getByLabelText('Salary'), '$90k');
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(api.patchJob).toHaveBeenCalledWith('abc123', { salary: '$90k' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});
