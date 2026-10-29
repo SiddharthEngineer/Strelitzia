@@ -63,7 +63,7 @@ Plus an **overall** grade per document and a **verdict**: phone screen yes / may
   output: a fenced block with or without the `json` tag, or bare JSON as the whole reply; test each.
 **Validate:** `pytest tests/test_review.py -q` → prompt has every criterion and both documents; good replies import
 for each grader; wrong grade strings, missing criteria and wrong prompt_version give clear errors/warnings.
-**Status:** ❌
+**Status:** ✅ 2026-10-29 (this commit; deleting a job also deletes its reviews, so `reviews` is in `JOB_TABLES`)
 
 ### Task 3: Review API (next to the old panel)
 **Runs:** unattended
