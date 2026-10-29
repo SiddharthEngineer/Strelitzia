@@ -1,152 +1,87 @@
 import { render, screen, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../api';
-import PanelPage from '../pages/PanelPage';
-import type { PanelOverview, PanelReport, PanelRun } from '../types';
+import PanelPage, { pointsGrade } from '../pages/PanelPage';
+import type { GraderStats, ReviewSummary } from '../types';
+import { CRITERIA } from './reviewFixtures';
 
 vi.mock('../api');
 
-function overview(extra: Partial<PanelOverview> = {}): PanelOverview {
-  return {
-    due: null, needed: 5, comparable: { latest_vs_previous: 5, rules_a_vs_b: 2 }, runs: [],
-    project_name: 'Strelitzia Panel',
-    project_instructions: 'Instructions version: p1234567\n\nYou are a strict resume screener.',
-    instructions_version: 'p1234567', rubric_version: 'b7654321',
-    ...extra,
-  };
-}
-
-const REPORT: PanelReport = {
-  items_total: 2,
-  items: [
-    { item: 1, title: 'Data Engineer', company: 'Initech', older_version: 1, newer_version: 2, newer_shown: 'second',
-      winners: { sonnet: 'newer', opus: 'older', you: 'newer' } },
-    { item: 2, title: 'ML Engineer', company: 'Globex', older_version: 2, newer_version: 3, newer_shown: 'first',
-      winners: { sonnet: 'newer', opus: 'newer', you: 'newer' } },
+const REVIEW: ReviewSummary = {
+  id: 'rev1', job_url: 'https://example.com/job/1', draft_id: 'd3', draft_version: 3, prompt_version: 'p1',
+  created_at: '2026-10-28T09:00:00+00:00', job: { key: 'abc123', title: 'Data Scientist', company: 'Acme' },
+  grades: [
+    { grader: 'claude-sonnet', model_label: '', overall_resume: 'B+', overall_cover: 'C', verdict: 'maybe',
+      created_at: '2026-10-28T09:10:00+00:00' },
+    { grader: 'chatgpt', model_label: 'GPT-5', overall_resume: 'A-', overall_cover: null, verdict: 'yes',
+      created_at: '2026-10-28T09:20:00+00:00' },
   ],
-  graders: {
-    you: { graded: 2, newer_win_rate: 1 },
-    sonnet: { graded: 2, newer_win_rate: 1,
-      a: { mean_overall: 2, mean_clarity: 3, met_rate: { required: 0.5, preferred: 0 }, red_flags: 2 },
-      b: { mean_overall: 3.5, mean_clarity: 4, met_rate: { required: 1, preferred: 0.5 }, red_flags: 0 } },
-    opus: { graded: 2, newer_win_rate: 0.5 },
-  },
-  agreement: { sonnet_vs_opus: 0.5, sonnet_vs_you: 1, opus_vs_you: 0.5 },
-  verdict: 'newer is better',
-  heard_back: [{ rules_version: 'r1', submitted: 3, heard_back: 1, rate: null, note: 'too few to compare' }],
 };
 
-function run(extra: Partial<PanelRun> = {}): PanelRun {
+function stats(extra: Partial<GraderStats>): GraderStats {
   return {
-    id: 'run1', created_at: '2026-10-15T09:00:00+00:00', mode: 'latest_vs_previous', status: 'open',
-    packets: [
-      { packet: 1, model: 'sonnet', text: 'P1', prompt: 'Grade this blind resume panel… P1' },
-      { packet: 2, model: 'opus', text: 'P2', prompt: 'Grade this blind resume panel… P2' },
-    ],
-    items: [
-      { item: 1, title: 'Data Engineer', company: 'Initech', first_text: 'Resume one A', second_text: 'Resume one B', your_pick: null },
-      { item: 2, title: 'ML Engineer', company: 'Globex', first_text: 'Resume two A', second_text: 'Resume two B', your_pick: null },
-    ],
-    graded: { sonnet: 0, opus: 0, you: 0 },
-    report: null,
-    ...extra,
+    grader: 'claude-sonnet', model_labels: [], reviews: 2,
+    mean: Object.fromEntries(CRITERIA.map(({ key }) => [key, 10])), mean_overall: { resume: 10, cover_letter: 7 },
+    verdict_agreement: 0.5, bias: 0, spread: 2, tendency: 'balanced', ...extra,
   };
 }
 
-const renderPage = (path = '/panel') => render(<MemoryRouter initialEntries={[path]}><PanelPage /></MemoryRouter>);
+const renderPage = () => render(<MemoryRouter><PanelPage /></MemoryRouter>);
 
 beforeEach(() => {
-  vi.mocked(api.getPanel).mockResolvedValue(overview());
-  vi.mocked(api.getPanelRun).mockResolvedValue(run());
+  vi.mocked(api.listReviews).mockResolvedValue([REVIEW]);
+  vi.mocked(api.getGraderComparison).mockResolvedValue({ reviews: 2, criteria: CRITERIA, graders: [
+    stats({ grader: 'claude-sonnet', model_labels: ['Sonnet 4.5'] }),
+    stats({ grader: 'chatgpt', bias: -2.3, tendency: 'harsh', verdict_agreement: 1, mean: { relevance: 4.6 } }),
+    stats({ grader: 'gemini', bias: 0.2, spread: 0.4, tendency: 'narrow' }),
+  ] });
+});
+
+describe('pointsGrade', () => {
+  it('rounds mean points to the nearest grade', () => {
+    expect(pointsGrade(14)).toBe('A+');
+    expect(pointsGrade(10.4)).toBe('B');
+    expect(pointsGrade(0)).toBe('F-');
+    expect(pointsGrade(null)).toBeNull();
+  });
 });
 
 describe('PanelPage', () => {
-  it('copies the versioned project instructions; the rubric needs no upload', async () => {
-    const user = userEvent.setup();
+  it('lists reviews with each grader\'s overall grades, linking to the job', async () => {
     renderPage();
-    await user.click(await screen.findByRole('button', { name: 'Copy instructions' }));
-    expect(api.copyText).toHaveBeenCalledWith('Instructions version: p1234567\n\nYou are a strict resume screener.');
-    expect(screen.getByRole('button', { name: 'Copied instructions' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Download rubric/ })).toBeNull();
-    expect(screen.getByText(/Instructions version p1234567 · rubric version b7654321/)).toBeInTheDocument();
+    const table = await screen.findByRole('table', { name: 'Reviews' });
+    expect(within(table).getByRole('link', { name: 'Data Scientist' })).toHaveAttribute('href', '/jobs/abc123');
+    const row = within(table).getAllByRole('row')[1];
+    expect(row).toHaveTextContent('v3');
+    expect(row).toHaveTextContent('Claude Sonnet: B+ · C · maybe');
+    expect(row).toHaveTextContent('ChatGPT (GPT-5): A- · — · yes');
   });
 
-  it('says how many more drafts are needed', async () => {
-    vi.mocked(api.getPanel).mockResolvedValue(overview({ comparable: { latest_vs_previous: 3, rules_a_vs_b: 0 } }));
+  it('compares the graders', async () => {
     renderPage();
-    expect(await screen.findByTestId('comparable')).toHaveTextContent(
-      '3 jobs have two comparable drafts. A panel needs 5: 2 more jobs need a second draft.');
-    expect(screen.getByRole('button', { name: 'Create run' })).toBeEnabled();
+    const table = await screen.findByRole('table', { name: 'Graders' });
+    const [, sonnet, gpt, gemini] = within(table).getAllByRole('row');
+    expect(sonnet).toHaveTextContent('Sonnet 4.5');
+    expect(within(sonnet).getAllByText('B')).toHaveLength(7); // six criteria and the resume overall
+    expect(gpt).toHaveTextContent('100%');
+    expect(gpt).toHaveTextContent('Harsh (−2.3 vs the others)');
+    expect(within(gpt).getByText('D+')).toHaveClass('grade-d'); // relevance 4.6 points
+    expect(gemini).toHaveTextContent('Narrow');
   });
 
-  it('shows the due reason and creates a run', async () => {
-    const user = userEvent.setup();
-    vi.mocked(api.getPanel).mockResolvedValue(overview({ due: 'no panel has been run yet' }));
-    vi.mocked(api.createPanelRun).mockResolvedValue(run());
+  it('explains how to compare graders before there are any', async () => {
+    vi.mocked(api.listReviews).mockResolvedValue([]);
+    vi.mocked(api.getGraderComparison).mockResolvedValue({ reviews: 0, criteria: CRITERIA, graders: [] });
     renderPage();
-    expect(await screen.findByText('Panel due: no panel has been run yet.')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Create run' }));
-    expect(api.createPanelRun).toHaveBeenCalledWith(5, 'latest_vs_previous');
-    expect(await screen.findByRole('region', { name: 'Model 1: Sonnet' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Model 2: Opus' })).toHaveTextContent('opposite order');
+    expect(await screen.findByText(/No reviews yet/)).toBeInTheDocument();
+    expect(screen.getByText(/two or more models/)).toBeInTheDocument();
+    expect(screen.queryByRole('table')).toBeNull();
   });
 
-  it('copies packets and imports a model reply', async () => {
-    const user = userEvent.setup();
-    vi.mocked(api.getPanel).mockResolvedValue(overview({ runs: [{ id: 'run1', created_at: '2026-10-15T09:00:00+00:00',
-      mode: 'latest_vs_previous', rules_version_a: 'r1', rules_version_b: 'r2', status: 'open' }] }));
-    vi.mocked(api.importPanelGrades).mockResolvedValue({
-      ok: true, graded: 2, warnings: ['The Strelitzia Panel project has old instructions (version 0ld0ld00)'],
-      run: run({ graded: { sonnet: 2, opus: 0, you: 0 } }),
-    });
+  it('shows a load error', async () => {
+    vi.mocked(api.listReviews).mockRejectedValue(new Error('boom'));
     renderPage();
-    const sonnet = await screen.findByRole('region', { name: 'Model 1: Sonnet' });
-    expect(within(sonnet).getByText(/Use Sonnet, in a new chat in the Panel project/)).toBeInTheDocument();
-    await user.click(within(sonnet).getByRole('button', { name: 'Copy packet for model 1' }));
-    expect(api.copyText).toHaveBeenCalledWith('Grade this blind resume panel… P1');
-    await user.type(within(sonnet).getByRole('textbox'), 'reply');
-    await user.click(within(sonnet).getByRole('button', { name: 'Import grades' }));
-    expect(api.importPanelGrades).toHaveBeenCalledWith('run1', 'sonnet', 'reply');
-    expect(await within(sonnet).findByText('2 items graded.')).toBeInTheDocument();
-    expect(within(sonnet).getByRole('list', { name: 'Warnings' })).toHaveTextContent('old instructions (version 0ld0ld00)');
-    expect(within(sonnet).getByText('2 of 2 graded')).toBeInTheDocument();
-  });
-
-  it('shows import errors such as a count mismatch', async () => {
-    const user = userEvent.setup();
-    vi.mocked(api.importPanelGrades).mockResolvedValue({ ok: false, errors: ['The reply grades 1 items, but this panel has 2.'] });
-    renderPage('/panel?run=run1');
-    const opus = await screen.findByRole('region', { name: 'Model 2: Opus' });
-    await user.type(within(opus).getByRole('textbox'), 'x');
-    await user.click(within(opus).getByRole('button', { name: 'Import grades' }));
-    expect(await within(opus).findByRole('alert')).toHaveTextContent('grades 1 items, but this panel has 2');
-  });
-
-  it('takes your blind picks and shows the report after the last one', async () => {
-    const user = userEvent.setup();
-    const afterFirst = run({ items: run().items.map((i) => (i.item === 1 ? { ...i, your_pick: 'second' } : i)) });
-    vi.mocked(api.pickPanelItem).mockResolvedValueOnce(afterFirst)
-      .mockResolvedValueOnce(run({ status: 'complete', items: afterFirst.items.map((i) => ({ ...i, your_pick: i.your_pick ?? 'first' })),
-        report: REPORT }));
-    renderPage('/panel?run=run1');
-    const item1 = await screen.findByRole('group', { name: 'Item 1' });
-    expect(within(item1).getByText('Resume one A')).toBeInTheDocument();
-    expect(within(item1).getByText('Resume one B')).toBeInTheDocument();
-    expect(screen.queryByText(/newer/)).toBeNull(); // blind
-    await user.click(within(item1).getByRole('button', { name: 'Second' }));
-    expect(api.pickPanelItem).toHaveBeenCalledWith('run1', 1, 'second');
-    expect(await within(item1).findByRole('button', { name: 'Second', pressed: true })).toBeInTheDocument();
-    expect(screen.queryByTestId('verdict')).toBeNull();
-    await user.click(within(screen.getByRole('group', { name: 'Item 2' })).getByRole('button', { name: 'First' }));
-    expect(await screen.findByTestId('verdict')).toHaveTextContent('Verdict: newer is better');
-    expect(screen.getByRole('list', { name: 'Agreement' })).toHaveTextContent('Sonnet vs Opus: 50%');
-    expect(screen.getByRole('list', { name: 'Items' })).toHaveTextContent('Opus older');
-    expect(screen.getByRole('list', { name: 'Heard back' })).toHaveTextContent('1 of 3 heard back (too few to compare)');
-    expect(screen.getByRole('row', { name: /Sonnet/ })).toHaveTextContent('2.0 → 3.5');
-    // The report un-blinds the panel, so the picks are locked.
-    expect(within(screen.getByRole('group', { name: 'Item 1' })).getByRole('button', { name: 'First' })).toBeDisabled();
-    expect(screen.getByText(/Your picks are locked/)).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('boom');
   });
 });

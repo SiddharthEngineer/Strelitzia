@@ -44,7 +44,7 @@ src/strelitzia/web/app.py (modify: `GET /reviews/graders`); tests
 section, from reviews with 2+ graders: per grader the mean grade per criterion, how often its verdict matched the
 others, and its spread (is it harsh, lenient, or all B's). Keep the page name "Panel" (decision 1).
 **Validate:** `pytest tests/test_web_review.py -q -k graders` and `npm test -- PanelPage`.
-**Status:** ❌
+**Status:** ✅ 2026-10-29 (this commit; the graders tests are in tests/test_review.py and tests/web/test_review_api.py)
 
 ### Task 4: Remove the A/B panel
 **Runs:** unattended

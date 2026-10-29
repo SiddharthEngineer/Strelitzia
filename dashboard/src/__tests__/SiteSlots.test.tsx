@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../api';
 import App from '../App';
 import SignInPage from '../pages/SignInPage';
@@ -9,7 +9,6 @@ import type { AuthMe } from '../types';
 vi.mock('../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api')>()),
   getMe: vi.fn(),
-  getPanel: vi.fn(),
   logout: vi.fn(),
   onUnauthorized: vi.fn(),
 }));
@@ -19,10 +18,6 @@ const OWNER: AuthMe = { enabled: true, user: { email: 'owner@example.com', name:
 
 const renderApp = () => render(<MemoryRouter initialEntries={['/nowhere']}><App /></MemoryRouter>);
 const scripts = () => Array.from(document.head.querySelectorAll('script')).filter((s) => s.getAttribute('src') === SCRIPT);
-
-beforeEach(() => {
-  vi.mocked(api.getPanel).mockResolvedValue({ due: null } as Awaited<ReturnType<typeof api.getPanel>>);
-});
 
 afterEach(() => {
   vi.clearAllMocks();

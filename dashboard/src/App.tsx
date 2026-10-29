@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { getMe, getPanel, logout, onUnauthorized, siteLogout } from './api';
+import { useEffect, useRef, useState } from 'react';
+import { getMe, logout, onUnauthorized, siteLogout } from './api';
 import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import AddJobDialog from './components/AddJobDialog';
 import Flower from './components/Flower';
@@ -34,11 +34,6 @@ export default function App() {
 
 function Shell({ me }: { me: AuthMe | null }) {
   const [adding, setAdding] = useState(false);
-  const [panelDue, setPanelDue] = useState<string | null>(null);
-  const refreshPanelDue = useCallback(() => {
-    getPanel().then((p) => setPanelDue(p.due)).catch(() => {}); // the reminder is optional
-  }, []);
-  useEffect(refreshPanelDue, [refreshPanelDue]);
   // On engineerfamily.net the site's own home link and profile control frame the header. In proxy mode the session is
   // the site's, so its profile control also carries Sign out; otherwise the dashboard keeps its own user menu.
   const site = Boolean(me?.site_header_url);
@@ -84,9 +79,7 @@ function Shell({ me }: { me: AuthMe | null }) {
           <NavLink to="/contacts">Contacts</NavLink>
           <NavLink to="/profile">Profile</NavLink>
           <NavLink to="/preferences">Preferences</NavLink>
-          <NavLink to="/panel">
-            Panel{panelDue && <span className="nav-dot" role="img" aria-label="due" title={`Panel due: ${panelDue}`} />}
-          </NavLink>
+          <NavLink to="/panel">Panel</NavLink>
           <NavLink to="/claude-setup">Claude setup</NavLink>
         </nav>
         <button type="button" className="primary add-job-button" onClick={() => setAdding(true)}>Add job</button>
@@ -101,13 +94,13 @@ function Shell({ me }: { me: AuthMe | null }) {
       {adding && <AddJobDialog onClose={() => setAdding(false)} />}
       <main className="content">
         <Routes>
-          <Route path="/" element={<JobsPage panelDue={panelDue} />} />
+          <Route path="/" element={<JobsPage />} />
           <Route path="/jobs/:key" element={<JobPage />} />
           <Route path="/contacts" element={<ContactsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/preferences" element={<PreferencesPage />} />
           <Route path="/claude-setup" element={<ClaudeSetupPage />} />
-          <Route path="/panel" element={<PanelPage onChange={refreshPanelDue} />} />
+          <Route path="/panel" element={<PanelPage />} />
           <Route path="*" element={<p className="notice">Page not found. <Link to="/">Back to jobs</Link></p>} />
         </Routes>
       </main>

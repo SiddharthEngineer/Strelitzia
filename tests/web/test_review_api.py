@@ -140,3 +140,18 @@ def test_deleting_the_job_deletes_its_reviews(client, conn, job):
 
 def test_the_old_panel_still_answers(client):
     assert client.get(f"{API}/panel").status_code == 200
+
+
+def test_graders_endpoint_compares_graders_per_user(client, conn, job, monkeypatch):
+    _draft(conn, 1)
+    review_id = client.post(f"{API}/jobs/{KEY}/reviews").json()["id"]
+    for grader, overall, verdict in (("claude-opus", "A-", "yes"), ("gemini", "C", "yes")):
+        res = client.post(f"{API}/reviews/{review_id}/replies", json={"grader": grader, "text": _reply(overall, verdict)})
+        assert res.status_code == 200, res.text
+    body = client.get(f"{API}/reviews/graders").json()
+    assert body["reviews"] == 1
+    assert [g["grader"] for g in body["graders"]] == ["claude-opus", "gemini"]
+    assert all(g["verdict_agreement"] == 1.0 for g in body["graders"])
+    assert body["graders"][0]["tendency"] == "lenient"
+    act_as(monkeypatch, second_user(conn))
+    assert client.get(f"{API}/reviews/graders").json()["graders"] == []

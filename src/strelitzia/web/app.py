@@ -666,6 +666,12 @@ def get_reviews(request: Request) -> list[dict]:
     return review.list_reviews(db_conn(request), current_user(request).id)
 
 
+@api.get("/reviews/graders")
+def get_review_graders(request: Request) -> dict:
+    """How each grader grades (mean per criterion, verdict agreement, bias and spread), from reviews with 2+ graders."""
+    return review.grader_stats(db_conn(request), current_user(request).id)
+
+
 @api.get("/reviews/{review_id}")
 def get_review(review_id: str, request: Request) -> dict:
     return _review(db_conn(request), current_user(request).id, review_id)

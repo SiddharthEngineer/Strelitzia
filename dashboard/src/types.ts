@@ -685,3 +685,28 @@ export interface ReviewDetail extends ReviewSummary {
 export type ReviewImportOutcome =
   | { ok: true; warnings: string[]; review: ReviewDetail }
   | { ok: false; errors: string[] };
+
+export type GraderTendency = 'harsh' | 'lenient' | 'narrow' | 'balanced';
+
+/** One grader in GET /reviews/graders. Means are grade points (A+ = 14 ... F- = 0). */
+export interface GraderStats {
+  grader: ReviewGrader;
+  model_labels: string[];
+  reviews: number;
+  mean: Record<string, number | null>;
+  mean_overall: { resume: number | null; cover_letter: number | null };
+  /** How often its verdict matched another grader's on the same review (0-1). */
+  verdict_agreement: number | null;
+  /** Mean points above (+) or below (-) the other graders on the same criterion. */
+  bias: number | null;
+  /** Standard deviation of its criterion grades, in points. */
+  spread: number | null;
+  tendency: GraderTendency | null;
+}
+
+/** GET /reviews/graders: from the reviews that 2+ graders replied to. */
+export interface GraderComparison {
+  reviews: number;
+  criteria: ReviewCriterion[];
+  graders: GraderStats[];
+}
