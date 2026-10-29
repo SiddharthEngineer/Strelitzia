@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import * as api from '../api';
 import { day, GRADER_LABELS, graderLabel } from '../labels';
+import Scorecard from './Scorecard';
 import type { JobDetail, ReviewDetail, ReviewGrader } from '../types';
 
 const CHATS: [string, string][] = [
@@ -28,7 +29,9 @@ export default function ReviewPanel({ job }: { job: JobDetail }) {
   const [text, setText] = useState('');
   const [result, setResult] = useState<Import>({ state: 'idle' });
 
+  const hasDraft = Boolean(job.draft_version);
   useEffect(() => {
+    if (!hasDraft) return;
     const ctrl = new AbortController();
     api.listJobReviews(job.key, ctrl.signal)
       .then((reviews) => (reviews?.length ? api.getReview(reviews[0].id, ctrl.signal) : null))
@@ -37,7 +40,7 @@ export default function ReviewPanel({ job }: { job: JobDetail }) {
         if (!ctrl.signal.aborted) setError(err instanceof Error ? err.message : String(err));
       });
     return () => ctrl.abort();
-  }, [job.key]);
+  }, [job.key, hasDraft]);
 
   async function copyPrompt(prompt: string) {
     try {
@@ -91,8 +94,8 @@ export default function ReviewPanel({ job }: { job: JobDetail }) {
     }
   }
 
-  if (!job.draft_version) return null;
-  const newer = review?.draft_version != null && review.draft_version < job.draft_version;
+  if (!hasDraft) return null;
+  const newer = review?.draft_version != null && review.draft_version < job.draft_version!;
   const oldCriteria = review != null && review.prompt_version !== review.current_prompt_version;
 
   return (
@@ -164,11 +167,7 @@ export default function ReviewPanel({ job }: { job: JobDetail }) {
           {result.state === 'saved' && result.warnings.length > 0 && (
             <ul className="muted small" aria-label="Warnings">{result.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
           )}
-          {review.replies.length > 0 && (
-            <p className="muted small" aria-label="Graded by">
-              Graded by {review.replies.map((r) => graderLabel(r.grader, r.model_label)).join(', ')}.
-            </p>
-          )}
+          <Scorecard review={review} />
         </>
       )}
     </section>

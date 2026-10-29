@@ -55,6 +55,8 @@ describe('ReviewPanel', () => {
     expect(api.importReviewReply).toHaveBeenLastCalledWith('rev1', 'chatgpt', 'GPT-5 Thinking', 'gpt reply');
     expect(await screen.findByText('Imported ChatGPT (GPT-5 Thinking)\'s review.')).toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Warnings' })).toHaveTextContent('2 top fixes');
+    const overall = screen.getByRole('table', { name: 'Overall' }); // the scorecard, a column per grader
+    expect(within(overall).getAllByRole('row')).toHaveLength(3);
   });
 
   it('shows import errors inline for each grader', async () => {
