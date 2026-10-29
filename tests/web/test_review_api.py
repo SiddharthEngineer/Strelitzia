@@ -48,6 +48,7 @@ def test_full_flow_for_two_graders(client, conn, job):
     created = res.json()
     review_id = created["id"]
     assert created["draft_version"] == 2 and created["replies"] == []
+    assert [c["key"] for c in created["criteria"]] == list(review.CRITERIA_KEYS)
     assert "You are a recruiter hiring for Data Engineer at Initech" in created["prompt"]
     assert "Resume take 2" in created["prompt"] and "Dear team, I like Initech." in created["prompt"]
 

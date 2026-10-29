@@ -4,7 +4,8 @@ import type {
   Facets, Interview, ImportResult, InterviewFields, JobDetail, JobList, JobPatch, JobQuery, PacketResult, PanelGradeOutcome,
   PanelMode, PanelOverview, PanelRun, PanelWinner, Preferences, PreferencesResponse, ProfileDocsSetupOutcome,
   ProfileResponse, ProfileSave, ProfileSyncResult, ReassessPreview, ReassessScope, Relation, RescoreAllResult,
-  RescorePreview, SavePreferencesResult, Task, UserStatus,
+  RescorePreview, ReviewDetail, ReviewGrader, ReviewImportOutcome, ReviewSummary, SavePreferencesResult, Task,
+  UserStatus,
 } from './types';
 
 export const API_BASE = `${import.meta.env.BASE_URL}api`;
@@ -325,6 +326,42 @@ export async function pickPanelItem(id: string, item: number, winner: PanelWinne
   const out = await postPanelGrade(id, { grader: 'you', item, winner });
   if (!out.ok) throw new ApiError(422, out.errors[0]);
   return out.run;
+}
+
+/** Start a recruiter review of the job's latest draft (409 when it has none): its prompt to paste into a chat. */
+export function createReview(key: string): Promise<ReviewDetail> {
+  return request<ReviewDetail>(`/jobs/${encodeURIComponent(key)}/reviews`, { method: 'POST' });
+}
+
+/** The job's reviews, newest first. */
+export function listJobReviews(key: string, signal?: AbortSignal): Promise<ReviewSummary[]> {
+  return request<ReviewSummary[]>(`/jobs/${encodeURIComponent(key)}/reviews`, { signal });
+}
+
+/** All the user's reviews, newest first. */
+export function listReviews(signal?: AbortSignal): Promise<ReviewSummary[]> {
+  return request<ReviewSummary[]>('/reviews', { signal });
+}
+
+export function getReview(id: string, signal?: AbortSignal): Promise<ReviewDetail> {
+  return request<ReviewDetail>(`/reviews/${encodeURIComponent(id)}`, { signal });
+}
+
+/** Import a grader's pasted reply: ok with the review, or not ok with the errors (the reply doesn't fit the format). */
+export async function importReviewReply(id: string, grader: ReviewGrader, modelLabel: string,
+  text: string): Promise<ReviewImportOutcome> {
+  const res = await fetch(`${API_BASE}/reviews/${encodeURIComponent(id)}/replies`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Strelitzia': '1' },
+    body: JSON.stringify({ grader, model_label: modelLabel, text }),
+  });
+  if (res.status === 422) {
+    const err = await res.clone().json().catch(() => null);
+    if (err && Array.isArray(err.errors)) return { ok: false, errors: err.errors };
+  }
+  if (!res.ok) throw await failure(res);
+  const out = (await res.json()) as { warnings?: string[]; review: ReviewDetail };
+  return { ok: true, warnings: out.warnings ?? [], review: out.review };
 }
 
 /** Whether sign-in is on and who is signed in (never a 401: user is null without a session). */

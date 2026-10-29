@@ -621,3 +621,67 @@ export interface DeleteJobResult {
   drive_folder: string | null;
   message: string;
 }
+
+/** Recruiter review graders: a chat app and model the user pasted the prompt into. */
+export type ReviewGrader = 'claude-haiku' | 'claude-sonnet' | 'claude-opus' | 'chatgpt' | 'gemini' | 'other';
+export type ReviewVerdict = 'yes' | 'maybe' | 'no';
+
+export interface ReviewGradeSummary {
+  grader: ReviewGrader;
+  /** The exact model the user named ("GPT-5 Thinking"), or "". */
+  model_label: string;
+  overall_resume: string;
+  overall_cover: string | null;
+  verdict: ReviewVerdict;
+  created_at: string;
+}
+
+/** GET /reviews and /jobs/{key}/reviews: one review with every grader's overall grades. */
+export interface ReviewSummary {
+  id: string;
+  job_url: string;
+  draft_id: string;
+  draft_version: number | null;
+  prompt_version: string;
+  created_at: string;
+  job: { key: string | null; title: string | null; company: string } | null;
+  grades: ReviewGradeSummary[];
+}
+
+export interface ReviewCriterionGrade {
+  grade: string;
+  evidence: string;
+  fix: string;
+}
+
+export interface ReviewDocGrades {
+  criteria: Record<string, ReviewCriterionGrade>;
+  overall: string;
+}
+
+/** A grader's whole reply, as imported. */
+export interface ReviewReplyData {
+  review: number;
+  prompt_version?: string;
+  resume: ReviewDocGrades;
+  cover_letter: ReviewDocGrades | null;
+  verdict: ReviewVerdict;
+  top_fixes: string[];
+}
+
+export interface ReviewCriterion {
+  key: string;
+  name: string;
+}
+
+/** GET /reviews/{id}: the review with its prompt and every grader's reply. */
+export interface ReviewDetail extends ReviewSummary {
+  current_prompt_version: string;
+  criteria: ReviewCriterion[];
+  prompt: string;
+  replies: (ReviewGradeSummary & { reply: ReviewReplyData })[];
+}
+
+export type ReviewImportOutcome =
+  | { ok: true; warnings: string[]; review: ReviewDetail }
+  | { ok: false; errors: string[] };

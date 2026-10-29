@@ -41,6 +41,7 @@ CRITERIA = (
                          "about 350 words."),
 )
 CRITERIA_KEYS = tuple(key for key, _, _ in CRITERIA)
+CRITERIA_NAMES = [{"key": key, "name": name} for key, name, _ in CRITERIA]
 
 
 def grade_points(grade: str) -> int:
@@ -234,7 +235,7 @@ def _grades(conn: Connection, review_ids: list[str]) -> dict[str, list[dict]]:
 def _summary(review: dict, job: dict | None, replies: list[dict]) -> dict:
     return {
         "id": review["id"], "job_url": review["job_url"], "draft_id": review["draft_id"],
-        "prompt_version": review["prompt_version"], "created_at": review["created_at"],
+        "draft_version": review.get("draft_version"), "prompt_version": review["prompt_version"], "created_at": review["created_at"],
         "job": {"key": job.get("job_key"), "title": job.get("title"), "company": job_company(job)} if job else None,
         "grades": [{key: g[key] for key in ("grader", "model_label", "overall_resume", "overall_cover", "verdict",
                                             "created_at")} for g in replies],
@@ -243,9 +244,10 @@ def _summary(review: dict, job: dict | None, replies: list[dict]) -> dict:
 
 def list_reviews(conn: Connection, user_id: str, job_url: str | None = None) -> list[dict]:
     """The user's reviews (of one job, if given), newest first, each with every grader's overall grades."""
-    sql = ("SELECT r.id, r.job_url, r.draft_id, r.prompt_version, r.created_at, j.url, j.job_key, j.title, "
-           "j.company, j.site, j.strategy FROM reviews r LEFT JOIN jobs j ON j.user_id = r.user_id AND j.url = r.job_url "
-           "WHERE r.user_id = ?")
+    sql = ("SELECT r.id, r.job_url, r.draft_id, r.prompt_version, r.created_at, d.version AS draft_version, j.url, "
+           "j.job_key, j.title, j.company, j.site, j.strategy FROM reviews r "
+           "LEFT JOIN jobs j ON j.user_id = r.user_id AND j.url = r.job_url "
+           "LEFT JOIN drafts d ON d.user_id = r.user_id AND d.id = r.draft_id WHERE r.user_id = ?")
     params: tuple = (user_id,)
     if job_url is not None:
         sql, params = sql + " AND r.job_url = ?", (*params, job_url)
@@ -271,6 +273,7 @@ def get_review(conn: Connection, user_id: str, review_id: str) -> dict:
     out = _summary(review, job, replies)
     out["draft_version"] = draft.get("version") if draft else None
     out["current_prompt_version"] = PROMPT_VERSION
+    out["criteria"] = CRITERIA_NAMES
     out["prompt"] = review["prompt_text"]
     out["replies"] = [{**{k: g[k] for k in ("grader", "model_label", "overall_resume", "overall_cover", "verdict",
                                              "created_at")}, "reply": _json(g["detail_json"], {})} for g in replies]
