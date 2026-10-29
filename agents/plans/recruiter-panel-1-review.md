@@ -67,13 +67,13 @@ for each grader; wrong grade strings, missing criteria and wrong prompt_version 
 
 ### Task 3: Review API (next to the old panel)
 **Runs:** unattended
-**Files:** src/strelitzia/web/app.py (modify), tests/test_web_review.py (new)
+**Files:** src/strelitzia/web/app.py (modify), tests/web/test_review_api.py (new; next to `test_panel_api.py`, where the web fixtures live)
 **What:** `POST /jobs/{key}/reviews` (latest draft; 409 when none), `GET /jobs/{key}/reviews`,
 `GET /reviews/{id}` (prompt + replies), `POST /reviews/{id}/replies` (422 with errors, else warnings + review),
 `GET /reviews` (the user's reviews, newest first, with overall grades per grader). Leave the `/panel*` endpoints and
 `panel.py` in place: the old Panel page still uses them until 2/2 replaces it (decision 3).
-**Validate:** `pytest tests/test_web_review.py -q` → full flow for two graders; another user's review → 404.
-**Status:** ❌
+**Validate:** `pytest tests/web/test_review_api.py -q` → full flow for two graders; another user's review → 404.
+**Status:** ✅ 2026-10-29 (this commit; creating a review reuses `_owner_content`, reading and pasting don't need it)
 
 ## Validation
 - `scripts/validate.sh --full` passes; the old Panel page still works.
