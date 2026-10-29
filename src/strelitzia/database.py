@@ -282,6 +282,17 @@ def _ensure_tables(conn: Connection) -> None:
         "run_id TEXT, item_no INTEGER, grader TEXT, winner TEXT, detail_json TEXT, created_at TEXT, "
         "PRIMARY KEY (run_id, item_no, grader))"
     )
+    # Recruiter reviews (strelitzia.scoring.review): one job's latest draft, graded A+ to F- per criterion by a
+    # recruiter prompt pasted into any chat model. One reply per grader; detail_json holds the whole reply.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS reviews ("
+        "id TEXT PRIMARY KEY, job_url TEXT, draft_id TEXT, prompt_version TEXT, created_at TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS review_grades ("
+        "review_id TEXT, grader TEXT, model_label TEXT, overall_resume TEXT, overall_cover TEXT, verdict TEXT, "
+        "detail_json TEXT, created_at TEXT, PRIMARY KEY (review_id, grader))"
+    )
     # Accounts (strelitzia.users): role owner | user, status invited | active | disabled, emails lowercased.
     conn.execute(
         "CREATE TABLE IF NOT EXISTS users ("
@@ -307,13 +318,14 @@ def _ensure_tables(conn: Connection) -> None:
 
 
 # Tables migrate_users gives a user_id (with the owner as the default); user_preferences and llm_usage already have one.
-USER_TABLES = ("status_events", "dashboard_tasks", "contacts", "job_contacts", "interviews", "drafts", "panel_runs")
+USER_TABLES = ("status_events", "dashboard_tasks", "contacts", "job_contacts", "interviews", "drafts", "panel_runs",
+               "reviews")
 # Message Batches belong to the user they were submitted for (one batch per user); older ones are the owner's.
 _OWNED_TABLES = ("llm_batches", *USER_TABLES)
 
 # Side tables with a row per job: table -> the column holding the job's url. delete_job_rows empties them.
 JOB_TABLES = {"status_events": "url", "dashboard_tasks": "url", "job_contacts": "job_url", "interviews": "job_url",
-              "drafts": "job_url"}
+              "drafts": "job_url", "reviews": "job_url"}
 # Side tables that keep a deleted job's url: llm_usage is the spend history.
 KEPT_JOB_TABLES = ("llm_usage",)
 
@@ -329,6 +341,9 @@ def delete_job_rows(conn: Connection, user_id: str, url: str) -> bool:
         if cur.rowcount == 0:
             conn.rollback()
             return False
+        # Review grades have no user_id: they go with the user's reviews of the job (deleted next, in JOB_TABLES).
+        conn.execute("DELETE FROM review_grades WHERE review_id IN "
+                     "(SELECT id FROM reviews WHERE user_id = ? AND job_url = ?)", (user_id, url))
         for table, column in JOB_TABLES.items():
             conn.execute(f"DELETE FROM {table} WHERE user_id = ? AND {column} = ?", (user_id, url))
         # Panel items have no user_id: they belong to the user's runs. Their grades go with them. An open run's

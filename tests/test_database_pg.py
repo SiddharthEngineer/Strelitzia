@@ -123,6 +123,7 @@ def _old_shape_db(conn) -> None:
     conn.execute("INSERT INTO interviews (id, job_url) VALUES ('i1', 'https://example.com/job/1')")
     conn.execute("INSERT INTO drafts (id, job_url, version) VALUES ('d1', 'https://example.com/job/1', 1)")
     conn.execute("INSERT INTO panel_runs (id, status) VALUES ('p1', 'open')")
+    conn.execute("INSERT INTO reviews (id, job_url) VALUES ('rv1', 'https://example.com/job/1')")
     conn.execute("INSERT INTO dashboard_tasks (id, url, state) VALUES ('t1', 'https://example.com/job/2', 'done')")
     conn.execute("INSERT INTO llm_usage (id, purpose, cost_usd) VALUES ('l1', 'score', 0.01)")
     conn.execute("INSERT INTO user_preferences (user_id, prefs_json, updated_at) VALUES (NULL, '{\"a\": 1}', '1')")

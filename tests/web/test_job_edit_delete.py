@@ -96,6 +96,7 @@ def _seed_everything(conn, user_id):
         ("interviews", {"id": f"i-{user_id}", "job_url": URL, "stage": "phone"}),
         ("drafts", {"id": f"d-{user_id}", "job_url": URL, "version": 1}),
         ("panel_runs", {"id": f"r-{user_id}", "status": "open"}),
+        ("reviews", {"id": f"rv-{user_id}", "job_url": URL, "draft_id": f"d-{user_id}"}),
         ("llm_usage", {"id": f"u-{user_id}", "job_url": URL, "cost_usd": 0.01}),
     ]
     for table, row in rows:
@@ -105,6 +106,8 @@ def _seed_everything(conn, user_id):
     conn.execute("INSERT INTO panel_items (run_id, item_no, job_url) VALUES (?, 1, ?)", (f"r-{user_id}", URL))
     conn.execute("INSERT INTO panel_grades (run_id, item_no, grader, winner) VALUES (?, 1, 'you', 'first')",
                  (f"r-{user_id}",))
+    conn.execute("INSERT INTO review_grades (review_id, grader, verdict) VALUES (?, 'chatgpt', 'yes')",
+                 (f"rv-{user_id}",))
     conn.commit()
 
 
@@ -130,6 +133,7 @@ def test_delete_removes_the_job_and_everything_that_belongs_to_it(client, conn, 
         assert _count(conn, "panel_items", "run_id = ?", (f"r-{uid}",)) == left
         assert _count(conn, "panel_grades", "run_id = ?", (f"r-{uid}",)) == left
         assert _count(conn, "panel_runs", "id = ?", (f"r-{uid}",)) == left  # an open run can't be graded without it
+        assert _count(conn, "review_grades", "review_id = ?", (f"rv-{uid}",)) == left
         assert _count(conn, "contacts", "user_id = ?", (uid,)) == 1  # contacts are shared across jobs: they stay
         assert _count(conn, "llm_usage", "user_id = ? AND job_url = ?", (uid, URL)) == 1  # the spend history stays
     assert client.get(f"{API}/jobs/{KEY}").status_code == 404
