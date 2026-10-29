@@ -34,7 +34,7 @@ says so ("this review is of draft v3; v4 is newer").
 evidence and fix on expand. Header: overall grades, verdict, top three fixes. With 2+ graders, a criterion where they
 differ by more than one letter band is marked "graders disagree".
 **Validate:** `npm test -- Scorecard` → renders 1 and 3 graders; disagreement mark appears for A- vs C+.
-**Status:** ❌
+**Status:** ✅ 2026-10-29 (this commit)
 
 ### Task 3: Panel page = reviews list + grader comparison
 **Runs:** unattended

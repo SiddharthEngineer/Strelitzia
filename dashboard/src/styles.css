@@ -403,6 +403,27 @@ button.danger { color: var(--danger); border-color: var(--danger); }
 .nav-dot { display: inline-block; width: 7px; height: 7px; margin-left: 5px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
 .panel-due { margin: 0 0 10px; }
 
+/* Recruiter review (components/ReviewPanel, Scorecard) */
+.review-panel { display: flex; flex-direction: column; gap: 8px; }
+.review-panel textarea { width: 100%; font-family: var(--mono); font-size: 12px; }
+.scorecard { display: flex; flex-direction: column; gap: 12px; }
+.scorecard-table { min-width: 0; }
+.scorecard-table th[scope='row'] { font-weight: 500; white-space: nowrap; }
+.scorecard-table tr.overall th, .scorecard-table tr.overall td { background: var(--surface-2); }
+.top-fixes h3 { margin: 0 0 4px; font-size: 14px; }
+.top-fixes ol { margin: 0 0 6px; }
+.grade-chip { display: inline-block; min-width: 2.4em; padding: 1px 8px; border-radius: 999px; font-weight: 600; font-size: 13px; text-align: center; }
+.grade-a { background: var(--badge-green-bg); color: var(--badge-green-fg); }
+.grade-b { background: var(--badge-blue-bg); color: var(--badge-blue-fg); }
+.grade-c { background: var(--badge-yellow-bg); color: var(--badge-yellow-fg); }
+.grade-d { background: var(--badge-orange-bg); color: var(--badge-orange-fg); }
+.grade-f { background: var(--badge-red-bg); color: var(--badge-red-fg); }
+.grade-detail summary { cursor: pointer; list-style: none; }
+.grade-detail summary::-webkit-details-marker { display: none; }
+.grade-detail p { margin: 4px 0 0; font-size: 12px; max-width: 28rem; }
+.disagree-mark { color: var(--badge-orange-fg); font-size: 12px; }
+.verdict { text-transform: capitalize; }
+
 /* Sign-in screen and the signed-in user in the top bar */
 .user-menu { display: inline-flex; align-items: center; gap: 8px; }
 .user-name { color: var(--muted); max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
