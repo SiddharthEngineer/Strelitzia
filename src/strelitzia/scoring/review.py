@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -124,6 +125,8 @@ def _reply_doc() -> _Doc:
     return d
 
 
+NO_LETTER = "There is no cover letter: set cover_letter to null."
+
 PROMPT_VERSION = hashlib.sha256(
     "\n".join((_ROLE, _criteria_doc().text(), _reply_doc().text())).encode("utf-8")).hexdigest()[:8]
 
@@ -167,7 +170,7 @@ def review_prompt(job: dict, draft: dict) -> str:
     if letter:
         d.pre(letter)
     else:
-        d.p("There is no cover letter: set cover_letter to null.")
+        d.p(NO_LETTER)
     d.include(_reply_doc(), "Reply format")
     return d.text()
 
@@ -189,7 +192,8 @@ def latest_draft(conn: Connection, user_id: str, job_url: str) -> dict | None:
 
 
 def create_review(conn: Connection, user_id: str, job: dict) -> str:
-    """A new review of the job's latest draft; its id.
+    """A new review of the job's latest draft; its id. The prompt is stored as it is now, so every grader of the
+    review grades the same text even if the draft or the job changes later.
 
     Raises:
         NoDraft: the job has no draft yet.
@@ -198,9 +202,10 @@ def create_review(conn: Connection, user_id: str, job: dict) -> str:
     if draft is None:
         raise NoDraft("This job has no draft to review yet. Import a resume for it first.")
     review_id = uuid.uuid4().hex
-    conn.execute("INSERT INTO reviews (id, user_id, job_url, draft_id, prompt_version, created_at) "
-                 "VALUES (?, ?, ?, ?, ?, ?)",
-                 (review_id, user_id, job["url"], draft["id"], PROMPT_VERSION, datetime.now(UTC).isoformat()))
+    conn.execute("INSERT INTO reviews (id, user_id, job_url, draft_id, prompt_version, prompt_text, has_cover, "
+                 "created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                 (review_id, user_id, job["url"], draft["id"], PROMPT_VERSION, review_prompt(job, draft),
+                  1 if cover_text(draft) else 0, datetime.now(UTC).isoformat()))
     conn.commit()
     return review_id
 
@@ -238,14 +243,15 @@ def _summary(review: dict, job: dict | None, replies: list[dict]) -> dict:
 
 def list_reviews(conn: Connection, user_id: str, job_url: str | None = None) -> list[dict]:
     """The user's reviews (of one job, if given), newest first, each with every grader's overall grades."""
-    sql, params = "SELECT * FROM reviews WHERE user_id = ?", (user_id,)
+    sql = ("SELECT r.id, r.job_url, r.draft_id, r.prompt_version, r.created_at, j.url, j.job_key, j.title, "
+           "j.company, j.site, j.strategy FROM reviews r LEFT JOIN jobs j ON j.user_id = r.user_id AND j.url = r.job_url "
+           "WHERE r.user_id = ?")
+    params: tuple = (user_id,)
     if job_url is not None:
-        sql, params = sql + " AND job_url = ?", (*params, job_url)
-    reviews = _rows(conn, sql + " ORDER BY created_at DESC, id", params)
-    jobs = {j["url"]: j for j in _rows(conn, "SELECT url, job_key, title, company, site, strategy FROM jobs "
-                                             "WHERE user_id = ?", (user_id,))}
-    grades = _grades(conn, [r["id"] for r in reviews])
-    return [_summary(r, jobs.get(r["job_url"]), grades.get(r["id"], [])) for r in reviews]
+        sql, params = sql + " AND r.job_url = ?", (*params, job_url)
+    rows = _rows(conn, sql + " ORDER BY r.created_at DESC, r.id", params)
+    grades = _grades(conn, [r["id"] for r in rows])
+    return [_summary(r, r if r["url"] else None, grades.get(r["id"], [])) for r in rows]
 
 
 def get_review(conn: Connection, user_id: str, review_id: str) -> dict:
@@ -259,19 +265,22 @@ def get_review(conn: Connection, user_id: str, review_id: str) -> dict:
         raise KeyError(review_id)
     review = rows[0]
     jobs = _rows(conn, "SELECT * FROM jobs WHERE user_id = ? AND url = ?", (user_id, review["job_url"]))
-    drafts = _rows(conn, "SELECT * FROM drafts WHERE user_id = ? AND id = ?", (user_id, review["draft_id"]))
+    drafts = _rows(conn, "SELECT version FROM drafts WHERE user_id = ? AND id = ?", (user_id, review["draft_id"]))
     job, draft = (jobs[0] if jobs else None), (drafts[0] if drafts else None)
     replies = _grades(conn, [review_id]).get(review_id, [])
     out = _summary(review, job, replies)
     out["draft_version"] = draft.get("version") if draft else None
     out["current_prompt_version"] = PROMPT_VERSION
-    out["prompt"] = review_prompt(job, draft) if job and draft else None
+    out["prompt"] = review["prompt_text"]
     out["replies"] = [{**{k: g[k] for k in ("grader", "model_label", "overall_resume", "overall_cover", "verdict",
                                              "created_at")}, "reply": _json(g["detail_json"], {})} for g in replies]
     return out
 
 
 # ── Import ────────────────────────────────────────────────────────────────
+
+NO_REVIEW = "No such review."
+
 
 @dataclass
 class ImportOutcome:
@@ -283,11 +292,14 @@ class ImportOutcome:
         return {"ok": self.ok, "errors": self.errors, "warnings": self.warnings}
 
 
+_DASHES = re.compile("[\u2010-\u2015\u2212]")
+
+
 def _clean_grade(value: object) -> object:
-    """A grade as written ("a-", " B+ ", a typographic minus) as the grade it means; anything else unchanged."""
+    """A grade as written ("a-", "B +", a typographic dash or minus) as the grade it means; anything else unchanged."""
     if not isinstance(value, str):
         return value
-    return value.strip().upper().replace("\u2212", "-").replace("\u2013", "-")
+    return re.sub(r"\s+", "", _DASHES.sub("-", value)).upper()
 
 
 def _normalize(data: object) -> None:
@@ -304,7 +316,7 @@ def _normalize(data: object) -> None:
             if isinstance(item, dict) and "grade" in item:
                 item["grade"] = _clean_grade(item["grade"])
     if isinstance(data.get("verdict"), str):
-        data["verdict"] = data["verdict"].strip().lower()
+        data["verdict"] = data["verdict"].strip().rstrip(".!").lower()
 
 
 def prompt_version_warning(used: str | None) -> str | None:
@@ -322,8 +334,10 @@ def import_reply(conn: Connection, user_id: str, review_id: str, grader: str, mo
     """Validate a pasted reply and store it as `grader`'s reply to the review (replacing its earlier one)."""
     if grader not in GRADERS:
         return ImportOutcome(False, [f"Unknown grader {grader!r} (use one of: {', '.join(GRADERS)})"])
-    if not conn.execute("SELECT 1 FROM reviews WHERE id = ? AND user_id = ?", (review_id, user_id)).fetchone():
-        return ImportOutcome(False, ["No such review."])
+    found = conn.execute("SELECT has_cover FROM reviews WHERE id = ? AND user_id = ?", (review_id, user_id)).fetchone()
+    if not found:
+        return ImportOutcome(False, [NO_REVIEW])
+    has_letter = bool(found[0])
     label = (model_label or "").strip()
     if len(label) > MODEL_LABEL_MAX:
         return ImportOutcome(False, [f"The model name is {len(label)} characters, at most {MODEL_LABEL_MAX}."])
@@ -341,19 +355,18 @@ def import_reply(conn: Connection, user_id: str, review_id: str, grader: str, mo
     warnings = [w for w in (prompt_version_warning(data.get("prompt_version")),) if w]
     if len(fixes) != TOP_FIXES:
         warnings.append(f"The reply lists {len(fixes)} top fixes, not {TOP_FIXES}.")
-    letters = _rows(conn, "SELECT d.cover_json FROM reviews r JOIN drafts d ON d.id = r.draft_id WHERE r.id = ?",
-                    (review_id,))
-    has_letter = bool(letters and cover_text(letters[0]))
     cover = data["cover_letter"]
     if has_letter and cover is None:
         warnings.append("The reply didn't grade the cover letter, though the prompt has one.")
     elif not has_letter and cover is not None:
         warnings.append("The reply graded a cover letter, but this draft has none; its grades are kept as given.")
     now = datetime.now(UTC).isoformat()
-    conn.execute("DELETE FROM review_grades WHERE review_id = ? AND grader = ?", (review_id, grader))
     conn.execute(
         "INSERT INTO review_grades (review_id, grader, model_label, overall_resume, overall_cover, verdict, "
-        "detail_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "detail_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT (review_id, grader) DO UPDATE SET model_label = excluded.model_label, "
+        "overall_resume = excluded.overall_resume, overall_cover = excluded.overall_cover, "
+        "verdict = excluded.verdict, detail_json = excluded.detail_json, created_at = excluded.created_at",
         (review_id, grader, label, data["resume"]["overall"], cover["overall"] if cover else None, data["verdict"],
          json.dumps(data, ensure_ascii=False), now),
     )

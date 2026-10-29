@@ -283,10 +283,12 @@ def _ensure_tables(conn: Connection) -> None:
         "PRIMARY KEY (run_id, item_no, grader))"
     )
     # Recruiter reviews (strelitzia.scoring.review): one job's latest draft, graded A+ to F- per criterion by a
-    # recruiter prompt pasted into any chat model. One reply per grader; detail_json holds the whole reply.
+    # recruiter prompt pasted into any chat model. prompt_text is the prompt as created (the draft and the job can
+    # change later). One reply per grader; detail_json holds the whole reply.
     conn.execute(
         "CREATE TABLE IF NOT EXISTS reviews ("
-        "id TEXT PRIMARY KEY, job_url TEXT, draft_id TEXT, prompt_version TEXT, created_at TEXT)"
+        "id TEXT PRIMARY KEY, job_url TEXT, draft_id TEXT, prompt_version TEXT, prompt_text TEXT, has_cover INTEGER, "
+        "created_at TEXT)"
     )
     conn.execute(
         "CREATE TABLE IF NOT EXISTS review_grades ("
