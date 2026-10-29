@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { activeRescoreAll, getFacets, listJobs, rescoreAll, rescorePreview } from '../api';
 import Filters from '../components/Filters';
 import Flower from '../components/Flower';
@@ -10,7 +9,7 @@ import type { Facets, JobList, RescorePreview, Task } from '../types';
 import { usd } from '../labels';
 import { DEFAULT_SORT, PAGE_SIZE, useQueryState } from '../useQueryState';
 
-export default function JobsPage({ panelDue = null }: { panelDue?: string | null }) {
+export default function JobsPage() {
   const [query, update] = useQueryState();
   const [data, setData] = useState<JobList | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -143,11 +142,6 @@ export default function JobsPage({ panelDue = null }: { panelDue?: string | null
             {rescoreError && <p className="error" role="alert">{rescoreError}</p>}
           </div>
         </div>
-      )}
-      {panelDue && (
-        <p className="stale-note panel-due" role="status">
-          Panel due: {panelDue}. <Link to="/panel">Run the resume panel</Link>
-        </p>
       )}
       <Filters query={query} facets={facets} onChange={update} />
       {error ? (

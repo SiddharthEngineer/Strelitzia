@@ -51,36 +51,11 @@ beforeEach(() => {
   vi.mocked(api.activeRescoreAll).mockResolvedValue({ task: null });
   vi.mocked(api.listJobs).mockResolvedValue(jobList([listItem('active', 1)]));
   vi.mocked(api.listContacts).mockResolvedValue([]);
-  vi.mocked(api.getPanel).mockResolvedValue({
-    due: null, needed: 5, comparable: { latest_vs_previous: 0, rules_a_vs_b: 0 }, runs: [], project_name: 'Strelitzia Panel',
-    project_instructions: '', instructions_version: '', rubric_version: '',
-  });
 });
 
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
-});
-
-describe('Panel reminder', () => {
-  it('marks the Panel nav link and the jobs list when a panel is due', async () => {
-    vi.mocked(api.getPanel).mockResolvedValue({
-      due: '31 days since the last panel', needed: 5, comparable: { latest_vs_previous: 6, rules_a_vs_b: 0 }, runs: [],
-      project_name: 'Strelitzia Panel', project_instructions: '', instructions_version: '', rubric_version: '',
-    });
-    renderAt('/');
-    const nav = screen.getByRole('navigation', { name: 'Main' });
-    expect(await within(nav).findByRole('img', { name: 'due' })).toBeInTheDocument();
-    const banner = await screen.findByText(/Panel due: 31 days since the last panel/);
-    expect(within(banner).getByRole('link', { name: 'Run the resume panel' })).toHaveAttribute('href', '/panel');
-  });
-
-  it('shows nothing when no panel is due', async () => {
-    renderAt('/');
-    await screen.findByText('Job 1');
-    expect(screen.queryByRole('img', { name: 'due' })).toBeNull();
-    expect(screen.queryByText(/Panel due/)).toBeNull();
-  });
 });
 
 describe('Add job', () => {

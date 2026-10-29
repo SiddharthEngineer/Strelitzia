@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import statistics
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -278,6 +279,93 @@ def get_review(conn: Connection, user_id: str, review_id: str) -> dict:
     out["replies"] = [{**{k: g[k] for k in ("grader", "model_label", "overall_resume", "overall_cover", "verdict",
                                              "created_at")}, "reply": _json(g["detail_json"], {})} for g in replies]
     return out
+
+
+# ── Grader comparison ─────────────────────────────────────────────────────
+
+HARSH = 1.5  # points below (or above: lenient) the other graders on average; a letter band is 3 points
+NARROW = 1.0  # a spread under this many points: nearly one grade for everything
+
+
+def _points(reply: dict) -> dict[tuple[str, str], int]:
+    """{(document, criterion key or "overall"): grade points} for a stored reply."""
+    out: dict[tuple[str, str], int] = {}
+    for doc in ("resume", "cover_letter"):
+        grades = reply.get(doc)
+        if not isinstance(grades, dict):
+            continue
+        items = {key: (item or {}).get("grade") for key, item in (grades.get("criteria") or {}).items()}
+        for key, grade in {**items, "overall": grades.get("overall")}.items():
+            if grade in GRADES:
+                out[(doc, key)] = grade_points(grade)
+    return out
+
+
+def _mean(values: list[float]) -> float | None:
+    return round(statistics.fmean(values), 2) if values else None
+
+
+def _tendency(bias: float | None, spread: float | None) -> str | None:
+    if bias is None or spread is None:
+        return None
+    if bias <= -HARSH:
+        return "harsh"
+    if bias >= HARSH:
+        return "lenient"
+    return "narrow" if spread < NARROW else "balanced"
+
+
+def grader_stats(conn: Connection, user_id: str) -> dict:
+    """How each grader grades, from the user's reviews that 2+ graders replied to.
+
+    Per grader (GRADERS order): its mean grade points per criterion (both documents together) and per overall grade,
+    how often its verdict matched each other grader's on the same review, its bias (mean points above the other
+    graders on the same criterion) and spread (standard deviation of its criterion grades), and a tendency: harsh,
+    lenient, narrow (nearly one grade for everything) or balanced.
+    """
+    rows = _rows(conn, "SELECT g.review_id, g.grader, g.model_label, g.verdict, g.detail_json FROM review_grades g "
+                       "JOIN reviews r ON r.id = g.review_id WHERE r.user_id = ?", (user_id,))
+    by_review: dict[str, list[dict]] = {}
+    for g in rows:
+        by_review.setdefault(g["review_id"], []).append(g)
+    shared = [replies for replies in by_review.values() if len(replies) > 1]
+    acc: dict[str, dict] = {}
+    for replies in shared:
+        points = {g["grader"]: _points(_json(g["detail_json"], {})) for g in replies}
+        for g in replies:
+            a = acc.setdefault(g["grader"], {"labels": set(), "reviews": 0, "criteria": {k: [] for k in CRITERIA_KEYS},
+                                             "overall": {"resume": [], "cover_letter": []}, "offsets": [],
+                                             "matches": 0, "pairs": 0})
+            a["reviews"] += 1
+            if g["model_label"]:
+                a["labels"].add(g["model_label"])
+            others = [o for o in replies if o is not g]
+            a["pairs"] += len(others)
+            a["matches"] += sum(o["verdict"] == g["verdict"] for o in others)
+            for (doc, key), p in points[g["grader"]].items():
+                if key == "overall":
+                    a["overall"][doc].append(p)
+                    continue
+                if key not in a["criteria"]:
+                    continue
+                a["criteria"][key].append(p)
+                theirs = [points[o["grader"]][(doc, key)] for o in others if (doc, key) in points[o["grader"]]]
+                if theirs:
+                    a["offsets"].append(p - statistics.fmean(theirs))
+    graders = []
+    for name in sorted(acc, key=lambda n: GRADERS.index(n) if n in GRADERS else len(GRADERS)):
+        a = acc[name]
+        every = [p for values in a["criteria"].values() for p in values]
+        bias = _mean(a["offsets"])
+        spread = round(statistics.pstdev(every), 2) if every else None
+        graders.append({
+            "grader": name, "model_labels": sorted(a["labels"]), "reviews": a["reviews"],
+            "mean": {key: _mean(values) for key, values in a["criteria"].items()},
+            "mean_overall": {doc: _mean(values) for doc, values in a["overall"].items()},
+            "verdict_agreement": round(a["matches"] / a["pairs"], 2) if a["pairs"] else None,
+            "bias": bias, "spread": spread, "tendency": _tendency(bias, spread),
+        })
+    return {"reviews": len(shared), "criteria": CRITERIA_NAMES, "graders": graders}
 
 
 # ── Import ────────────────────────────────────────────────────────────────

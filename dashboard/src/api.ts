@@ -2,7 +2,7 @@
 import type {
   AddJobInput, AddJobResult, AuthMe, ClaudeSetup, Contact, CoverPacketResult, DeleteJobResult, DraftCheckOutcome, DraftKind, ContactFields, ContactListItem, ContactWithJobs,
   Facets, Interview, ImportResult, InterviewFields, JobDetail, JobList, JobPatch, JobQuery, PacketResult, PanelGradeOutcome,
-  PanelMode, PanelOverview, PanelRun, PanelWinner, Preferences, PreferencesResponse, ProfileDocsSetupOutcome,
+  PanelMode, PanelOverview, PanelRun, PanelWinner, Preferences, PreferencesResponse, ProfileDocsSetupOutcome, GraderComparison,
   ProfileResponse, ProfileSave, ProfileSyncResult, ReassessPreview, ReassessScope, Relation, RescoreAllResult,
   RescorePreview, ReviewDetail, ReviewGrader, ReviewImportOutcome, ReviewSummary, SavePreferencesResult, Task,
   UserStatus,
@@ -341,6 +341,11 @@ export function listJobReviews(key: string, signal?: AbortSignal): Promise<Revie
 /** All the user's reviews, newest first. */
 export function listReviews(signal?: AbortSignal): Promise<ReviewSummary[]> {
   return request<ReviewSummary[]>('/reviews', { signal });
+}
+
+/** How each grader grades, from the reviews with 2+ graders. */
+export function getGraderComparison(signal?: AbortSignal): Promise<GraderComparison> {
+  return request<GraderComparison>('/reviews/graders', { signal });
 }
 
 export function getReview(id: string, signal?: AbortSignal): Promise<ReviewDetail> {

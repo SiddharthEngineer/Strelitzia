@@ -283,3 +283,53 @@ def test_more_ways_models_write_grades(conn, job):
     [reply] = review.get_review(conn, _me(conn), review_id)["replies"]
     assert (reply["overall_resume"], reply["verdict"]) == ("B+", "yes")
     assert reply["reply"]["resume"]["criteria"]["polish"]["grade"] == "A-"
+
+
+def _all(grade, verdict, cover=True):
+    criteria = {key: {"grade": grade, "evidence": "\"x\"", "fix": "y"} for key in review.CRITERIA_KEYS}
+    return good_reply(resume={"criteria": criteria, "overall": grade}, verdict=verdict,
+                      cover_letter={"criteria": copy.deepcopy(criteria), "overall": grade} if cover else None)
+
+
+def test_graders_compare_only_reviews_with_two_or_more_graders(conn, job):
+    add_draft(conn)
+    me = _me(conn)
+    shared, alone = review.create_review(conn, me, job), review.create_review(conn, me, job)
+    for grader, label, grade, verdict in (("claude-sonnet", "Sonnet 4.5", "A", "yes"), ("chatgpt", "", "C", "no"),
+                                          ("gemini", "", "B", "yes")):
+        assert review.import_reply(conn, me, shared, grader, label, fenced(_all(grade, verdict))).ok
+    assert review.import_reply(conn, me, alone, "claude-opus", "", fenced(_all("F", "no"))).ok
+
+    stats = review.grader_stats(conn, me)
+    assert stats["reviews"] == 1
+    assert [c["key"] for c in stats["criteria"]] == list(review.CRITERIA_KEYS)
+    by = {g["grader"]: g for g in stats["graders"]}
+    assert list(by) == ["claude-sonnet", "chatgpt", "gemini"]  # Opus graded alone: nothing to compare
+    sonnet, gpt, gemini = by["claude-sonnet"], by["chatgpt"], by["gemini"]
+    assert sonnet["model_labels"] == ["Sonnet 4.5"] and sonnet["reviews"] == 1
+    assert sonnet["mean"]["relevance"] == review.grade_points("A")
+    assert gpt["mean_overall"] == {"resume": review.grade_points("C"), "cover_letter": review.grade_points("C")}
+    assert (sonnet["verdict_agreement"], gpt["verdict_agreement"], gemini["verdict_agreement"]) == (0.5, 0.0, 0.5)
+    assert sonnet["bias"] == 4.5 and gpt["bias"] == -4.5 and gemini["bias"] == 0
+    assert (sonnet["tendency"], gpt["tendency"], gemini["tendency"]) == ("lenient", "harsh", "narrow")
+    assert gemini["spread"] == 0
+
+
+def test_graders_tendency():
+    assert review._tendency(-1.5, 3) == "harsh"
+    assert review._tendency(2, 0) == "lenient"
+    assert review._tendency(0.4, 0.5) == "narrow"
+    assert review._tendency(0.4, 2.5) == "balanced"
+    assert review._tendency(None, None) is None
+
+
+def test_graders_skip_a_missing_cover_letter(conn, job):
+    add_draft(conn)
+    me = _me(conn)
+    rid = review.create_review(conn, me, job)
+    assert review.import_reply(conn, me, rid, "gemini", "", fenced(_all("B", "maybe", cover=False))).ok
+    assert review.import_reply(conn, me, rid, "chatgpt", "", fenced(_all("B", "maybe"))).ok
+    by = {g["grader"]: g for g in review.grader_stats(conn, me)["graders"]}
+    assert by["gemini"]["mean_overall"]["cover_letter"] is None
+    assert by["chatgpt"]["mean_overall"]["cover_letter"] == review.grade_points("B")
+    assert by["gemini"]["verdict_agreement"] == 1.0 and by["gemini"]["bias"] == 0

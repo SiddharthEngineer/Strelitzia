@@ -10,7 +10,6 @@ import type { AuthMe } from '../types';
 vi.mock('../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api')>()),
   getMe: vi.fn(),
-  getPanel: vi.fn(),
   logout: vi.fn(),
   siteLogout: vi.fn(),
   onUnauthorized: vi.fn(),
@@ -22,7 +21,6 @@ const OWNER: AuthMe = { enabled: true, user: { email: 'owner@example.com', name:
 const renderApp = (path = '/nowhere') => render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>);
 
 beforeEach(() => {
-  vi.mocked(api.getPanel).mockResolvedValue({ due: null } as Awaited<ReturnType<typeof api.getPanel>>);
   vi.mocked(api.logout).mockResolvedValue({ ok: true });
 });
 
