@@ -40,7 +40,7 @@ in the criteria. Starting list (decision 1), each graded separately for the resu
 6. **Polish**: grammar, consistency, length (one page; cover letter under ~350 words).
 Plus an **overall** grade per document and a **verdict**: phone screen yes / maybe / no, with the top three fixes.
 **Validate:** the brief's Decisions record the list below as signed off by the user (2026-10-27), unchanged.
-**Status:** ❌
+**Status:** ✅ 2026-10-29 (this commit)
 
 ### Task 2: Review module and tables
 **Runs:** unattended
