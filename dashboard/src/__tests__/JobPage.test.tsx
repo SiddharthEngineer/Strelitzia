@@ -33,6 +33,7 @@ function renderJob() {
 beforeEach(() => {
   vi.mocked(api.getJob).mockResolvedValue(jobDetail());
   vi.mocked(api.listJobTasks).mockResolvedValue([]);
+  vi.mocked(api.listJobReviews).mockResolvedValue([]);
 });
 
 afterEach(() => {

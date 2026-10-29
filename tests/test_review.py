@@ -254,6 +254,7 @@ def test_list_reviews_newest_first_with_grades(conn, job):
     assert listed[0]["grades"][0]["grader"] == "gemini"
     assert listed[0]["grades"][0]["overall_resume"] == "B+"
     assert listed[0]["job"]["title"] == "Data Engineer"
+    assert listed[0]["draft_version"] == review.get_review(conn, me, second)["draft_version"] is not None
     assert [r["id"] for r in review.list_reviews(conn, me, job_url="https://example.com/other")] == []
 
 

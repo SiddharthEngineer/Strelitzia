@@ -25,7 +25,7 @@ dashboard/src/types.ts (modify); tests
 gemini.google.com, a paste box, Import. Errors show inline like Check & format's. A review made for an older draft
 says so ("this review is of draft v3; v4 is newer").
 **Validate:** `npm test -- ReviewPanel` → create, copy, import (ok and error) for two graders.
-**Status:** ❌
+**Status:** ✅ 2026-10-29 (this commit)
 
 ### Task 2: Scorecard
 **Runs:** unattended

@@ -7,6 +7,7 @@ import ContactsPanel from '../components/ContactsPanel';
 import EditJobDialog from '../components/EditJobDialog';
 import InterviewsPanel from '../components/InterviewsPanel';
 import PastePanel from '../components/PastePanel';
+import ReviewPanel from '../components/ReviewPanel';
 import FitBreakdown from '../components/FitBreakdown';
 import Flower from '../components/Flower';
 import StatusBadge from '../components/StatusBadge';
@@ -301,6 +302,7 @@ export default function JobPage() {
           rows={4} maxLength={COVER_NOTES_MAX} placeholder={COVER_NOTES_PLACEHOLDER} value={job.cover_notes}
           onSave={(value) => act(() => api.putCoverNotes(key, value))} />
       } />
+      <ReviewPanel job={job} />
 
       <div className="sections">
         {d ? (

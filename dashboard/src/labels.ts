@@ -1,5 +1,5 @@
 // Readable labels for the API's enum values.
-import type { Importance, Outcome, Relation, Status, StatusFilter } from './types';
+import type { Importance, Outcome, Relation, ReviewGrader, Status, StatusFilter } from './types';
 
 export const STATUS_LABELS: Record<Status | 'no_response', string> = {
   active: 'Active',
@@ -137,4 +137,21 @@ export function relativeTime(value: string | null | undefined, now: Date = new D
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
   return localDate(value);
+}
+
+/** Recruiter review graders, in the server's order. */
+export const GRADER_LABELS: Record<ReviewGrader, string> = {
+  'claude-haiku': 'Claude Haiku',
+  'claude-sonnet': 'Claude Sonnet',
+  'claude-opus': 'Claude Opus',
+  chatgpt: 'ChatGPT',
+  gemini: 'Gemini',
+  other: 'Other',
+};
+
+/** A grader as shown: its exact model when the user named one ("ChatGPT (GPT-5 Thinking)"). */
+export function graderLabel(grader: ReviewGrader, modelLabel?: string | null): string {
+  const label = GRADER_LABELS[grader] ?? grader;
+  if (!modelLabel) return label;
+  return grader === 'other' ? modelLabel : `${label} (${modelLabel})`;
 }
