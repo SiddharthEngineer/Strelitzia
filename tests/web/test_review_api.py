@@ -138,10 +138,6 @@ def test_deleting_the_job_deletes_its_reviews(client, conn, job):
     assert conn.execute("SELECT COUNT(*) FROM review_grades").fetchone()[0] == 0
 
 
-def test_the_old_panel_still_answers(client):
-    assert client.get(f"{API}/panel").status_code == 200
-
-
 def test_graders_endpoint_compares_graders_per_user(client, conn, job, monkeypatch):
     _draft(conn, 1)
     review_id = client.post(f"{API}/jobs/{KEY}/reviews").json()["id"]

@@ -95,7 +95,6 @@ def _seed_everything(conn, user_id):
         ("job_contacts", {"job_url": URL, "contact_id": f"c-{user_id}", "relation": "recruiter"}),
         ("interviews", {"id": f"i-{user_id}", "job_url": URL, "stage": "phone"}),
         ("drafts", {"id": f"d-{user_id}", "job_url": URL, "version": 1}),
-        ("panel_runs", {"id": f"r-{user_id}", "status": "open"}),
         ("reviews", {"id": f"rv-{user_id}", "job_url": URL, "draft_id": f"d-{user_id}"}),
         ("llm_usage", {"id": f"u-{user_id}", "job_url": URL, "cost_usd": 0.01}),
     ]
@@ -103,9 +102,6 @@ def _seed_everything(conn, user_id):
         row = {**row, "user_id": user_id}
         conn.execute(f"INSERT INTO {table} ({', '.join(row)}) VALUES ({', '.join('?' * len(row))})",
                      tuple(row.values()))
-    conn.execute("INSERT INTO panel_items (run_id, item_no, job_url) VALUES (?, 1, ?)", (f"r-{user_id}", URL))
-    conn.execute("INSERT INTO panel_grades (run_id, item_no, grader, winner) VALUES (?, 1, 'you', 'first')",
-                 (f"r-{user_id}",))
     conn.execute("INSERT INTO review_grades (review_id, grader, verdict) VALUES (?, 'chatgpt', 'yes')",
                  (f"rv-{user_id}",))
     conn.commit()
@@ -130,30 +126,12 @@ def test_delete_removes_the_job_and_everything_that_belongs_to_it(client, conn, 
         assert _count(conn, "jobs", "user_id = ? AND url = ?", (uid, URL)) == left
         for table, column in database.JOB_TABLES.items():
             assert _count(conn, table, f"user_id = ? AND {column} = ?", (uid, URL)) == left, table
-        assert _count(conn, "panel_items", "run_id = ?", (f"r-{uid}",)) == left
-        assert _count(conn, "panel_grades", "run_id = ?", (f"r-{uid}",)) == left
-        assert _count(conn, "panel_runs", "id = ?", (f"r-{uid}",)) == left  # an open run can't be graded without it
         assert _count(conn, "review_grades", "review_id = ?", (f"rv-{uid}",)) == left
         assert _count(conn, "contacts", "user_id = ?", (uid,)) == 1  # contacts are shared across jobs: they stay
         assert _count(conn, "llm_usage", "user_id = ? AND job_url = ?", (uid, URL)) == 1  # the spend history stays
     assert client.get(f"{API}/jobs/{KEY}").status_code == 404
     act_as(monkeypatch, other)
     assert client.get(f"{API}/jobs/{KEY}").status_code == 200
-
-
-def test_delete_keeps_a_complete_panel_run_without_the_job(client, conn, job):
-    owner = users.owner(conn)
-    _seed_everything(conn, owner.id)
-    conn.execute("UPDATE panel_runs SET status = 'complete'")
-    conn.execute("INSERT INTO panel_items (run_id, item_no, job_url) VALUES (?, 2, 'https://example.com/other')",
-                 (f"r-{owner.id}",))
-    conn.execute("INSERT INTO panel_grades (run_id, item_no, grader, winner) VALUES (?, 2, 'you', 'tie')",
-                 (f"r-{owner.id}",))
-    conn.commit()
-    assert client.delete(f"{API}/jobs/{KEY}").status_code == 200
-    assert _count(conn, "panel_runs", "id = ?", (f"r-{owner.id}",)) == 1
-    assert [r[0] for r in conn.execute("SELECT item_no FROM panel_items").fetchall()] == [2]
-    assert [r[0] for r in conn.execute("SELECT item_no FROM panel_grades").fetchall()] == [2]
 
 
 def test_delete_says_the_drive_folder_stays(client, conn, job):
@@ -185,7 +163,7 @@ def test_delete_covers_every_table_with_a_job_url(conn):
     for (table,) in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall():
         if table != "jobs" and database.table_columns(conn, table) & {"url", "job_url"}:
             found.add(table)
-    assert found == {*database.JOB_TABLES, *database.KEPT_JOB_TABLES, "panel_items"}
+    assert found == {*database.JOB_TABLES, *database.KEPT_JOB_TABLES}
 
 
 def test_hand_edits_survive_extraction_and_classify(client, conn, job):

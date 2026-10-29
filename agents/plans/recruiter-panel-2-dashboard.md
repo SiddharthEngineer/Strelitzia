@@ -57,7 +57,7 @@ add a ROADMAP manual step for the user (back up, then `DROP TABLE panel_grades, 
 and prod).
 **Validate:** `grep -rn "panel_runs\|scoring.panel\|/panel/" src dashboard/src` → none outside the manual step;
 `scripts/validate.sh --full` passes.
-**Status:** ❌
+**Status:** ✅ 2026-10-29 (this commit; the manual drop is ROADMAP M38)
 
 ## Validation
 - `scripts/validate.sh --full` passes.
