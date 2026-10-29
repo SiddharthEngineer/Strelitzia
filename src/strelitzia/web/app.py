@@ -39,7 +39,7 @@ from strelitzia.enrichment.classify import parse_location
 from strelitzia.llm import LLMStopRun, check_budget, month_spend, user_month_spend
 from strelitzia.scoring import panel
 from strelitzia.scoring import preferences as prefs_mod
-from strelitzia.scoring import resume_parse, workbench
+from strelitzia.scoring import resume_parse, review, workbench
 from strelitzia.scoring.assessment import current_assessment_key, recompute_fit
 from strelitzia.scoring.content_library import parse_content_library_text
 from strelitzia.web import admin, auth, queries, tasks
@@ -628,6 +628,67 @@ def post_panel_grades(run_id: str, body: PanelGrade, request: Request):
         return JSONResponse({"detail": outcome.errors[0], "errors": outcome.errors, "warnings": outcome.warnings},
                             status_code=422)
     return {"graded": outcome.graded, "warnings": outcome.warnings, "run": _panel_run(conn, user.id, run_id)}
+
+
+# --- Recruiter review (strelitzia.scoring.review) ---
+
+def _review(conn: Connection, user_id: str, review_id: str) -> dict:
+    try:
+        return review.get_review(conn, user_id, review_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Review not found") from None
+
+
+@api.post("/jobs/{key}/reviews", status_code=201)
+def create_review(key: str, request: Request) -> dict:
+    """A new recruiter review of the job's latest draft (409 when it has none): its prompt, to paste into a chat."""
+    conn = db_conn(request)
+    user = current_user(request)
+    _owner_content(user)
+    job = job_by_key(conn, user.id, key)
+    try:
+        review_id = review.create_review(conn, user.id, job)
+    except review.NoDraft as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
+    return _review(conn, user.id, review_id)
+
+
+@api.get("/jobs/{key}/reviews")
+def get_job_reviews(key: str, request: Request) -> list[dict]:
+    conn = db_conn(request)
+    user = current_user(request)
+    return review.list_reviews(conn, user.id, job_by_key(conn, user.id, key)["url"])
+
+
+@api.get("/reviews")
+def get_reviews(request: Request) -> list[dict]:
+    """The user's reviews, newest first, with every grader's overall grades and verdict."""
+    return review.list_reviews(db_conn(request), current_user(request).id)
+
+
+@api.get("/reviews/{review_id}")
+def get_review(review_id: str, request: Request) -> dict:
+    return _review(db_conn(request), current_user(request).id, review_id)
+
+
+class ReviewReply(BaseModel):
+    """A grader's pasted reply; model_label names the exact model (e.g. "GPT-5 Thinking")."""
+    grader: Literal[review.GRADERS]
+    model_label: str = Field(default="", max_length=review.MODEL_LABEL_MAX)
+    text: str = Field(max_length=500_000)
+
+
+@api.post("/reviews/{review_id}/replies")
+def post_review_reply(review_id: str, body: ReviewReply, request: Request):
+    """422 with the errors when a pasted reply doesn't fit the review format; otherwise the warnings and the review."""
+    conn = db_conn(request)
+    user = current_user(request)
+    _review(conn, user.id, review_id)
+    outcome = review.import_reply(conn, user.id, review_id, body.grader, body.model_label, body.text)
+    if not outcome.ok:
+        return JSONResponse({"detail": outcome.errors[0], "errors": outcome.errors, "warnings": outcome.warnings},
+                            status_code=422)
+    return {"warnings": outcome.warnings, "review": _review(conn, user.id, review_id)}
 
 
 def budget_stop(conn: Connection, user_id: str, estimated_usd: float = 0.0) -> None:
