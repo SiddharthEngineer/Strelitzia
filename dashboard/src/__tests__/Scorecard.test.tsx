@@ -53,3 +53,12 @@ describe('Scorecard', () => {
     expect(screen.queryByRole('table', { name: 'Cover letter' })).toBeNull();
   });
 });
+
+describe('Scorecard with a damaged reply', () => {
+  it('still renders the overall grades', () => {
+    const broken = { ...graded('chatgpt', reply('B')), reply: {} as ReturnType<typeof reply> };
+    render(<Scorecard review={reviewDetail({ replies: [broken] })} />);
+    expect(screen.getByRole('table', { name: 'Overall' })).toHaveTextContent('ChatGPT');
+    expect(screen.queryByRole('table', { name: 'Resume' })).toBeNull();
+  });
+});

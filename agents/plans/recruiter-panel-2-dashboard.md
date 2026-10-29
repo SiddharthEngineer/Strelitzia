@@ -1,5 +1,5 @@
 # Plan: Recruiter panel 2/2: review on the job page, scorecards and grader comparison
-**Status:** ❌ Not started (planned with the user 2026-10-27)
+**Status:** ✅ Code done 2026-10-29 (planned with the user 2026-10-27); human test on preprod and M38 left
 **Risk:** low (user, 2026-10-27: merge without a review wait; protected paths still get the automated review and preprod check)
 **Depends on:** recruiter-panel-1-review
 
@@ -25,7 +25,7 @@ dashboard/src/types.ts (modify); tests
 gemini.google.com, a paste box, Import. Errors show inline like Check & format's. A review made for an older draft
 says so ("this review is of draft v3; v4 is newer").
 **Validate:** `npm test -- ReviewPanel` → create, copy, import (ok and error) for two graders.
-**Status:** ✅ 2026-10-29 (this commit)
+**Status:** ✅ 2026-10-29 (9c3a8bd)
 
 ### Task 2: Scorecard
 **Runs:** unattended
@@ -34,7 +34,7 @@ says so ("this review is of draft v3; v4 is newer").
 evidence and fix on expand. Header: overall grades, verdict, top three fixes. With 2+ graders, a criterion where they
 differ by more than one letter band is marked "graders disagree".
 **Validate:** `npm test -- Scorecard` → renders 1 and 3 graders; disagreement mark appears for A- vs C+.
-**Status:** ✅ 2026-10-29 (this commit)
+**Status:** ✅ 2026-10-29 (592d7c3)
 
 ### Task 3: Panel page = reviews list + grader comparison
 **Runs:** unattended
@@ -44,7 +44,7 @@ src/strelitzia/web/app.py (modify: `GET /reviews/graders`); tests
 section, from reviews with 2+ graders: per grader the mean grade per criterion, how often its verdict matched the
 others, and its spread (is it harsh, lenient, or all B's). Keep the page name "Panel" (decision 1).
 **Validate:** `pytest tests/test_web_review.py -q -k graders` and `npm test -- PanelPage`.
-**Status:** ✅ 2026-10-29 (this commit; the graders tests are in tests/test_review.py and tests/web/test_review_api.py)
+**Status:** ✅ 2026-10-29 (da17264; the graders tests are in tests/test_review.py and tests/web/test_review_api.py)
 
 ### Task 4: Remove the A/B panel
 **Runs:** unattended
@@ -57,7 +57,7 @@ add a ROADMAP manual step for the user (back up, then `DROP TABLE panel_grades, 
 and prod).
 **Validate:** `grep -rn "panel_runs\|scoring.panel\|/panel/" src dashboard/src` → none outside the manual step;
 `scripts/validate.sh --full` passes.
-**Status:** ✅ 2026-10-29 (this commit; the manual drop is ROADMAP M38)
+**Status:** ✅ 2026-10-29 (69579d9; the manual drop is ROADMAP M38)
 
 ## Validation
 - `scripts/validate.sh --full` passes.
@@ -69,5 +69,5 @@ and prod).
 3. Panel page: the review is listed; Graders shows the three models.
 
 ## Decisions
-1. (Proposed) Keep the nav name "Panel"; the "Strelitzia Panel" Claude project becomes optional (the prompt is
+1. (Applied 2026-10-29; the project step is ROADMAP M38) Keep the nav name "Panel"; the "Strelitzia Panel" Claude project becomes optional (the prompt is
    self-contained). Its instructions are cut to one line pointing at the prompt; M-step to update it.

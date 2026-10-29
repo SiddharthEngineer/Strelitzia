@@ -302,7 +302,7 @@ export default function JobPage() {
           rows={4} maxLength={COVER_NOTES_MAX} placeholder={COVER_NOTES_PLACEHOLDER} value={job.cover_notes}
           onSave={(value) => act(() => api.putCoverNotes(key, value))} />
       } />
-      <ReviewPanel job={job} />
+      <ReviewPanel key={job.key} job={job} />
 
       <div className="sections">
         {d ? (

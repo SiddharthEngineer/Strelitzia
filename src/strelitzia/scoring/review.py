@@ -323,15 +323,17 @@ def grader_stats(conn: Connection, user_id: str) -> dict:
     graders on the same criterion) and spread (standard deviation of its criterion grades), and a tendency: harsh,
     lenient, narrow (nearly one grade for everything) or balanced.
     """
-    rows = _rows(conn, "SELECT g.review_id, g.grader, g.model_label, g.verdict, g.detail_json FROM review_grades g "
-                       "JOIN reviews r ON r.id = g.review_id WHERE r.user_id = ?", (user_id,))
+    rows = _rows(conn, "SELECT g.review_id, g.grader, g.model_label, g.verdict, g.detail_json, r.has_cover "
+                       "FROM review_grades g JOIN reviews r ON r.id = g.review_id WHERE r.user_id = ?", (user_id,))
     by_review: dict[str, list[dict]] = {}
     for g in rows:
         by_review.setdefault(g["review_id"], []).append(g)
     shared = [replies for replies in by_review.values() if len(replies) > 1]
     acc: dict[str, dict] = {}
     for replies in shared:
-        points = {g["grader"]: _points(_json(g["detail_json"], {})) for g in replies}
+        # A grader that graded a cover letter the draft doesn't have made those grades up: leave them out.
+        points = {g["grader"]: {k: p for k, p in _points(_json(g["detail_json"], {})).items()
+                                if g["has_cover"] or k[0] != "cover_letter"} for g in replies}
         for g in replies:
             a = acc.setdefault(g["grader"], {"labels": set(), "reviews": 0, "criteria": {k: [] for k in CRITERIA_KEYS},
                                              "overall": {"resume": [], "cover_letter": []}, "offsets": [],
@@ -410,14 +412,15 @@ def _normalize(data: object) -> None:
         data["verdict"] = data["verdict"].strip().rstrip(".!").lower()
 
 
-def prompt_version_warning(used: str | None) -> str | None:
-    """A warning when the reply names no prompt version or an old one (a prompt copied before an update)."""
-    if used == PROMPT_VERSION:
+def prompt_version_warning(used: str | None, expected: str = PROMPT_VERSION) -> str | None:
+    """A warning when the reply names no prompt version or another one than the review's (`expected`): a prompt
+    copied from another review, or before an update."""
+    if used == expected:
         return None
-    again = "copy the prompt again and rerun it in a new chat if you want a review against the current criteria"
+    again = "copy this review's prompt again and rerun it in a new chat"
     if not used:
-        return f"The reply doesn't say which prompt version it graded (current: {PROMPT_VERSION}); {again}."
-    return f"The reply graded prompt version {used}, not the current {PROMPT_VERSION}; {again}."
+        return f"The reply doesn't say which prompt version it graded (this review's: {expected}); {again}."
+    return f"The reply graded prompt version {used}, not this review's {expected}; {again}."
 
 
 def import_reply(conn: Connection, user_id: str, review_id: str, grader: str, model_label: str | None,
@@ -425,7 +428,8 @@ def import_reply(conn: Connection, user_id: str, review_id: str, grader: str, mo
     """Validate a pasted reply and store it as `grader`'s reply to the review (replacing its earlier one)."""
     if grader not in GRADERS:
         return ImportOutcome(False, [f"Unknown grader {grader!r} (use one of: {', '.join(GRADERS)})"])
-    found = conn.execute("SELECT has_cover FROM reviews WHERE id = ? AND user_id = ?", (review_id, user_id)).fetchone()
+    found = conn.execute("SELECT has_cover, prompt_version FROM reviews WHERE id = ? AND user_id = ?",
+                         (review_id, user_id)).fetchone()
     if not found:
         return ImportOutcome(False, [NO_REVIEW])
     has_letter = bool(found[0])
@@ -440,10 +444,10 @@ def import_reply(conn: Connection, user_id: str, review_id: str, grader: str, mo
     errors = schema_errors(data, REPLY_SCHEMA)
     if errors:
         return ImportOutcome(False, [f"{where} doesn't match the review format: " + "; ".join(errors[:8])])
-    fixes = [f for f in data["top_fixes"] if f.strip()]
+    fixes = data["top_fixes"] = [f.strip() for f in data["top_fixes"] if f.strip()]
     if not fixes:
         return ImportOutcome(False, [f"{where} lists no top fixes; ask for the top {TOP_FIXES} fixes."])
-    warnings = [w for w in (prompt_version_warning(data.get("prompt_version")),) if w]
+    warnings = [w for w in (prompt_version_warning(data.get("prompt_version"), found[1] or PROMPT_VERSION),) if w]
     if len(fixes) != TOP_FIXES:
         warnings.append(f"The reply lists {len(fixes)} top fixes, not {TOP_FIXES}.")
     cover = data["cover_letter"]

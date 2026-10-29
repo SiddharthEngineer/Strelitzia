@@ -201,6 +201,11 @@ def test_wrong_or_missing_prompt_version_warns(conn, job):
     outcome, _ = _import(conn, job, fenced(good_reply(prompt_version="deadbeef")))
     assert outcome.ok
     assert any("deadbeef" in w and review.PROMPT_VERSION in w for w in outcome.warnings)
+    old = review.create_review(conn, _me(conn), job)  # a review made before the criteria changed
+    conn.execute("UPDATE reviews SET prompt_version = 'deadbeef' WHERE id = ?", (old,))
+    conn.commit()
+    outcome = review.import_reply(conn, _me(conn), old, "chatgpt", "", fenced(good_reply(prompt_version="deadbeef")))
+    assert outcome.ok and not any("prompt version" in w for w in outcome.warnings)
     data = good_reply()
     del data["prompt_version"]
     outcome, _ = _import(conn, job, fenced(data), grader="gemini")
@@ -333,3 +338,24 @@ def test_graders_skip_a_missing_cover_letter(conn, job):
     assert by["gemini"]["mean_overall"]["cover_letter"] is None
     assert by["chatgpt"]["mean_overall"]["cover_letter"] == review.grade_points("B")
     assert by["gemini"]["verdict_agreement"] == 1.0 and by["gemini"]["bias"] == 0
+
+
+def test_blank_top_fixes_are_not_stored(conn, job):
+    outcome, review_id = _import(conn, job, fenced(good_reply(top_fixes=[" Fix X ", "", " "])))
+    assert outcome.ok
+    assert review.get_review(conn, _me(conn), review_id)["replies"][0]["reply"]["top_fixes"] == ["Fix X"]
+
+
+def test_graders_ignore_made_up_cover_letter_grades(conn, job):
+    add_draft(conn, letter=None)
+    me = _me(conn)
+    rid = review.create_review(conn, me, job)
+    made_up = _all("B", "maybe")
+    made_up["cover_letter"]["overall"] = "F"
+    for item in made_up["cover_letter"]["criteria"].values():
+        item["grade"] = "F"
+    assert review.import_reply(conn, me, rid, "gemini", "", fenced(made_up)).ok
+    assert review.import_reply(conn, me, rid, "chatgpt", "", fenced(_all("B", "maybe", cover=False))).ok
+    gemini = {g["grader"]: g for g in review.grader_stats(conn, me)["graders"]}["gemini"]
+    assert gemini["mean"]["relevance"] == review.grade_points("B") and gemini["spread"] == 0
+    assert gemini["mean_overall"]["cover_letter"] is None

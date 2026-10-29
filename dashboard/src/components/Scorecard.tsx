@@ -110,13 +110,13 @@ export default function Scorecard({ review }: { review: ReviewDetail }) {
           <div key={r.grader}>
             {several && <p className="muted small">{graderLabel(r.grader, r.model_label)}</p>}
             <ol aria-label={several ? `Top fixes from ${graderLabel(r.grader, r.model_label)}` : 'Top fixes'}>
-              {data[i].top_fixes.map((f, j) => <li key={j}>{f}</li>)}
+              {(data[i]?.top_fixes ?? []).map((f, j) => <li key={j}>{f}</li>)}
             </ol>
           </div>
         ))}
       </div>
       {DOCS.map(([doc, title]) => {
-        const docs = data.map((d) => d[doc]);
+        const docs = data.map((d) => d?.[doc] ?? null);
         if (!docs.some(Boolean)) return null;
         return <DocTable key={doc} title={title} docs={docs} replies={replies} criteria={review.criteria} />;
       })}
