@@ -127,6 +127,25 @@ def _collect_leaked_connections():
         _fd_baseline[0] = len(os.listdir(_FD_DIR))
 
 
+@pytest.fixture(autouse=True)
+def _close_cached_connections():
+    """Close the connections get_connection cached on the test's own thread.
+
+    Each test opens its database under its own tmp_path, so the cache gains a connection per test (three fds in WAL
+    mode). The cache keeps them reachable, so the GC above can't free them: about 960 fds by the end of the suite.
+    """
+    yield
+    from strelitzia import database
+
+    cache = getattr(database._local, "connections", None)
+    while cache:
+        _, conn = cache.popitem()
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 def _test_database_url() -> str | None:
     return os.environ.get("STRELITZIA_TEST_DATABASE_URL") or os.environ.get("APPLYPILOT_TEST_DATABASE_URL") or None
 
