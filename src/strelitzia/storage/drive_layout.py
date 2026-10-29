@@ -1,7 +1,7 @@
 """Where a job's files go in Google Drive: Strelitzia/<Company>/<Role>/<YYYY-MM-DD>/.
 
-The Profile Docs (content library, base resume) go in Strelitzia/Profile/. The rules and the panel rubric aren't
-Docs: they travel in each job packet and panel prompt.
+The Profile Docs (content library, base resume) go in Strelitzia/Profile/. The rules aren't
+Docs: they travel in each job packet.
 
 Pure functions with no Google imports, so the layout is easy to test and stable across machines.
 """

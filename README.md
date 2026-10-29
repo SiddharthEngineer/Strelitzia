@@ -127,8 +127,8 @@ pick the model (Opus or Sonnet) per chat. Everything goes through Google Drive w
 The resume draft starts with the rules version Claude read in the packet and the version on the first line of its
 project instructions. Check & format warns when either is missing or old: an old rules version means a stale packet
 (Open in Claude again), an old instructions version means the project needs the current instructions pasted again.
-The panel works the same way: each packet prompt starts with the current rubric, and the grade import warns about an
-old rubric or old "Strelitzia Panel" instructions.
+A recruiter review works the same way: its prompt names its version, and the import warns when a reply graded an old
+one.
 
 Marking a job Submitted records its draft and rules versions (`submitted_draft_version`, `submitted_rules_version`).
 

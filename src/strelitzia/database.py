@@ -264,24 +264,6 @@ def _ensure_tables(conn: Connection) -> None:
         "resume_text TEXT, cover_json TEXT, coverage_json TEXT, created_at TEXT)"
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_drafts_job ON drafts (job_url, version)")
-    # Resume panel (strelitzia.scoring.panel): blind A/B grading of two drafts per job. Draft "a" is the older
-    # (or rules_version_a) one, "b" the newer; shown_first is which of them packet 1 shows first (packet 2 swaps).
-    # status open | complete. winner (first | second | tie) is in packet 1's order for every grader.
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS panel_runs ("
-        "id TEXT PRIMARY KEY, created_at TEXT, mode TEXT, rules_version_a TEXT, rules_version_b TEXT, "
-        "status TEXT, packet_text TEXT, packet_text_swapped TEXT)"
-    )
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS panel_items ("
-        "run_id TEXT, item_no INTEGER, job_url TEXT, draft_a_id TEXT, draft_b_id TEXT, shown_first TEXT, "
-        "PRIMARY KEY (run_id, item_no))"
-    )
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS panel_grades ("
-        "run_id TEXT, item_no INTEGER, grader TEXT, winner TEXT, detail_json TEXT, created_at TEXT, "
-        "PRIMARY KEY (run_id, item_no, grader))"
-    )
     # Recruiter reviews (strelitzia.scoring.review): one job's latest draft, graded A+ to F- per criterion by a
     # recruiter prompt pasted into any chat model. prompt_text is the prompt as created (the draft and the job can
     # change later). One reply per grader; detail_json holds the whole reply.
@@ -320,8 +302,7 @@ def _ensure_tables(conn: Connection) -> None:
 
 
 # Tables migrate_users gives a user_id (with the owner as the default); user_preferences and llm_usage already have one.
-USER_TABLES = ("status_events", "dashboard_tasks", "contacts", "job_contacts", "interviews", "drafts", "panel_runs",
-               "reviews")
+USER_TABLES = ("status_events", "dashboard_tasks", "contacts", "job_contacts", "interviews", "drafts", "reviews")
 # Message Batches belong to the user they were submitted for (one batch per user); older ones are the owner's.
 _OWNED_TABLES = ("llm_batches", *USER_TABLES)
 
@@ -348,19 +329,6 @@ def delete_job_rows(conn: Connection, user_id: str, url: str) -> bool:
                      "(SELECT id FROM reviews WHERE user_id = ? AND job_url = ?)", (user_id, url))
         for table, column in JOB_TABLES.items():
             conn.execute(f"DELETE FROM {table} WHERE user_id = ? AND {column} = ?", (user_id, url))
-        # Panel items have no user_id: they belong to the user's runs. Their grades go with them. An open run's
-        # packet still shows the job, so it could never be graded: the whole run goes.
-        items = conn.execute(
-            "SELECT i.run_id, i.item_no, r.status FROM panel_items i JOIN panel_runs r ON r.id = i.run_id "
-            "WHERE i.job_url = ? AND r.user_id = ?", (url, user_id)).fetchall()
-        for run_id, item_no, status in items:
-            if status == "open":
-                for table in ("panel_grades", "panel_items"):
-                    conn.execute(f"DELETE FROM {table} WHERE run_id = ?", (run_id,))
-                conn.execute("DELETE FROM panel_runs WHERE id = ?", (run_id,))
-            else:
-                for table in ("panel_grades", "panel_items"):
-                    conn.execute(f"DELETE FROM {table} WHERE run_id = ? AND item_no = ?", (run_id, item_no))
         conn.commit()
     except Exception:
         conn.rollback()
