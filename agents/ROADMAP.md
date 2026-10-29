@@ -31,7 +31,7 @@ R25-R43 are on prod and archived (R40-R43, site-wide Google sign-in and the shar
 | R61 | Dashboard cleanup (#98): no Users nav link, no source filter, default sort status then fit score, orange overwrite warning on Set up Profile Docs | [dashboard-cleanup](plans/dashboard-cleanup.md) | low | ✅ | — |
 | R62 | Edit a job's details or delete a job with its drafts, interviews and notes (#98) | [job-edit-delete](plans/job-edit-delete.md) | low | 🟡 | R60 (queue order) |
 | R63 | Recruiter panel 1/2 (#19): one application graded A+ to F- per criterion by a recruiter; self-contained prompt for Claude, ChatGPT or Gemini (adds; the A/B panel stays until R64) | [recruiter-panel-1-review](plans/recruiter-panel-1-review.md) | low | 🟡 | R62 (queue order) |
-| R64 | Recruiter panel 2/2: review box and scorecard on the job page; Panel page lists reviews and compares graders; A/B panel code removed (tables left for a manual drop) | [recruiter-panel-2-dashboard](plans/recruiter-panel-2-dashboard.md) | low | ⏳ | R63 |
+| R64 | Recruiter panel 2/2: review box and scorecard on the job page; Panel page lists reviews and compares graders; A/B panel code removed (tables left for a manual drop, M38) | [recruiter-panel-2-dashboard](plans/recruiter-panel-2-dashboard.md) | low | 🟡 | R63 |
 
 ## Manual steps (you)
 
