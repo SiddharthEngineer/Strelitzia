@@ -1,5 +1,5 @@
 # Plan: Recruiter panel 1/2: one application, graded A+ to F- by a recruiter (backend)
-**Status:** ❌ Not started (planned with the user 2026-10-27)
+**Status:** ✅ Complete 2026-10-29 (human test step on preprod pending)
 **Risk:** low (user, 2026-10-27: merge without a review wait; protected paths still get the automated review and preprod check; was review: replaces the panel module and its tables)
 **Depends on:** —
 

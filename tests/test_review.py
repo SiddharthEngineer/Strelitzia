@@ -88,7 +88,7 @@ def test_prompt_has_the_role_every_criterion_both_documents_and_the_format(conn,
 def test_prompt_without_a_cover_letter_asks_for_null(conn, job):
     add_draft(conn, letter=None)
     prompt = review.review_prompt(job, review.latest_draft(conn, _me(conn), URL))
-    assert "There is no cover letter: set cover_letter to null." in prompt
+    assert review.NO_LETTER in prompt
 
 
 def test_prompt_version_ignores_the_job_and_draft():
@@ -255,3 +255,30 @@ def test_list_reviews_newest_first_with_grades(conn, job):
     assert listed[0]["grades"][0]["overall_resume"] == "B+"
     assert listed[0]["job"]["title"] == "Data Engineer"
     assert [r["id"] for r in review.list_reviews(conn, me, job_url="https://example.com/other")] == []
+
+
+def test_the_prompt_is_kept_as_created(conn, job):
+    add_draft(conn, letter=None)
+    me = _me(conn)
+    review_id = review.create_review(conn, me, job)
+    prompt = review.get_review(conn, me, review_id)["prompt"]
+    # A cover letter accepted later, or an edited title, doesn't change what the graders see.
+    conn.execute("UPDATE drafts SET cover_json = ?", (json.dumps(LETTER),))
+    conn.execute("UPDATE jobs SET title = 'Staff Engineer'")
+    conn.commit()
+    assert review.get_review(conn, me, review_id)["prompt"] == prompt
+    assert "Staff Engineer" not in prompt and review.NO_LETTER in prompt
+    outcome = review.import_reply(conn, me, review_id, "chatgpt", "", fenced(good_reply(cover_letter=None)))
+    assert outcome.ok and outcome.warnings == []
+
+
+def test_more_ways_models_write_grades(conn, job):
+    data = good_reply(verdict="Yes.")
+    data["resume"]["overall"] = "B +"
+    data["resume"]["criteria"]["polish"]["grade"] = "A‑"
+    data["resume"]["criteria"]["clarity"]["grade"] = "c—"
+    outcome, review_id = _import(conn, job, fenced(data))
+    assert outcome.ok, outcome.errors
+    [reply] = review.get_review(conn, _me(conn), review_id)["replies"]
+    assert (reply["overall_resume"], reply["verdict"]) == ("B+", "yes")
+    assert reply["reply"]["resume"]["criteria"]["polish"]["grade"] == "A-"

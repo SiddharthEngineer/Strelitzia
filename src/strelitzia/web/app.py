@@ -683,8 +683,9 @@ def post_review_reply(review_id: str, body: ReviewReply, request: Request):
     """422 with the errors when a pasted reply doesn't fit the review format; otherwise the warnings and the review."""
     conn = db_conn(request)
     user = current_user(request)
-    _review(conn, user.id, review_id)
     outcome = review.import_reply(conn, user.id, review_id, body.grader, body.model_label, body.text)
+    if outcome.errors == [review.NO_REVIEW]:
+        raise HTTPException(status_code=404, detail="Review not found")
     if not outcome.ok:
         return JSONResponse({"detail": outcome.errors[0], "errors": outcome.errors, "warnings": outcome.warnings},
                             status_code=422)
